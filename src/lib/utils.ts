@@ -1,0 +1,1 @@
+export const nowTimestamp = () => new Date().valueOf(); 

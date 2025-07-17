@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* Brand colors as CSS custom properties */
+:root {
+  --color-primary: #2563ff;
+  --color-secondary: #7b5bff;
+  --color-accent: #34e89e;
+  --color-charcoal: #111827;
+}
+
+.dark {
+  --color-primary: #2563ff;
+  --color-secondary: #7b5bff;
+  --color-accent: #34e89e;
+  --color-charcoal: #f9fafb;
+}
+
+/* Tailwind color utilities */
+.text-primary { color: var(--color-primary) !important; }
+.bg-primary { background-color: var(--color-primary) !important; }
+.border-primary { border-color: var(--color-primary) !important; }
+.ring-primary { --tw-ring-color: var(--color-primary) !important; }
+
+.text-secondary { color: var(--color-secondary) !important; }
+.bg-secondary { background-color: var(--color-secondary) !important; }
+.border-secondary { border-color: var(--color-secondary) !important; }
+
+.text-accent { color: var(--color-accent) !important; }
+.bg-accent { background-color: var(--color-accent) !important; }
+.border-accent { border-color: var(--color-accent) !important; }
+
+.from-primary { --tw-gradient-from: var(--color-primary) var(--tw-gradient-from-position) !important; }
+.to-primary { --tw-gradient-to: var(--color-primary) var(--tw-gradient-to-position) !important; }
+.via-primary { --tw-gradient-via: var(--color-primary) var(--tw-gradient-via-position) !important; }
+
+.from-secondary { --tw-gradient-from: var(--color-secondary) var(--tw-gradient-from-position) !important; }
+.to-secondary { --tw-gradient-to: var(--color-secondary) var(--tw-gradient-to-position) !important; }
+.via-secondary { --tw-gradient-via: var(--color-secondary) var(--tw-gradient-via-position) !important; }
+
+.from-primary\/10 { --tw-gradient-from: rgb(from var(--color-primary) r g b / 0.1) var(--tw-gradient-from-position) !important; }
+.to-primary\/5 { --tw-gradient-to: rgb(from var(--color-primary) r g b / 0.05) var(--tw-gradient-to-position) !important; }
+.from-secondary\/10 { --tw-gradient-from: rgb(from var(--color-secondary) r g b / 0.1) var(--tw-gradient-from-position) !important; }
+.to-secondary\/5 { --tw-gradient-to: rgb(from var(--color-secondary) r g b / 0.05) var(--tw-gradient-to-position) !important; }
+.from-primary\/70 { --tw-gradient-from: rgb(from var(--color-primary) r g b / 0.7) var(--tw-gradient-from-position) !important; }
+
+.hover\:text-primary\/80:hover { color: rgb(from var(--color-primary) r g b / 0.8) !important; }
+.focus\:ring-primary\/70:focus { --tw-ring-color: rgb(from var(--color-primary) r g b / 0.7) !important; }
+
+/* Simple fade & slide-up animation for reveal */
+.reveal-hidden {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Micro-interaction: scale buttons on hover */
+.btn-pop {
+  transition: transform 120ms ease;
+}
+
+.btn-pop:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+

@@ -1,0 +1,321 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Your role
+You are an award winning ui designer. Make the ui feel like it was crafted by an award-winning designer . Ultra-modern, playful, highly usable, with smooth microinteractions and delightful UX touches that elevate the entire experience.
+
+When you write code. it is clean, easy to read and direct. No fancy unnecessary code, simple functions and names with very clear logic. No use of complex functions or creation of files for unnecessary few lines of code. You implment the logic in less lines without comments.
+
+# Project Guidelines
+
+## App Identity & Naming
+- **App Name**: The application is called "Answerable"
+- **Database Naming**: Use "answerable" as the database name in MongoDB instead of generic names
+- **Consistency**: Maintain the "Answerable" branding throughout the UI and documentation
+- **Case Usage**: 
+  - UI/Display: "Answerable" (capitalized)
+  - Database/Technical: "answerable" (lowercase)
+  - File names: Follow existing conventions (kebab-case, camelCase as appropriate)
+
+## File Organization
+- **Minimize file creation**: Do not create unnecessary files
+- **Single file approach**: Keep related functionality in single files where it makes sense
+- **Consolidate similar code**: Use index files to group related exports
+- **Examples**:
+  - All types in [src/types/index.ts](mdc:src/types/index.ts)
+  - All hooks in [src/hooks/index.ts](mdc:src/hooks/index.ts)
+  - All context providers in [src/context/index.tsx](mdc:src/context/index.tsx)
+
+## Component Organization
+- **Common components only**: Only keep components in [src/components/](mdc:src/components) that are common or can be used by multiple different pages
+- **Page-specific components**: Keep components that are specific to a particular page in the same folder as the page in the app directory for easy accessibility and clarity
+- **Co-location principle**: Components used by only one page should live next to that page, not in the global components folder
+
+## Development Approach
+- **Only do what's requested**: Do not add extra features or functionality unless explicitly asked
+- **Ask for permission**: If you want to add something extra, always ask for permission first
+- **Follow up questions**: If confused about requirements, ask clarifying questions
+- **Stay focused**: Complete the specific task requested before suggesting improvements
+
+## Framework-First Approach
+- **Use Next.js built-ins**: Always use Next.js default features like `loading.tsx`, `error.tsx`, and `not-found.tsx` for handling loading states, errors, and 404s instead of custom logic
+- **Check before creating**: Always check if a component, hook, or utility already exists in the framework or codebase before creating a new one
+- **Ask before building**: Must ask permission before creating new components, utilities, or logic that might already exist in the framework
+- **Leverage defaults**: Prefer Next.js conventions (file-based routing, built-in components) over custom implementations
+
+## Code Duplication Prevention
+- **Check before creating**: Always search existing codebase before creating new functions, types, or database operations
+- **Search locations**:
+  - Functions: Check [src/lib/](mdc:src/lib), [src/hooks/index.ts](mdc:src/hooks/index.ts), and relevant component files
+  - Types: Check [src/types/index.ts](mdc:src/types/index.ts) first
+  - Database operations: Check [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts) first
+- **Reuse over recreation**: If similar functionality exists, extend or modify rather than duplicate
+
+## UI Component Architecture
+- **Mantine as base**: Always use Mantine library components as the foundation
+- **Wrapper pattern**: Create wrapper components in [src/components/ui/](mdc:src/components/ui) to prevent vendor lock-in
+- **NEVER use Mantine directly**: NEVER import or use Mantine components directly in any application code. ALL Mantine components must be wrapped in UI components first
+- **UI components only**: Always import components from `@/components/ui` - never from `@mantine/core` or any other UI library
+- **Forward refs**: Always use `forwardRef` for UI components to maintain ref compatibility
+- **Export pattern**: Export wrapped components from [src/components/ui/index.ts](mdc:src/components/ui/index.ts)
+- **Next.js components**: Wrap Next.js components (Link, Image, etc.) with custom components using `forwardRef` to maintain fixed values and consistency
+- **Example structures**:
+  ```typescript
+  // ❌ WRONG - Never do this
+  import { Button, Text, Stack } from '@mantine/core';
+  
+  // ✅ CORRECT - Always do this
+  import { Button, Text, Stack } from '@/components/ui';
+  
+  // src/components/ui/Button.tsx
+  import { Button as MantineButton } from '@mantine/core';
+  import { forwardRef } from 'react';
+  
+  export const Button = forwardRef<HTMLButtonElement, ButtonProps>((props, ref) => {
+    return <MantineButton ref={ref} {...props} />;
+  });
+  
+  // src/components/ui/Link.tsx
+  import NextLink from 'next/link';
+  import { forwardRef } from 'react';
+  
+  export const Link = forwardRef<HTMLAnchorElement, LinkProps>((props, ref) => {
+    return <NextLink ref={ref} prefetch={false} {...props} />;
+  });
+  ```
+
+## UI Components Inventory
+
+### Core UI Components
+- **Button** - [src/components/ui/Button.tsx](mdc:src/components/ui/Button.tsx) - Basic button wrapper with forwardRef and support for HTML type attribute (button, submit, reset)
+- **LoadingButton** - [src/components/ui/LoadingButton.tsx](mdc:src/components/ui/LoadingButton.tsx) - Button with built-in loading states and Lucide icons
+- **TextInput** - [src/components/ui/TextInput.tsx](mdc:src/components/ui/TextInput.tsx) - Text input wrapper
+- **Textarea** - [src/components/ui/Textarea.tsx](mdc:src/components/ui/Textarea.tsx) - Textarea wrapper
+- **Card** - [src/components/ui/Card.tsx](mdc:src/components/ui/Card.tsx) - Card wrapper
+- **AnimatedCard** - [src/components/ui/AnimatedCard.tsx](mdc:src/components/ui/AnimatedCard.tsx) - Card with hover and click animations
+- **LoadingOverlay** - [src/components/ui/LoadingOverlay.tsx](mdc:src/components/ui/LoadingOverlay.tsx) - Loading overlay wrapper
+
+### Layout Components
+- **Container** - [src/components/ui/Container.tsx](mdc:src/components/ui/Container.tsx) - Container wrapper
+- **Stack** - [src/components/ui/Stack.tsx](mdc:src/components/ui/Stack.tsx) - Stack layout wrapper
+- **Center** - [src/components/ui/Center.tsx](mdc:src/components/ui/Center.tsx) - Center alignment wrapper
+
+### Typography Components
+- **Title** - [src/components/ui/Title.tsx](mdc:src/components/ui/Title.tsx) - Title/heading wrapper
+- **Text** - [src/components/ui/Text.tsx](mdc:src/components/ui/Text.tsx) - Text wrapper
+
+### Navigation Components
+- **Link** - [src/components/ui/Link.tsx](mdc:src/components/ui/Link.tsx) - Next.js Link wrapper with fixed prefetch=false
+
+### Form Components
+- **FormField** - [src/components/ui/FormField.tsx](mdc:src/components/ui/FormField.tsx) - Reusable form field with label, description, and error handling
+- **ErrorMessage** - [src/components/ui/ErrorMessage.tsx](mdc:src/components/ui/ErrorMessage.tsx) - Error alert with Lucide AlertCircle icon
+- **SuccessMessage** - [src/components/ui/SuccessMessage.tsx](mdc:src/components/ui/SuccessMessage.tsx) - Success alert with Lucide CheckCircle icon
+
+### Loading Components
+- **Skeleton** - [src/components/ui/Skeleton.tsx](mdc:src/components/ui/Skeleton.tsx) - Basic skeleton wrapper
+- **FormSkeleton** - [src/components/ui/FormSkeleton.tsx](mdc:src/components/ui/FormSkeleton.tsx) - Specialized skeleton for forms with configurable fields
+
+### Animation Components
+- **FadeIn** - [src/components/ui/FadeIn.tsx](mdc:src/components/ui/FadeIn.tsx) - Smooth fade-in animation with customizable delay and duration
+- **AnimatedCard** - Already listed above in Core UI Components
+
+### Component Export Index
+- **All components exported from**: [src/components/ui/index.ts](mdc:src/components/ui/index.ts)
+
+### Usage Guidelines for UI Components
+- **Import pattern**: Always import from the index file: `import { Button, TextInput } from '@/components/ui';`
+- **Lucide icons**: All icon components use Lucide React icons (pre-installed)
+- **ForwardRef compatibility**: All components support ref forwarding
+- **TypeScript types**: All components export proper TypeScript interfaces/types
+- **Mantine foundation**: All components wrap Mantine components to prevent vendor lock-in
+
+## Color Scheme Management
+- **Use predefined colors only**: Never use random or hardcoded colors
+- **Color source**: All colors must come from the established color scheme configuration
+- **Configuration location**: Colors defined in theme/config files (to be determined)
+- **No arbitrary colors**: Avoid using arbitrary Tailwind colors or CSS color values
+- **Consistency**: Maintain visual consistency across all components and pages
+
+## Database Architecture
+- **Use Native MongoDB Driver**: The project uses MongoDB's native Node.js driver (not Mongoose)
+- **Database Connection**: MongoDB client is configured in [src/lib/db.ts](mdc:src/lib/db.ts)
+- **Database Name**: Always use "answerable" as the database name
+- **No ODM/ORM**: Direct MongoDB operations without abstraction layer
+- **Server Actions**: All database operations should be in Server Actions in [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts)
+- **Collection Operations**: Use native MongoDB collection methods (insertOne, findOne, updateOne, etc.)
+
+## Authentication & Middleware Architecture
+- **Better Auth**: Uses better-auth library for authentication
+- **Middleware Protection**: [src/middleware.ts](mdc:src/middleware.ts) protects all `/app/*` routes
+- **Authentication Flow**:
+  1. If not logged in → redirect to `/login`
+  2. If logged in but onboarding not completed → redirect to `/app/onboarding`
+  3. If logged in and onboarding completed → allow access to `/app/*`
+  4. If onboarding completed and trying to access `/app/onboarding` → redirect to `/app`
+- **Session Management**: Uses better-auth's session API with betterFetch
+- **User Data**: Retrieved via `/api/user` endpoint which checks `hasCompletedOnboarding` field
+
+## AI Creative Generation Architecture
+- **AI Integration**: [src/lib/ai.ts](mdc:src/lib/ai.ts) - Complete creative generation workflow using OpenAI's o3 and gpt-image-1 models
+- **Workflow Steps**:
+  1. **Creative Type Selection**: AI selects appropriate creative types based on campaign data
+  2. **Example Selection**: AI chooses best examples from creative database for each type
+  3. **Image Prompt Generation**: AI creates detailed image generation prompts
+  4. **Image Generation**: Uses OpenAI's gpt-image-1 model to create images
+  5. **Feedback Iteration**: AI provides refinement feedback and regenerates images
+- **Creative Database**: [src/lib/creativesDB.json](mdc:src/lib/creativesDB.json) - JSON database of creative examples with types, descriptions, and company data
+- **Prompt System**: Structured prompts in [src/lib/prompts/](mdc:src/lib/prompts) directory:
+  - `developerSystemPrompt.ts` - Sets AI persona as award-winning Creative Director
+  - `generateCreativeTypePrompt.ts` - Selects creative types with JSON output
+  - `generateCreativeExampleChoicePrompt.ts` - Chooses best examples with JSON output
+  - `generateCreativeImagePrompt.ts` - Creates detailed image generation prompts
+  - `generateCreativeFeedbackPrompt.ts` - Provides refinement feedback
+- **Usage Tracking**: Comprehensive token usage tracking across all AI operations
+- **Error Handling**: Robust error handling with proper Zod validation and type safety
+
+## Trigger.dev Integration
+- **Background Jobs**: Uses Trigger.dev v3 for long-running AI creative generation tasks
+- **Task Definition**: [trigger/generateCreative.ts](mdc:trigger/generateCreative.ts) - Background task that calls AI workflow
+- **Server Action Integration**: `generateCreativeAds` in [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts) triggers background job
+- **Status Tracking**: Creative documents track job status (pending → completed) in MongoDB
+- **Payload Structure**: Uses `GenerateCreativeTriggerInput` type for structured job data
+- **Database Updates**: Background job updates creative document with generated images and completion status
+
+## OpenAI Integration
+- **Models Used**:
+  - **o3**: For reasoning-heavy tasks (creative type selection, example choice, prompt generation, feedback)
+  - **gpt-image-1**: For image generation and editing
+- **Response Handling**: Uses OpenAI's structured response format with JSON output for consistent parsing
+- **Image Processing**: Handles base64 image data for feedback iterations and storage upload
+- **Usage Monitoring**: Tracks input/output tokens and total usage across all operations
+- **Error Recovery**: Proper error handling for API failures and malformed responses
+
+## Onboarding Flow Implementation
+- **Page**: [src/app/app/onboarding/page.tsx](mdc:src/app/app/onboarding/page.tsx) - Server component that renders OnboardingForm
+- **Form Component**: [src/app/app/onboarding/OnboardingForm.tsx](mdc:src/app/app/onboarding/OnboardingForm.tsx) - Client component with two-step form
+- **Server Actions**:
+  - `generateAccountConfig(websiteUrl)` - Mock analysis returning dummy ICP, USP, messaging/design guidelines
+  - `upsertAccountConfig(formData)` - Saves config to accountConfig collection and marks user onboarding complete
+- **Flow**:
+  1. Step 1: User enters website URL → calls `generateAccountConfig` → shows prefilled form
+  2. Step 2: User edits prefilled data → calls `upsertAccountConfig` → redirects to `/app`
+- **Database**: Uses `accountConfigCollection` to store user configuration and updates user document with `hasCompletedOnboarding: true`
+
+## API Architecture
+- **Use Server Actions**: Prefer Next.js Server Actions over API routes for most functionality
+- **API routes only for**:
+  - Authentication endpoints (handled by better-auth)
+  - User data endpoints (e.g., `/api/user`)
+  - Webhook endpoints from external services
+  - Third-party integrations that require traditional REST endpoints
+- **Server Actions for**:
+  - Database operations
+  - Form submissions
+  - Data mutations
+  - Business logic
+  - AI operations with OpenAI
+  - Background job triggering
+
+## Project Structure Reference
+- **Auth pages**: [src/app/(auth)/](mdc:src/app/(auth)/) - Login, register, etc.
+- **App pages**: [src/app/app/](mdc:src/app/app) - Protected application pages (no route group)
+- **Public pages**: [src/app/(public)/](mdc:src/app/(public)/) - Landing and public pages
+- **API routes**: [src/app/api/](mdc:src/app/api) - Only for auth and specific endpoints
+- **Components**: [src/components/](mdc:src/components) - Organized by section (ui, auth, app, common)
+- **Server Actions**: [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts) for shared database operations
+- **AI Integration**: [src/lib/ai.ts](mdc:src/lib/ai.ts) for creative generation workflow
+- **Background Jobs**: [trigger/](mdc:trigger) directory for Trigger.dev tasks
+- **Prompts**: [src/lib/prompts/](mdc:src/lib/prompts) directory for AI prompt templates
+
+## Current Implementation Snapshot (January 2025)
+
+_This snapshot helps you quickly navigate the existing codebase. It will become outdated as files change, so update it when major structural changes occur._
+
+### Root Directories
+- **Source code**: [src/](mdc:src)
+  - **Application routes**: [src/app/](mdc:src/app)
+  - **Shared libraries & helpers**: [src/lib/](mdc:src/lib)
+  - **Global React context**: [src/context/](mdc:src/context) (currently empty)
+  - **Reusable components**: [src/components/](mdc:src/components)
+  - **Type definitions**: [src/types/](mdc:src/types)
+  - **Custom hooks**: [src/hooks/](mdc:src/hooks)
+- **Background jobs**: [trigger/](mdc:trigger) - Trigger.dev task definitions
+
+### Key Route Groups
+1. **Auth Pages** — [src/app/(auth)/](mdc:src/app/(auth)/)
+   - Login: [src/app/(auth)/login/page.tsx](mdc:src/app/(auth)/login/page.tsx)
+   - Register (placeholder): [src/app/(auth)/register/page.tsx](mdc:src/app/(auth)/register/page.tsx)
+   - Local `layout.tsx` provides auth-specific wrapper
+
+2. **Protected App Pages** — [src/app/app/](mdc:src/app/app) (no route group)
+   - Main entry: [src/app/app/page.tsx](mdc:src/app/app/page.tsx)
+   - Onboarding: [src/app/app/onboarding/page.tsx](mdc:src/app/app/onboarding/page.tsx)
+   - Dashboard: [src/app/app/dashboard/page.tsx](mdc:src/app/app/dashboard/page.tsx)
+   - Additional pages: `/app/settings`, `/app/profile` (with their own `page.tsx`)
+
+3. **Public Pages** — [src/app/(public)/](mdc:src/app/(public)/) (landing & marketing)
+
+### Middleware & Authentication
+- **Middleware**: [src/middleware.ts](mdc:src/middleware.ts) - Protects `/app/*` routes with session validation and onboarding flow
+- **Auth Configuration**: [src/lib/auth.ts](mdc:src/lib/auth.ts) - Better-auth setup
+- **Auth Client**: [src/lib/auth-client.ts](mdc:src/lib/auth-client.ts) - Browser-side auth utilities
+
+### Library & Utility Files
+- **MongoDB client**: [src/lib/db.ts](mdc:src/lib/db.ts) - Native MongoDB driver connection with collections
+- **Server actions**: [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts) - Database operations and business logic
+- **AI Integration**: [src/lib/ai.ts](mdc:src/lib/ai.ts) - Complete creative generation workflow
+- **AI Prompts**: [src/lib/prompts/](mdc:src/lib/prompts) - Structured AI prompt templates
+- **Creative Database**: [src/lib/creativesDB.json](mdc:src/lib/creativesDB.json) - Creative examples database
+- **Image Storage**: [src/lib/storage.ts](mdc:src/lib/storage.ts) - Image upload utilities
+- **Theme configuration**: [src/lib/theme.ts](mdc:src/lib/theme.ts)
+- **Utilities**: [src/lib/utils.ts](mdc:src/lib/utils.ts)
+
+### API Routes
+- **Auth**: [src/app/api/auth/[...all]/route.ts](mdc:src/app/api/auth/[...all]/route.ts) - Better-auth handler
+- **User**: [src/app/api/user/route.ts](mdc:src/app/api/user/route.ts) - User data endpoint for middleware
+
+### Background Jobs
+- **Creative Generation**: [trigger/generateCreative.ts](mdc:trigger/generateCreative.ts) - Long-running AI creative generation task
+
+### UI Component Folders
+- **UI wrappers**: [src/components/ui/](mdc:src/components/ui) - Comprehensive UI component library
+- **Auth-specific components**: [src/components/auth/](mdc:src/components/auth) (currently empty)
+
+### Data & Types
+- **Type definitions**: [src/types/index.ts](mdc:src/types/index.ts) - Comprehensive Zod schemas and TypeScript types including AI workflow types
+- **No Mongoose Models**: Database operations use native MongoDB driver with Zod schemas for validation
+
+### Key Collections
+- **userCollection**: User authentication and profile data
+- **accountConfigCollection**: User's website configuration (ICP, USP, guidelines)
+- **creativeCollection**: Creative generation jobs and results
+
+### Styling & Theme
+- **Global CSS**: [src/app/globals.css](mdc:src/app/globals.css)
+- **Mantine Provider & fonts**: [src/app/layout.tsx](mdc:src/app/layout.tsx)
+
+## Validation & Schema Management
+- **Use Zod for validation**: Always use Zod schemas for data validation instead of manual checking
+- **Schema location**: Define Zod schemas in [src/types/index.ts](mdc:src/types/index.ts) alongside TypeScript interfaces
+- **Validation pattern**: Create Zod schemas that can infer TypeScript types, ensuring single source of truth
+- **Server actions**: Use Zod schemas to validate inputs in server actions before processing
+  **Pattern**: After `safeParse`, map `error.errors` into a `fieldErrors: Record<string, string[]>` object and return it via `ServerActionResult` → `{ success: false, error: 'Please fix the validation errors', fieldErrors }`  
+  The shared `ServerActionResult` interface already includes an optional `fieldErrors` key for this purpose.
+- **Form validation**: Client forms should:
+  1. Read `fieldErrors` returned from server actions and highlight the corresponding fields using the `error` prop of Mantine inputs.
+  2. Clear a field's error as soon as the user starts editing it.
+  3. Still surface a high-level toast via `notifyError/notifySuccess` for overall status.
+- **API validation**: Validate all incoming data using Zod schemas
+- **Database validation**: Use Zod schemas to validate data before MongoDB operations
+- **AI Workflow validation**: All AI workflow inputs/outputs use Zod schemas for type safety
+
+## Notification & Messaging
+- **Toast approach (general)**: Use Mantine's `@mantine/notifications` (wrapped in `@/components/ui/Notifications`) for global success & error toasts via `notifySuccess` / `notifyError` helpers.
+- **Field-level errors (validation)**: It is **allowed** to display inline error text directly under a form field when the message relates to that specific input (e.g., "USP is required"). This overrides the previous "no inline error text" rule for validation scenarios.
+- **Wrapper enforcement**: As with all Mantine elements, do **NOT** import `showNotification` directly—always use the exported helpers.
+
+---
+_Use this snapshot alongside the guidelines above to maintain consistency and avoid duplicating functionality._

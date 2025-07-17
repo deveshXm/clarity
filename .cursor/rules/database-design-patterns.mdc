@@ -1,0 +1,527 @@
+---
+alwaysApply: false
+---
+# Database Design Patterns
+
+## Collection Separation Strategy
+
+### Generic Boilerplate Collections
+```typescript
+// Core collections for boilerplate
+User {
+  _id: string,
+  id: string,
+  email: string,
+  name: string,
+  image?: string,
+  emailVerified: boolean,
+  hasCompletedOnboarding?: boolean,
+  createdAt: Date,
+  updatedAt: Date
+}
+
+AccountConfig {
+  _id: string,
+  userId: string,
+  companyName: string,
+  websiteUrl?: string,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+## Database Configuration
+
+### Collections Setup
+**Location**: [src/lib/db.ts](mdc:src/lib/db.ts)
+
+```typescript
+// Core collections
+export const userCollection = db.collection("user")
+export const accountConfigCollection = db.collection("accountConfig")
+```
+
+### Naming Convention
+- **Database**: Use `process.env.MONGODB_DB_NAME` (configurable)
+- **Collections**: camelCase names
+- **Application**: Generic names like "Your App"
+
+## Query Patterns
+
+### 1. User Validation
+**Always validate before data access:**
+
+```typescript
+// Standard pattern in server actions
+const user = await userCollection.findOne({
+  _id: new ObjectId(userId)
+})
+
+if (!user) {
+  return { success: false, error: 'User not found' }
+}
+```
+
+### 2. Account Config Fetching
+**After user validation:**
+
+```typescript
+const accountConfig = await accountConfigCollection.findOne({ 
+  userId: userId 
+})
+
+// Always serialize MongoDB _id to string
+const serializedConfig = accountConfig ? {
+  ...accountConfig,
+  _id: accountConfig._id.toString()
+} : null
+```
+
+## Type System Integration
+
+### Schema Location
+**All schemas in**: [src/types/index.ts](mdc:src/types/index.ts)
+
+### Pattern: Schema → Type Inference
+```typescript
+// 1. Define Zod schema first
+export const AccountConfigSchema = z.object({
+  _id: z.string(),
+  userId: z.string(),
+  companyName: z.string().min(1),
+  websiteUrl: z.string().url().optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+// 2. Infer TypeScript type
+export type AccountConfig = z.infer<typeof AccountConfigSchema>
+
+// 3. Create input schema (omit auto-generated fields)
+export const CreateAccountConfigSchema = AccountConfigSchema.omit({ 
+  _id: true, 
+  createdAt: true, 
+  updatedAt: true 
+})
+
+export type CreateAccountConfigInput = z.infer<typeof CreateAccountConfigSchema>
+```
+
+## Data Consistency Patterns
+
+### 1. Timestamp Handling
+**Use millisecond epoch timestamps for all date fields:**
+
+```typescript
+// Import the utility function
+import { getNowTimestamp } from '@/lib/utils';
+
+// Use for all date fields
+const now = getNowTimestamp(); // Returns millisecond epoch timestamp
+
+// Example usage in database operations
+await accountConfigCollection.insertOne({
+  ...data,
+  createdAt: now,
+  updatedAt: now
+});
+```
+
+### 2. Status Management
+**Consistent status patterns:**
+
+```typescript
+type Status = "pending" | "completed" | "failed"
+
+// Example for future task implementations
+task.status = "pending" → "completed"
+```
+
+## Security Patterns
+
+### 1. User Isolation
+**Always filter by userId:**
+
+```typescript
+// Account config access
+{ userId: user.id }
+
+// Always verify ownership before operations
+const config = await accountConfigCollection.findOne({ 
+  _id: new ObjectId(configId),
+  userId: user.id 
+})
+```
+
+### 2. Data Serialization
+**Always convert ObjectId to string:**
+
+```typescript
+const serializedConfig: AccountConfig = {
+  _id: config._id.toString(), // ✅ Convert ObjectId
+  userId: config.userId,
+  companyName: config.companyName,
+  websiteUrl: config.websiteUrl,
+  createdAt: config.createdAt,
+  updatedAt: config.updatedAt
+}
+```
+
+## Performance Optimizations
+
+### 1. Document Size Limits
+- **User documents**: Minimal, essential auth data only
+- **Account config documents**: Simple configuration data
+- **Query efficiency**: Direct access without complex joins
+
+### 2. Index Recommendations (Future)
+```javascript
+// Recommended indexes for production:
+db.user.createIndex({ "email": 1 })
+db.user.createIndex({ "id": 1 })
+db.accountConfig.createIndex({ "userId": 1 })
+```
+
+### 3. Query Optimization
+- **Batch operations**: Use `insertMany()` for multiple records
+- **Selective fetching**: Only query data when needed
+- **User validation**: Fail fast on ownership checks
+
+## Migration Strategy
+
+### What Was Removed (Boilerplate Cleanup)
+- ❌ Creative-related collections and schemas
+- ❌ Complex account configuration fields
+- ❌ AI-specific data structures
+- ❌ Image and media collections
+
+### What Was Added
+- ✅ Simplified user and account config collections
+- ✅ Generic account configuration schema
+- ✅ Basic onboarding flow data
+- ✅ Clean, minimal database structure
+
+### Data Migration Notes
+**For boilerplate**: No migration needed - clean slate
+**For production data**: Would need custom migration scripts based on specific requirements
+
+## Utility Functions
+
+### Timestamp Utility
+**Location**: [src/lib/utils.ts](mdc:src/lib/utils.ts)
+
+```typescript
+// Use this function for all timestamp fields
+export const getNowTimestamp = (): number => {
+  return Date.now(); // Returns millisecond epoch timestamp
+};
+```
+
+**Usage in database operations:**
+```typescript
+import { getNowTimestamp } from '@/lib/utils';
+
+// Always use this for timestamps
+const now = getNowTimestamp();
+
+await collection.insertOne({
+  ...data,
+  createdAt: now,
+  updatedAt: now
+});
+```
+
+## Example Implementation
+
+### Server Action Pattern
+```typescript
+export async function upsertAccountConfig(rawData: AccountConfigFormData): Promise<ServerActionResult> {
+  try {
+    const user = await getCurrentUser();
+    const validatedData = AccountConfigFormDataSchema.parse(rawData);
+    
+    const now = getNowTimestamp(); // ✅ Use utility function
+    
+    await accountConfigCollection.replaceOne(
+      { userId: user.id },
+      {
+        ...validatedData,
+        userId: user.id,
+        createdAt: now,
+        updatedAt: now
+      },
+      { upsert: true }
+    );
+
+    return { success: true };
+  } catch (error) {
+    // Error handling...
+  }
+}
+```
+
+- **Batch operations**: Use `insertMany()` for multiple images
+- **Selective fetching**: Only query images when needed
+- **User validation**: Fail fast on ownership checks
+# Database Design Patterns
+
+## Collection Separation Strategy
+
+### Generic Boilerplate Collections
+```typescript
+// Core collections for boilerplate
+User {
+  _id: string,
+  id: string,
+  email: string,
+  name: string,
+  image?: string,
+  emailVerified: boolean,
+  hasCompletedOnboarding?: boolean,
+  createdAt: Date,
+  updatedAt: Date
+}
+
+AccountConfig {
+  _id: string,
+  userId: string,
+  companyName: string,
+  websiteUrl?: string,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+## Database Configuration
+
+### Collections Setup
+**Location**: [src/lib/db.ts](mdc:src/lib/db.ts)
+
+```typescript
+// Core collections
+export const userCollection = db.collection("user")
+export const accountConfigCollection = db.collection("accountConfig")
+```
+
+### Naming Convention
+- **Database**: Use `process.env.MONGODB_DB_NAME` (configurable)
+- **Collections**: camelCase names
+- **Application**: Generic names like "Your App"
+
+## Query Patterns
+
+### 1. User Validation
+**Always validate before data access:**
+
+```typescript
+// Standard pattern in server actions
+const user = await userCollection.findOne({
+  _id: new ObjectId(userId)
+})
+
+if (!user) {
+  return { success: false, error: 'User not found' }
+}
+```
+
+### 2. Account Config Fetching
+**After user validation:**
+
+```typescript
+const accountConfig = await accountConfigCollection.findOne({ 
+  userId: userId 
+})
+
+// Always serialize MongoDB _id to string
+const serializedConfig = accountConfig ? {
+  ...accountConfig,
+  _id: accountConfig._id.toString()
+} : null
+```
+
+## Type System Integration
+
+### Schema Location
+**All schemas in**: [src/types/index.ts](mdc:src/types/index.ts)
+
+### Pattern: Schema → Type Inference
+```typescript
+// 1. Define Zod schema first
+export const AccountConfigSchema = z.object({
+  _id: z.string(),
+  userId: z.string(),
+  companyName: z.string().min(1),
+  websiteUrl: z.string().url().optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+// 2. Infer TypeScript type
+export type AccountConfig = z.infer<typeof AccountConfigSchema>
+
+// 3. Create input schema (omit auto-generated fields)
+export const CreateAccountConfigSchema = AccountConfigSchema.omit({ 
+  _id: true, 
+  createdAt: true, 
+  updatedAt: true 
+})
+
+export type CreateAccountConfigInput = z.infer<typeof CreateAccountConfigSchema>
+```
+
+## Data Consistency Patterns
+
+### 1. Timestamp Handling
+**Use millisecond epoch timestamps for all date fields:**
+
+```typescript
+// Import the utility function
+import { getNowTimestamp } from '@/lib/utils';
+
+// Use for all date fields
+const now = getNowTimestamp(); // Returns millisecond epoch timestamp
+
+// Example usage in database operations
+await accountConfigCollection.insertOne({
+  ...data,
+  createdAt: now,
+  updatedAt: now
+});
+```
+
+### 2. Status Management
+**Consistent status patterns:**
+
+```typescript
+type Status = "pending" | "completed" | "failed"
+
+// Example for future task implementations
+task.status = "pending" → "completed"
+```
+
+## Security Patterns
+
+### 1. User Isolation
+**Always filter by userId:**
+
+```typescript
+// Account config access
+{ userId: user.id }
+
+// Always verify ownership before operations
+const config = await accountConfigCollection.findOne({ 
+  _id: new ObjectId(configId),
+  userId: user.id 
+})
+```
+
+### 2. Data Serialization
+**Always convert ObjectId to string:**
+
+```typescript
+const serializedConfig: AccountConfig = {
+  _id: config._id.toString(), // ✅ Convert ObjectId
+  userId: config.userId,
+  companyName: config.companyName,
+  websiteUrl: config.websiteUrl,
+  createdAt: config.createdAt,
+  updatedAt: config.updatedAt
+}
+```
+
+## Performance Optimizations
+
+### 1. Document Size Limits
+- **User documents**: Minimal, essential auth data only
+- **Account config documents**: Simple configuration data
+- **Query efficiency**: Direct access without complex joins
+
+### 2. Index Recommendations (Future)
+```javascript
+// Recommended indexes for production:
+db.user.createIndex({ "email": 1 })
+db.user.createIndex({ "id": 1 })
+db.accountConfig.createIndex({ "userId": 1 })
+```
+
+### 3. Query Optimization
+- **Batch operations**: Use `insertMany()` for multiple records
+- **Selective fetching**: Only query data when needed
+- **User validation**: Fail fast on ownership checks
+
+## Migration Strategy
+
+### What Was Removed (Boilerplate Cleanup)
+- ❌ Creative-related collections and schemas
+- ❌ Complex account configuration fields
+- ❌ AI-specific data structures
+- ❌ Image and media collections
+
+### What Was Added
+- ✅ Simplified user and account config collections
+- ✅ Generic account configuration schema
+- ✅ Basic onboarding flow data
+- ✅ Clean, minimal database structure
+
+### Data Migration Notes
+**For boilerplate**: No migration needed - clean slate
+**For production data**: Would need custom migration scripts based on specific requirements
+
+## Utility Functions
+
+### Timestamp Utility
+**Location**: [src/lib/utils.ts](mdc:src/lib/utils.ts)
+
+```typescript
+// Use this function for all timestamp fields
+export const getNowTimestamp = (): number => {
+  return Date.now(); // Returns millisecond epoch timestamp
+};
+```
+
+**Usage in database operations:**
+```typescript
+import { getNowTimestamp } from '@/lib/utils';
+
+// Always use this for timestamps
+const now = getNowTimestamp();
+
+await collection.insertOne({
+  ...data,
+  createdAt: now,
+  updatedAt: now
+});
+```
+
+## Example Implementation
+
+### Server Action Pattern
+```typescript
+export async function upsertAccountConfig(rawData: AccountConfigFormData): Promise<ServerActionResult> {
+  try {
+    const user = await getCurrentUser();
+    const validatedData = AccountConfigFormDataSchema.parse(rawData);
+    
+    const now = getNowTimestamp(); // ✅ Use utility function
+    
+    await accountConfigCollection.replaceOne(
+      { userId: user.id },
+      {
+        ...validatedData,
+        userId: user.id,
+        createdAt: now,
+        updatedAt: now
+      },
+      { upsert: true }
+    );
+
+    return { success: true };
+  } catch (error) {
+    // Error handling...
+  }
+}
+```
+
+- **Batch operations**: Use `insertMany()` for multiple images
+- **Selective fetching**: Only query images when needed
+- **User validation**: Fail fast on ownership checks
