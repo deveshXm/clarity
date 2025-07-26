@@ -24,8 +24,8 @@ const bricolage = Bricolage_Grotesque({
 });
 
 export const metadata = {
-  title: 'Answerable',
-  description: 'AI-Powered Marketing Intelligence Platform',
+  title: 'Personal AI Coach',
+  description: 'Your AI communication coach for better Slack messaging',
 };
 
 export default function RootLayout({

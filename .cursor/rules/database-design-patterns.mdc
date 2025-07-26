@@ -1,4 +1,5 @@
 ---
+description: Follow this rule while making changes in db schema.
 alwaysApply: false
 ---
 # Database Design Patterns
@@ -39,12 +40,113 @@ AccountConfig {
 // Core collections
 export const userCollection = db.collection("user")
 export const accountConfigCollection = db.collection("accountConfig")
+
+// Slack-specific collections
+export const workspaceCollection = db.collection("workspaces")
+export const slackUserCollection = db.collection("slackUsers")
+export const botChannelsCollection = db.collection("botChannels")
+export const invitationCollection = db.collection("invitations")
+export const analysisInstanceCollection = db.collection("analysisInstances")
 ```
 
 ### Naming Convention
 - **Database**: Use `process.env.MONGODB_DB_NAME` (configurable)
 - **Collections**: camelCase names
 - **Application**: Generic names like "Your App"
+
+### Slack-Specific Collections
+
+```typescript
+// Workspace with bot token for API calls
+Workspace {
+  _id: ObjectId,
+  workspaceId: string,     // Slack team ID (T08HU2MKRK2)
+  name: string,
+  domain?: string,
+  botToken: string,        // Workspace-specific bot token from OAuth
+  createdAt: Date,
+  updatedAt: Date
+}
+
+// Bot channel tracking for access control
+BotChannel {
+  _id: ObjectId,
+  workspaceId: string,     // User's workspace ObjectId (relationship key)
+  channelId: string,       // Slack channel ID
+  channelName: string,     // Display name
+  addedAt: Date
+}
+
+// Slack user linked to workspace
+SlackUser {
+  _id: ObjectId,
+  slackId: string,         // Slack user ID
+  workspaceId: string,     // References workspace ObjectId
+  analysisFrequency: 'weekly' | 'monthly',
+  hasCompletedOnboarding: boolean,
+  // ... other user fields
+}
+```
+
+## Slack Event Handling & Auto Coaching Patterns
+
+### 1. Event Subscription Requirements ✅ CRITICAL
+**Bot only receives events from channels where it's a member:**
+
+```typescript
+// Slack sends message.channels events ONLY from:
+// 1. Channels where bot is explicitly added
+// 2. Channels bot joined via conversations.join API
+// 3. NOT from all public channels (privacy protection)
+
+// Manifest.json event subscriptions required:
+"bot_events": [
+  "message.channels",    // Public channel messages (REQUIRED for auto coaching)
+  "message.groups",      // Private channel messages  
+  "app_mention"          // @bot mentions
+]
+```
+
+### 2. Channel Access Control Pattern ✅ IMPLEMENTED
+**Double-layer security for message processing:**
+
+```typescript
+// Layer 1: Slack's membership filter (automatic)
+// Layer 2: Our database verification (explicit)
+const isChannelActive = await botChannelsCollection.findOne({
+  channelId: slackChannelId,
+  workspaceId: userWorkspaceObjectId  // User's workspace reference
+})
+
+if (!isChannelActive) {
+  console.log('⏭️ Bot not active in this channel, skipping analysis');
+  return; // Skip processing - bot not authorized
+}
+```
+
+### 3. Auto Coaching Message Flow
+**Complete event processing pipeline:**
+
+```typescript
+// Step 1: Receive message event (only from member channels)
+if (event.type === 'message' && (event.channel_type === 'channel' || event.channel_type === 'group')) {
+  
+  // Step 2: Validate user has app installed
+  const user = await slackUserCollection.findOne({ 
+    slackId: event.user, 
+    isActive: true 
+  });
+  
+  // Step 3: Check bot is active in this specific channel
+  const isChannelActive = await isChannelAccessible(event.channel, user.workspaceId);
+  
+  // Step 4: Get workspace-specific bot token
+  const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+  
+  // Step 5: Process message with AI analysis
+  // Step 6: Send ephemeral coaching feedback (private to user)
+}
+```
 
 ## Query Patterns
 
@@ -77,6 +179,65 @@ const serializedConfig = accountConfig ? {
 } : null
 ```
 
+### 3. Workspace Token Lookup Pattern ✅ CRITICAL
+**For Slack API calls with workspace-specific tokens:**
+
+```typescript
+// Get workspace by Slack team ID
+const workspace = await workspaceCollection.findOne({ 
+  workspaceId: teamId  // Slack team ID like T08HU2MKRK2
+})
+
+// Get workspace by user's workspace ObjectId
+const workspace = await workspaceCollection.findOne({ 
+  _id: new ObjectId(userWorkspaceId) 
+})
+
+if (!workspace || !workspace.botToken) {
+  return { error: 'Workspace not found or missing bot token' }
+}
+
+// Use workspace-specific token for API calls
+const workspaceSlack = new WebClient(workspace.botToken)
+```
+
+### 4. Channel Access Control Pattern
+**Check if bot is active in channel:**
+
+```typescript
+const isChannelActive = await botChannelsCollection.findOne({
+  channelId: slackChannelId,
+  workspaceId: userWorkspaceObjectId  // User's workspace reference
+})
+
+if (!isChannelActive) {
+  // Skip processing - bot not active in this channel
+  return
+}
+```
+
+### 5. Bot Channel Management Pattern
+**During onboarding - joining and tracking channels:**
+
+```typescript
+// Join bot to selected channels and store in database
+for (const channel of selectedChannels) {
+  // Join channel with workspace-specific bot token
+  const joinSuccess = await joinChannel(channel.id, workspace.botToken);
+  
+  if (joinSuccess) {
+    // Store in botChannelsCollection for access control
+    await botChannelsCollection.insertOne({
+      _id: new ObjectId(),
+      workspaceId: userWorkspaceId, // User's workspace ObjectId
+      channelId: channel.id,
+      channelName: channel.name,
+      addedAt: new Date()
+    });
+  }
+}
+```
+
 ## Type System Integration
 
 ### Schema Location
@@ -105,6 +266,19 @@ export const CreateAccountConfigSchema = AccountConfigSchema.omit({
 })
 
 export type CreateAccountConfigInput = z.infer<typeof CreateAccountConfigSchema>
+```
+
+### Slack Event Validation
+```typescript
+// Validate incoming Slack events
+export const SlackEventSchema = z.object({
+  type: z.literal('message'),
+  user: z.string(),
+  text: z.string(),
+  channel: z.string(),
+  ts: z.string(),
+  channel_type: z.enum(['channel', 'group'])
+});
 ```
 
 ## Data Consistency Patterns
@@ -167,6 +341,21 @@ const serializedConfig: AccountConfig = {
 }
 ```
 
+### 3. Slack Privacy Protection ✅ IMPLEMENTED
+**Multi-layer privacy safeguards:**
+
+```typescript
+// Layer 1: Slack only sends events from channels where bot is member
+// Layer 2: Our database tracks authorized channels only
+// Layer 3: User must have explicitly installed the app
+// Layer 4: Ephemeral messages are private (only sender sees feedback)
+
+// Privacy by design:
+// - No message storage (only analysis results)
+// - User controls which channels to enable
+// - Coaching feedback is private and ephemeral
+```
+
 ## Performance Optimizations
 
 ### 1. Document Size Limits
@@ -180,6 +369,11 @@ const serializedConfig: AccountConfig = {
 db.user.createIndex({ "email": 1 })
 db.user.createIndex({ "id": 1 })
 db.accountConfig.createIndex({ "userId": 1 })
+
+// Slack-specific indexes
+db.slackUsers.createIndex({ "slackId": 1 })
+db.workspaces.createIndex({ "workspaceId": 1 })
+db.botChannels.createIndex({ "channelId": 1, "workspaceId": 1 })
 ```
 
 ### 3. Query Optimization
@@ -200,6 +394,8 @@ db.accountConfig.createIndex({ "userId": 1 })
 - ✅ Generic account configuration schema
 - ✅ Basic onboarding flow data
 - ✅ Clean, minimal database structure
+- ✅ Slack-specific collections for bot management
+- ✅ Workspace token storage and channel access control
 
 ### Data Migration Notes
 **For boilerplate**: No migration needed - clean slate
@@ -260,264 +456,41 @@ export async function upsertAccountConfig(rawData: AccountConfigFormData): Promi
 }
 ```
 
-- **Batch operations**: Use `insertMany()` for multiple images
-- **Selective fetching**: Only query images when needed
-- **User validation**: Fail fast on ownership checks
-# Database Design Patterns
-
-## Collection Separation Strategy
-
-### Generic Boilerplate Collections
+### Slack Event Processing Pattern
 ```typescript
-// Core collections for boilerplate
-User {
-  _id: string,
-  id: string,
-  email: string,
-  name: string,
-  image?: string,
-  emailVerified: boolean,
-  hasCompletedOnboarding?: boolean,
-  createdAt: Date,
-  updatedAt: Date
-}
-
-AccountConfig {
-  _id: string,
-  userId: string,
-  companyName: string,
-  websiteUrl?: string,
-  createdAt: Date,
-  updatedAt: Date
-}
-```
-
-## Database Configuration
-
-### Collections Setup
-**Location**: [src/lib/db.ts](mdc:src/lib/db.ts)
-
-```typescript
-// Core collections
-export const userCollection = db.collection("user")
-export const accountConfigCollection = db.collection("accountConfig")
-```
-
-### Naming Convention
-- **Database**: Use `process.env.MONGODB_DB_NAME` (configurable)
-- **Collections**: camelCase names
-- **Application**: Generic names like "Your App"
-
-## Query Patterns
-
-### 1. User Validation
-**Always validate before data access:**
-
-```typescript
-// Standard pattern in server actions
-const user = await userCollection.findOne({
-  _id: new ObjectId(userId)
-})
-
-if (!user) {
-  return { success: false, error: 'User not found' }
-}
-```
-
-### 2. Account Config Fetching
-**After user validation:**
-
-```typescript
-const accountConfig = await accountConfigCollection.findOne({ 
-  userId: userId 
-})
-
-// Always serialize MongoDB _id to string
-const serializedConfig = accountConfig ? {
-  ...accountConfig,
-  _id: accountConfig._id.toString()
-} : null
-```
-
-## Type System Integration
-
-### Schema Location
-**All schemas in**: [src/types/index.ts](mdc:src/types/index.ts)
-
-### Pattern: Schema → Type Inference
-```typescript
-// 1. Define Zod schema first
-export const AccountConfigSchema = z.object({
-  _id: z.string(),
-  userId: z.string(),
-  companyName: z.string().min(1),
-  websiteUrl: z.string().url().optional(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
-})
-
-// 2. Infer TypeScript type
-export type AccountConfig = z.infer<typeof AccountConfigSchema>
-
-// 3. Create input schema (omit auto-generated fields)
-export const CreateAccountConfigSchema = AccountConfigSchema.omit({ 
-  _id: true, 
-  createdAt: true, 
-  updatedAt: true 
-})
-
-export type CreateAccountConfigInput = z.infer<typeof CreateAccountConfigSchema>
-```
-
-## Data Consistency Patterns
-
-### 1. Timestamp Handling
-**Use millisecond epoch timestamps for all date fields:**
-
-```typescript
-// Import the utility function
-import { getNowTimestamp } from '@/lib/utils';
-
-// Use for all date fields
-const now = getNowTimestamp(); // Returns millisecond epoch timestamp
-
-// Example usage in database operations
-await accountConfigCollection.insertOne({
-  ...data,
-  createdAt: now,
-  updatedAt: now
-});
-```
-
-### 2. Status Management
-**Consistent status patterns:**
-
-```typescript
-type Status = "pending" | "completed" | "failed"
-
-// Example for future task implementations
-task.status = "pending" → "completed"
-```
-
-## Security Patterns
-
-### 1. User Isolation
-**Always filter by userId:**
-
-```typescript
-// Account config access
-{ userId: user.id }
-
-// Always verify ownership before operations
-const config = await accountConfigCollection.findOne({ 
-  _id: new ObjectId(configId),
-  userId: user.id 
-})
-```
-
-### 2. Data Serialization
-**Always convert ObjectId to string:**
-
-```typescript
-const serializedConfig: AccountConfig = {
-  _id: config._id.toString(), // ✅ Convert ObjectId
-  userId: config.userId,
-  companyName: config.companyName,
-  websiteUrl: config.websiteUrl,
-  createdAt: config.createdAt,
-  updatedAt: config.updatedAt
-}
-```
-
-## Performance Optimizations
-
-### 1. Document Size Limits
-- **User documents**: Minimal, essential auth data only
-- **Account config documents**: Simple configuration data
-- **Query efficiency**: Direct access without complex joins
-
-### 2. Index Recommendations (Future)
-```javascript
-// Recommended indexes for production:
-db.user.createIndex({ "email": 1 })
-db.user.createIndex({ "id": 1 })
-db.accountConfig.createIndex({ "userId": 1 })
-```
-
-### 3. Query Optimization
-- **Batch operations**: Use `insertMany()` for multiple records
-- **Selective fetching**: Only query data when needed
-- **User validation**: Fail fast on ownership checks
-
-## Migration Strategy
-
-### What Was Removed (Boilerplate Cleanup)
-- ❌ Creative-related collections and schemas
-- ❌ Complex account configuration fields
-- ❌ AI-specific data structures
-- ❌ Image and media collections
-
-### What Was Added
-- ✅ Simplified user and account config collections
-- ✅ Generic account configuration schema
-- ✅ Basic onboarding flow data
-- ✅ Clean, minimal database structure
-
-### Data Migration Notes
-**For boilerplate**: No migration needed - clean slate
-**For production data**: Would need custom migration scripts based on specific requirements
-
-## Utility Functions
-
-### Timestamp Utility
-**Location**: [src/lib/utils.ts](mdc:src/lib/utils.ts)
-
-```typescript
-// Use this function for all timestamp fields
-export const getNowTimestamp = (): number => {
-  return Date.now(); // Returns millisecond epoch timestamp
-};
-```
-
-**Usage in database operations:**
-```typescript
-import { getNowTimestamp } from '@/lib/utils';
-
-// Always use this for timestamps
-const now = getNowTimestamp();
-
-await collection.insertOne({
-  ...data,
-  createdAt: now,
-  updatedAt: now
-});
-```
-
-## Example Implementation
-
-### Server Action Pattern
-```typescript
-export async function upsertAccountConfig(rawData: AccountConfigFormData): Promise<ServerActionResult> {
+export async function handleMessageEvent(event: SlackMessageEvent): Promise<void> {
   try {
-    const user = await getCurrentUser();
-    const validatedData = AccountConfigFormDataSchema.parse(rawData);
+    // Validate event data
+    const validatedEvent = SlackEventSchema.parse(event);
     
-    const now = getNowTimestamp(); // ✅ Use utility function
+    // Check user has installed app  
+    const user = await slackUserCollection.findOne({
+      slackId: validatedEvent.user,
+      isActive: true
+    });
     
-    await accountConfigCollection.replaceOne(
-      { userId: user.id },
-      {
-        ...validatedData,
-        userId: user.id,
-        createdAt: now,
-        updatedAt: now
-      },
-      { upsert: true }
+    if (!user) return; // Skip - user hasn't installed app
+    
+    // Check bot is active in this channel
+    const isChannelActive = await isChannelAccessible(
+      validatedEvent.channel, 
+      user.workspaceId
     );
-
-    return { success: true };
+    
+    if (!isChannelActive) return; // Skip - bot not in channel
+    
+    // Get workspace-specific bot token
+    const workspace = await workspaceCollection.findOne({ 
+      _id: new ObjectId(user.workspaceId) 
+    });
+    
+    if (!workspace?.botToken) return; // Skip - no bot token
+    
+    // Process with AI analysis and send ephemeral feedback
+    // ... AI analysis logic
+    
   } catch (error) {
-    // Error handling...
+    console.error('Message event processing error:', error);
   }
 }
 ```

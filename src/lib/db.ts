@@ -33,5 +33,13 @@ if (process.env.NODE_ENV === "development") {
 export const db = client.db(process.env.MONGODB_DB_NAME);
 export default client; 
 
+// Basic collections (for boilerplate)
 export const userCollection = db.collection("user");
 export const accountConfigCollection = db.collection("accountConfig");
+
+// Slack app collections
+export const workspaceCollection = db.collection("workspaces");
+export const slackUserCollection = db.collection("slackUsers");
+export const analysisInstanceCollection = db.collection("analysisInstances");
+export const invitationCollection = db.collection("invitations");
+export const botChannelsCollection = db.collection("botChannels");

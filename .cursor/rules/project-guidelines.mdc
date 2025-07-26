@@ -38,6 +38,23 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **Follow up questions**: If confused about requirements, ask clarifying questions
 - **Stay focused**: Complete the specific task requested before suggesting improvements
 
+## Build Quality & Error Prevention
+- **JSX Entity Escaping**: Always escape special characters in JSX text content to prevent React unescaped entity errors
+  - Use `&apos;` for apostrophes: `you'll` → `you&apos;ll`
+  - Use `&ldquo;` and `&rdquo;` for quotes: `"quoted text"` → `&ldquo;quoted text&rdquo;`
+  - Use `&amp;` for ampersands: `A & B` → `A &amp; B`
+- **TypeScript Parameter Usage**: Remove unused parameters from function signatures instead of prefixing with underscore
+  - ❌ WRONG: `function handleData(_unusedParam: string, data: string)`
+  - ✅ CORRECT: `function handleData(data: string)` and update all calls
+- **Type Safety**: Never use `any` type - always provide explicit type annotations
+  - ❌ WRONG: `const params: any = { channel: id };`
+  - ✅ CORRECT: `const params: { channel: string; limit?: number } = { channel: id };`
+- **Suspense Boundaries**: Wrap components using `useSearchParams()` or other client-side hooks in Suspense boundaries
+  - Always wrap in `<Suspense fallback={LoadingComponent}>` when using `useSearchParams()`, `useRouter()` with client-side navigation
+  - Provide meaningful loading fallbacks for better UX
+- **ESLint Compliance**: Follow all ESLint rules without exceptions - fix issues rather than disable rules
+- **Build Verification**: Always run `npm run build` before completing tasks to ensure no build errors
+
 ## Framework-First Approach
 - **Next.js 15** - we are using nextjs 15 version
 - **Use Next.js built-ins**: Always use Next.js default features like `loading.tsx`, `error.tsx`, and `not-found.tsx` for handling loading states, errors, and 404s instead of custom logic
@@ -160,30 +177,126 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **Server Actions**: All database operations should be in Server Actions in [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts)
 - **Collection Operations**: Use native MongoDB collection methods (insertOne, findOne, updateOne, etc.)
 
-## Authentication & Middleware Architecture
-- **Better Auth**: Uses better-auth library for authentication
-- **Middleware Protection**: [src/middleware.ts](mdc:src/middleware.ts) protects all `/app/*` routes
+## Authentication & Slack Integration Architecture
+- **Slack OAuth**: Direct Slack app installation without traditional web authentication
+- **Workspace-Specific Tokens**: Each workspace has its own bot token stored during OAuth installation
+- **Bot Token Storage**: Workspace-specific `botToken` field in workspaceCollection enables per-workspace API calls
+- **Channel Access Control**: Bot only operates in channels explicitly selected during onboarding
 - **Authentication Flow**:
-  1. If not logged in → redirect to `/login`
-  2. If logged in but onboarding not completed → redirect to `/app/onboarding`
-  3. If logged in and onboarding completed → allow access to `/app/*`
-  4. If onboarding completed and trying to access `/app/onboarding` → redirect to `/app`
-- **Session Management**: Uses better-auth's session API with betterFetch
-- **User Data**: Retrieved via `/api/user` endpoint which checks `hasCompletedOnboarding` field
+  1. User installs Slack app via OAuth
+  2. Bot token and workspace data stored in database
+  3. User redirected to onboarding with query parameters
+  4. Onboarding includes channel selection and bot joining
+- **Token Usage**: All Slack API calls use workspace-specific tokens from database
+- **No Web Sessions**: Standard Slack app approach - all data tied to Slack user IDs
+
+## Slack Event Handling & Auto Coaching ✅ IMPLEMENTED
+
+### Event Subscription Strategy
+- **Privacy by Design**: Bot only receives events from channels where it's explicitly added as a member
+- **Event Types Required**: 
+  - `message.channels` - Public channel messages (REQUIRED for auto coaching)  
+  - `message.groups` - Private channel messages
+  - `app_mention` - @bot mentions
+- **Channel Filtering**: Slack automatically filters events to only channels where bot is member
+- **Database Verification**: Additional check against `botChannelsCollection` for authorized channels
+
+### Auto Coaching Implementation ✅ WORKING
+- **Real-time Analysis**: Message events trigger AI analysis for communication improvement
+- **Ephemeral Feedback**: Private suggestions only visible to message sender
+- **Interactive Components**: "Replace Message" and "Keep Original" buttons
+- **Workspace-Specific Tokens**: Each workspace uses its own bot token for API calls
+- **Channel Access Control**: Double-layer verification (Slack + database) ensures privacy
+
+### Message Event Processing Flow
+```typescript
+// 1. Slack sends event (only from member channels)
+if (event.type === 'message' && (event.channel_type === 'channel' || event.channel_type === 'group')) {
+  
+  // 2. Validate user has app installed
+  const user = await slackUserCollection.findOne({ slackId: event.user, isActive: true });
+  if (!user) return; // Skip - user hasn't installed app
+  
+  // 3. Verify bot is active in specific channel  
+  const isChannelActive = await isChannelAccessible(event.channel, user.workspaceId);
+  if (!isChannelActive) return; // Skip - not authorized channel
+  
+  // 4. Get workspace-specific bot token
+  const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+  if (!workspace?.botToken) return; // Skip - missing token
+  
+  // 5. AI analysis and ephemeral coaching feedback
+  // 6. Interactive message replacement functionality
+}
+```
+
+## Slack Scope Management & Troubleshooting ✅ CRITICAL
+- **Required Bot Scopes**: All Slack functionality depends on having correct bot token scopes configured
+- **Scope Configuration Files**:
+  - Code: [src/lib/slack.ts](mdc:src/lib/slack.ts) - `slackOAuthConfig.botScopes` array  
+  - Manifest: [manifest.json](mdc:manifest.json) - `oauth_config.scopes.bot` array
+- **Critical Scopes for Core Functionality**:
+  - `chat:write` - Send messages to channels (REQUIRED)
+  - `chat:write.customize` - Custom username/avatar for message replacement
+  - `im:write` - Send direct messages to users (REQUIRED for welcome messages)
+  - `message.channels` event subscription requires proper scopes
+- **Common Issues Fixed**:
+  - Missing `message.channels` in event subscriptions (prevented auto coaching)
+  - Incorrect interactive endpoint URL (`/interactions` vs `/interactive`)
+  - Missing `chat:write.customize` scope for message replacement
+  - Using global bot token instead of workspace-specific tokens
+- **Troubleshooting Process**:
+  1. Check error logs for `missing_scope` messages
+  2. Identify which API method is failing
+  3. Look up required scopes in Slack API docs
+  4. Add missing scopes to both `src/lib/slack.ts` and `manifest.json`
+  5. Update Slack app configuration in developer console
+  6. Reinstall app to get new permissions
+- **Essential Bot Scopes List**:
+  ```typescript
+  botScopes: [
+    'chat:write',        // Send messages
+    'chat:write.public', // Send to channels bot isn't in
+    'chat:write.customize', // Custom username/avatar for replacements
+    'commands',          // Slash commands
+    'channels:history',  // Read message history
+    'groups:history',    // Read private channel history  
+    'channels:read',     // Read channel info
+    'channels:join',     // Join channels during onboarding
+    'groups:read',       // Read private channel info
+    'im:write',          // Send DMs (CRITICAL for welcome messages)
+    'users:read',        // Read user info
+    'app_mentions:read'  // Handle @mentions
+  ]
+  ```
+
+## Welcome Message Implementation ✅ COMPLETED
+- **Functionality**: Personalized welcome message sent via DM after Slack app installation
+- **Implementation**: [src/lib/slack.ts](mdc:src/lib/slack.ts) - `sendWelcomeMessage()` function
+- **Integration**: [src/app/api/auth/slack/callback/route.ts](mdc:src/app/api/auth/slack/callback/route.ts) - Called after OAuth success
+- **Message Features**:
+  - Rich Block Kit formatting with interactive buttons
+  - "Complete Setup" button linking to onboarding
+  - "Help Center" button for documentation  
+  - Clear value proposition and next steps
+  - Privacy reassurance (feedback is private)
+- **Error Handling**: Graceful failure - doesn't break OAuth flow if DM fails
+- **Critical Dependency**: Requires `im:write` scope for DM functionality
+- **Follow-up System**: `sendOnboardingReminderMessage()` for incomplete users
 
 ## API Architecture
 - **Use Server Actions**: Prefer Next.js Server Actions over API routes for most functionality
 - **API routes only for**:
-  - Authentication endpoints (handled by better-auth)
-  - User data endpoints (e.g., `/api/user`)
+  - Slack OAuth callback and webhook endpoints
+  - Slack commands, events, and interactive components
   - Webhook endpoints from external services
   - Third-party integrations that require traditional REST endpoints
 - **Server Actions for**:
-  - Database operations
-  - Form submissions
-  - Data mutations
-  - Business logic
-  - AI operations with Azure
+  - Database operations (with workspace-specific token lookups)
+  - Form submissions and onboarding flow
+  - Data mutations and channel management
+  - Business logic and AI operations
+- **Workspace Token Pattern**: Server actions fetch workspace-specific bot tokens from database before making Slack API calls
 
 ## Project Structure Reference
 - **Auth pages**: [src/app/(auth)/](mdc:src/app/(auth)/) - Login, register, etc.
@@ -207,16 +320,19 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
   - **Custom hooks**: [src/hooks/](mdc:src/hooks)
 
 ### Key Route Groups
-1. **Auth Pages** — [src/app/(auth)/](mdc:src/app/(auth)/)
-   - Login: [src/app/(auth)/login/page.tsx](mdc:src/app/(auth)/login/page.tsx)
-   - Register (placeholder): [src/app/(auth)/register/page.tsx](mdc:src/app/(auth)/register/page.tsx)
-   - Local `layout.tsx` provides auth-specific wrapper
+1. **Public Pages** — [src/app/(public)/](mdc:src/app/(public)/) 
+   - Landing page with Slack installation: [src/app/(public)/page.tsx](mdc:src/app/(public)/page.tsx)
+   - Marketing and public content
 
-2. **Protected App Pages** — [src/app/app/](mdc:src/app/app) (no route group)
-   - Main entry: [src/app/app/page.tsx](mdc:src/app/app/page.tsx)
-   - Onboarding: [src/app/app/onboarding/page.tsx](mdc:src/app/app/onboarding/page.tsx)
+2. **App Pages** — [src/app/app/](mdc:src/app/app) (no auth needed - Slack app)
+   - Onboarding flow: [src/app/app/onboarding/page.tsx](mdc:src/app/app/onboarding/page.tsx)
+   - Help documentation: [src/app/app/help/page.tsx](mdc:src/app/app/help/page.tsx)  
+   - Team invitations: [src/app/app/invite/page.tsx](mdc:src/app/app/invite/page.tsx)
 
-3. **Public Pages** — [src/app/(public)/](mdc:src/app/(public)/) (landing & marketing)
+3. **API Routes** — [src/app/api/](mdc:src/app/api)
+   - Slack OAuth callback: [src/app/api/auth/slack/callback/route.ts](mdc:src/app/api/auth/slack/callback/route.ts)
+   - Slack commands: [src/app/api/slack/commands/route.ts](mdc:src/app/api/slack/commands/route.ts)
+   - Slack events: [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts)
 
 ### Middleware & Authentication
 - **Middleware**: [src/middleware.ts](mdc:src/middleware.ts) - Protects `/app/*` routes with session validation and onboarding flow
@@ -226,7 +342,8 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
 ### Library & Utility Files
 - **MongoDB client**: [src/lib/db.ts](mdc:src/lib/db.ts) - Native MongoDB driver connection
 - **Server actions**: [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts) - Database operations and business logic
-- **AI Integration**: [src/lib/ai.ts](mdc:src/lib/ai.ts) - Example AI functions
+- **AI Integration**: [src/lib/ai.ts](mdc:src/lib/ai.ts) - Azure OpenAI powered AI functions for auto-coaching
+- **AI Prompts**: [src/lib/prompts/index.ts](mdc:src/lib/prompts/index.ts) - Centralized AI prompt templates (includes contextual variants for rephrase)
 - **Theme configuration**: [src/lib/theme.ts](mdc:src/lib/theme.ts)
 - **Utilities**: [src/lib/utils.ts](mdc:src/lib/utils.ts)
 
@@ -271,17 +388,28 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
   await db.collection('configs').insertOne(validatedData);
   ```
 
-## Onboarding Flow Implementation
-- **Simple form**: [src/app/app/onboarding/OnboardingForm.tsx](mdc:src/app/app/onboarding/OnboardingForm.tsx) handles basic onboarding
-- **Fields**: Company name (required) and website URL (optional)
+## Onboarding Flow Implementation ✅ COMPLETED
+- **Multi-step form**: [src/app/app/onboarding/OnboardingForm.tsx](mdc:src/app/app/onboarding/OnboardingForm.tsx) handles Slack user onboarding
+- **User Identification**: Query parameters (`?user={slackId}&team={teamId}`) for validation
+- **Step 1**: Analysis frequency selection (weekly/monthly)
+- **Step 2**: Channel selection - users choose which channels to enable AI coaching
+- **Step 3**: Team member email invitations (optional)
 - **Server Actions**: 
-  - `upsertAccountConfig()` - Saves config and marks onboarding complete
-- **Collection**: Uses `accountConfigCollection` from [src/lib/db.ts](mdc:src/lib/db.ts)
+  - `validateSlackUser()` - Validates user and checks onboarding status
+  - `getWorkspaceChannels()` - Fetches available channels using workspace-specific bot token
+  - `saveBotChannels()` - Joins bot to selected channels and stores in database
+  - `completeSlackOnboarding()` - Saves preferences, channels, and marks onboarding complete
+- **One-time completion**: `hasCompletedOnboarding` flag prevents re-access
+- **Bot Integration**: Bot automatically joins selected channels during onboarding
 - **Completion**: Sets `hasCompletedOnboarding: true` on user document for middleware routing
 
-## Key Collections
-- **userCollection**: User authentication and profile data
-- **accountConfigCollection**: User's basic configuration (company name, website URL)
+## Key Collections ✅ UPDATED
+- **workspaceCollection**: Slack workspace/team data (workspaceId, name, domain, **botToken**)
+- **slackUserCollection**: Slack user data with onboarding tracking (slackId, analysisFrequency, hasCompletedOnboarding)
+- **botChannelsCollection**: Tracks which channels bot is active in (workspaceId, channelId, channelName, addedAt)
+- **invitationCollection**: Email invitations sent by users during onboarding
+- **analysisInstanceCollection**: Future - will store message analysis results
+- **Legacy collections**: userCollection, accountConfigCollection (for reference only)
 
 ## Trigger.dev Background Jobs Architecture
 
@@ -358,12 +486,281 @@ export const exampleTask = task({
 - **Client-side**: Use Trigger.dev React hooks for real-time updates
 - **Environment**: Configure for different deployment environments
 
+## Azure OpenAI Integration ✅ IMPLEMENTED
+
+### Configuration
+- **Provider**: Azure OpenAI using official `openai` SDK with `AzureOpenAI` client
+- **Environment Variables**:
+  - `AZURE_API_KEY` - Azure OpenAI API key (required)
+  - `AZURE_API_ENDPOINT` - Azure endpoint URL (required)
+  - `AZURE_API_VERSION` - API version (defaults to '2024-12-01-preview')
+  - `AZURE_DEPLOYMENT_NAME` - Model deployment name (defaults to 'gpt-4')
+  - `AZURE_MODEL_NAME` - Optional model name override
+
+### AI Architecture
+- **Client Setup**: [src/lib/ai.ts](mdc:src/lib/ai.ts) - Single `AzureOpenAI` client instance
+- **Prompt Management**: [src/lib/prompts/index.ts](mdc:src/lib/prompts/index.ts) - Centralized prompt templates
+- **JSON Response Format**: All AI functions use `response_format: { type: 'json_object' }` with explicit JSON instructions
+
+### Auto-Coaching Workflow ✅ OPTIMIZED
+1. **Step 1: Quick Check** - Analyze current message only (no context)
+   - Conservative filtering to avoid flagging normal greetings/responses
+   - Fast response (~200ms) using `quickCheckNeedsCoaching()`
+   - Most messages filtered out here to save API calls
+
+2. **Step 2: Fetch Context** - Only when Step 1 flags message
+   - Fetch last 15 messages from Slack API
+   - Conversation history for better analysis context
+
+3. **Step 3: Detailed Analysis** - With full context
+   - Analyze current message with conversation history
+   - Focus on current message issues, not history problems
+   - Generate coaching suggestions and improved message
+
+### AI Functions Implemented
+- **`quickCheckNeedsCoaching()`** - Conservative message screening
+- **`analyzeMessageForFlags()`** - Detailed analysis with context (for auto-coaching)
+- **`analyzeMessageForRephraseWithoutContext()`** - Context-free message analysis for rephrase
+- **`analyzeMessageForRephraseWithContext()`** - Context-aware message analysis using conversation history
+- **`generateImprovedMessage()`** - Basic message improvement suggestions
+- **`generateImprovedMessageWithContext()`** - Context-aware message improvements that fit conversation flow
+- **`generatePersonalFeedback()`** - User communication patterns analysis
+- **`identifyMessageTarget()`** - Detect message recipients
+- **`generateReport()`** - Weekly/monthly communication reports
+
+### Prompt Design Principles
+- **Conservative by default** - Don't flag normal professional communication
+- **Explicit JSON format** - Required for Azure OpenAI `json_object` mode
+- **Context separation** - Clear distinction between current message and history
+- **Specific examples** - Concrete examples of what to flag/not flag
+
+### Contextual Analysis Patterns ✅ NEW
+- **Conditional Context Usage**: `/rephrase` command intelligently uses conversation history when bot has channel access
+- **Channel Access Detection**: Uses `isChannelAccessible()` to determine if bot can fetch conversation history
+- **Dual Analysis Paths**:
+  - **With Context**: `analyzeMessageForRephraseWithContext()` - Uses last 10 messages for better understanding
+  - **Without Context**: `analyzeMessageForRephraseWithoutContext()` - Analyzes only the provided message text
+- **Context-Aware Improvements**: `generateImprovedMessageWithContext()` creates suggestions that fit conversation flow
+- **Privacy-First**: Only accesses conversation data when bot is explicitly added to channels
+
 ---
 _Use this snapshot alongside the guidelines above to maintain consistency and avoid duplicating functionality._
 
+## Slack Slash Command Modal Responses
+- When a slash command opens a modal via `views.open`, **never** wait for the API call to resolve before responding to Slack.
+- Respond with an **empty 200 OK** (no JSON body) or `null` in Next.js API routes to acknowledge the request immediately.
+- This prevents Slack from posting a `Slackbot` operation_timeout error or showing "We had some trouble connecting" banners.
+- Handle any async work (e.g., DB updates, secondary API calls) in the background and log errors instead of blocking the response.
+
+## Using `after()` for background tasks (Next.js 15)
+- When running on Vercel, prefer Next.js `after()` from `next/server` to schedule any asynchronous work (DB writes, external API calls, logging) **after** the HTTP response has been sent.
+- Pattern:
+  ```ts
+  import { after } from 'next/server';
+
+  // inside route handler
+  after(async () => {
+    await doLongTask();
+  });
+
+  return new Response(null, { status: 200 });
+  ```
+- This guarantees the work completes (or errors) without risking Slack’s 3-second timeout and without dropping promises when the serverless invocation ends.
+- Continue to respond to Slack immediately (empty 200 or minimal JSON) before the 3-second window.
+
+## Enhanced Rephrase Command Implementation ✅ COMPLETED
+
+### Contextual Analysis Workflow
+The `/rephrase` command now intelligently adapts based on bot channel permissions:
+
+**Implementation Pattern:**
+```typescript
+// Check if bot has channel access
+const hasChannelAccess = await isChannelAccessible(channelId, user.workspaceId);
+
+if (hasChannelAccess) {
+    // Fetch last 10 messages for context
+    const conversationHistory = await fetchConversationHistory(channelId, workspace.botToken, undefined, 10);
+    // Use context-aware analysis
+    const analysisResult = await analyzeMessageForRephraseWithContext(text, conversationHistory);
+    // Generate context-aware improvements
+    const improvedMessage = await generateImprovedMessageWithContext(text, primaryFlag.type, conversationHistory);
+} else {
+    // Analyze without context
+    const analysisResult = await analyzeMessageForRephraseWithoutContext(text);
+    // Generate basic improvements
+    const improvedMessage = await generateImprovedMessage(text, primaryFlag.type);
+}
+```
+
+### Key Features ✅ IMPLEMENTED
+- **Conditional Context Fetching**: Only fetches conversation history when bot is channel member
+- **Timeout Prevention**: Uses `after()` for background AI processing, responds immediately
+- **Ephemeral Results**: Shows suggestions as private ephemeral messages in same channel
+- **Clean Interface**: Simple format with original, improved, and tone information
+- **Privacy-First**: Conversation history only accessed when explicitly authorized
+
+### User Experience
+1. User runs `/rephrase Can you get this done ASAP?`
+2. Immediate response: "⏳ Analyzing and rephrasing your message..."
+3. Background analysis completes (context-aware if bot in channel)
+4. Ephemeral result shows improved message with tone information
+
+## Slack Integration Best Practices ✅ CRITICAL UPDATES
+
+### Workspace-Specific Token Usage Pattern ✅ MANDATORY
+**Never use global bot tokens - always use workspace-specific tokens from database:**
+
+```typescript
+// ❌ WRONG - Global token causes auth errors
+const conversationHistory = await fetchConversationHistory(channelId, process.env.SLACK_BOT_TOKEN!, undefined, 40);
+
+// ✅ CORRECT - Workspace-specific token
+const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+const conversationHistory = await fetchConversationHistory(channelId, workspace.botToken, undefined, 40);
+```
+
+**Why this matters:**
+- Each workspace has its own bot token from OAuth installation
+- Global tokens cause `invalid_auth` errors in multi-workspace environments  
+- Workspace-specific tokens ensure proper permissions and isolation
+
+### Slack Markdown Formatting ✅ CRITICAL
+**Use Slack's mrkdwn format, not standard Markdown:**
+
+```typescript
+// ❌ WRONG - Standard Markdown (doesn't render in Slack)
+const message = `**Personal Communication Feedback**\n**Overall Score**: 8/10\n*Analysis based on recent messages.*`;
+
+// ✅ CORRECT - Slack mrkdwn format
+const message = `*Personal Communication Feedback*\n*Overall Score*: 8/10\n_Analysis based on recent messages._`;
+```
+
+**Slack formatting rules:**
+- **Bold**: Use `*text*` (single asterisks)
+- **Italic**: Use `_text_` (underscores)  
+- **Code**: Use backticks `` `code` ``
+- **Channels**: Use `<#channelId>` for channel references
+- **Users**: Use `<@userId>` for user mentions
+
+### Human-Only Message Filtering ✅ IMPLEMENTED
+**Enhanced conversation history filtering to only include human messages:**
+
+```typescript
+// In fetchConversationHistory - comprehensive filtering
+const messages = result.messages
+  .filter(msg => {
+    // Must have text content
+    if (!msg.text || msg.text.trim() === '') return false;
+    
+    // Filter out all bot messages
+    if (msg.bot_id || msg.app_id) return false;
+    
+    // Filter out system messages by subtype
+    if (msg.subtype && [
+      'bot_message', 'channel_join', 'channel_leave', 'channel_topic',
+      'channel_purpose', 'file_share', 'slackbot_response'
+    ].includes(msg.subtype)) return false;
+    
+    // Must have a human user ID (starts with 'U')
+    if (!msg.user || !msg.user.startsWith('U')) return false;
+    
+    // Filter out slash commands and standalone mentions
+    const text = msg.text.trim();
+    if (text.startsWith('/') || text.match(/^<@[UW][A-Z0-9]+>$/)) return false;
+    
+    return true;
+  })
+  .map(msg => msg.text || '')
+  .reverse(); // Chronological order
+```
+
+### Background Processing with Timeout Prevention ✅ IMPLEMENTED
+**Slack command pattern with immediate response and background analysis:**
+
+```typescript
+// Personal feedback command example
+async function handlePersonalFeedback(userId: string, channelId: string) {
+  // Get user and workspace information
+  const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+  const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+  
+  // Schedule background analysis using after()
+  after(async () => {
+    try {
+      // Heavy analysis work (conversation history + AI)
+      const conversationHistory = await fetchConversationHistory(channelId, workspace.botToken, undefined, 40);
+      const feedback = await generatePersonalFeedback(conversationHistory);
+      
+      // Add relationship insights
+      const relationshipInsights = await analyzeRelationshipContext(conversationHistory);
+      
+      // Send formatted results via DM
+      const formattedMessage = formatPersonalFeedbackMessage(feedback, relationshipInsights, channelId);
+      await sendDirectMessage(userId, formattedMessage, workspace.botToken);
+    } catch (error) {
+      await sendDirectMessage(userId, 'Error generating report', workspace.botToken);
+    }
+  });
+
+  // Immediately return processing message 
+  return {
+    text: '⏳ *Analyzing your communication patterns...*\n\nI\'ll send the detailed analysis to your DMs shortly!',
+    response_type: 'ephemeral'
+  };
+}
+```
+
+### Relationship-Specific Coaching Insights ✅ IMPLEMENTED
+**Analyze individual messages to identify communication targets:**
+
+```typescript
+// Analyze recent messages for relationship context
+let relationshipInsights: { name: string; issues: string[] }[] = [];
+const relationshipMap = new Map<string, string[]>();
+
+for (const message of recentMessages) {
+  const analysis = await analyzeMessageForFlags(message, conversationHistory);
+  if (analysis.flags.length > 0 && analysis.target?.name) {
+    const issues = relationshipMap.get(analysis.target.name) || [];
+    analysis.flags.forEach(flag => {
+      if (!issues.includes(flag.type)) issues.push(flag.type);
+    });
+    relationshipMap.set(analysis.target.name, issues);
+  }
+}
+
+// Only show if we have real person names (not "Unknown")
+if (relationshipInsights.some(insight => insight.name && insight.name !== 'Unknown')) {
+  feedbackMessage += `👥 *Relationship insights:*\n`;
+  feedbackMessage += relationshipInsights
+    .filter(insight => insight.name !== 'Unknown')
+    .map(insight => `• Work on *${insight.issues.join(', ')}* when messaging *${insight.name}*`)
+    .join('\n');
+}
+```
+
+### Friendly Coaching Tone ✅ IMPLEMENTED
+**Use supportive, personal language instead of formal reports:**
+
+```typescript
+// ❌ FORMAL - Sounds like a report
+const responseText = `Communication Report\nOverall Score: 8/10\nAreas for Improvement:\n• Be more specific`;
+
+// ✅ COACHING - Friendly and supportive
+const responseText = `🤖 *Hey there! Here's your personal feedback*\n` +
+  `*How you're doing: ${score}/10* ${score >= 8 ? '🟢 You\'re crushing it!' : '🔴 Let\'s level up together!'}\n` +
+  `💪 *Let's work on these together:*\n• Be more specific in your requests`;
+```
+
+**Coaching language patterns:**
+- "Hey there!" instead of formal greetings
+- "How you're doing" instead of "Overall Score"  
+- "Let's work on these together" instead of "Areas for Improvement"
+- "Here's what I'd love to see you try next" instead of "Action Items"
+- Encouraging emojis and supportive tone throughout
 
 
 ---
 _Use this snapshot alongside the guidelines above to maintain consistency and avoid duplicating functionality._
-
-

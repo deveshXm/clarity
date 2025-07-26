@@ -1,0 +1,159 @@
+---
+alwaysApply: true
+---
+
+# Personal AI Coaching Slack App - Development Plan
+
+## Overview
+A Slack-first personal AI coaching app that helps employees improve their communication skills through real-time analysis and feedback. Users can install the app from the Slack App Directory or via our website, with freemium subscription model.
+
+**✅ CURRENT STATUS: Auto Coaching & Event Handling Complete**
+- Slack OAuth integration working ✅
+- Database collections for users and workspaces ✅
+- Multi-step onboarding flow with user identification ✅
+- User preference management with server actions ✅
+- One-time onboarding completion tracking ✅
+- Email invitation system integrated ✅
+- Personalized welcome message via DM after installation ✅
+- Slack scope troubleshooting and `im:write` scope fix ✅
+- **Auto coaching event handling and message analysis** ✅
+- **Real-time message processing with ephemeral feedback** ✅
+- **Interactive message replacement functionality** ✅
+- **Bot channel access control and privacy protection** ✅
+
+## ⚠️ Critical Technical Insights ✅ IMPLEMENTED
+**Bot Event Privacy**: Slack bots only receive `message.channels` events from channels where the bot is explicitly added as a member. This provides automatic privacy protection - the bot won't see messages from random public channels, only from channels where users have specifically authorized it during onboarding.
+
+**Event Filtering Strategy**: 
+- Layer 1: Slack's automatic filtering (only member channels)
+- Layer 2: Database verification against `botChannelsCollection` 
+- Layer 3: User must have installed the app (`isActive: true`)
+- Layer 4: Ephemeral responses are private to message sender
+
+## Required Slack Permissions
+
+### Bot Token Scopes (No Admin Required) ✅ UPDATED
+- `chat:write` - Send messages as the bot
+- `chat:write.public` - Send messages to channels bot isn't a member of  
+- `chat:write.customize` - **NEW**: Custom username/avatar for message replacement
+- `commands` - Add slash commands
+- `channels:history` - Read message history in public channels
+- `groups:history` - Read message history in private channels
+- `im:history` - Read message history in DMs
+- `mpim:history` - Read message history in group DMs
+- `channels:read` - View basic info about public channels
+- `channels:join` - Join channels during onboarding
+- `groups:read` - View basic info about private channels
+- `im:read` - View basic info about DMs
+- `mpim:read` - View basic info about group DMs  
+- `im:write` - **CRITICAL**: Send direct messages to users (required for welcome messages)
+- `users:read` - View people in workspace
+- `app_mentions:read` - View messages mentioning the bot
+
+### Event Subscriptions ✅ FIXED
+**Required in manifest.json:**
+```json
+"bot_events": [
+  "message.channels",  // NEW: Public channel messages (REQUIRED for auto coaching)
+  "message.groups",    // NEW: Private channel messages  
+  "app_mention"        // Bot mentions
+]
+```
+
+### Phase 3: Core Slack Integration ✅ COMPLETED
+- [x] **3.1 Auto Coaching System**
+  - [x] Real-time message event processing
+  - [x] AI analysis for communication issues  
+  - [x] Ephemeral coaching suggestions (private to user)
+  - [x] Interactive message replacement functionality
+  - [x] Workspace-specific bot token usage
+  - [x] Channel access control and privacy protection
+
+- [x] **3.2 Event Infrastructure**  
+  - [x] Message event subscription and handling
+  - [x] Slack signature verification
+  - [x] Event filtering for authorized channels only
+  - [x] Error handling and graceful degradation
+
+- [x] **3.3 Interactive Components**
+  - [x] "Replace Message" button functionality
+  - [x] "Keep Original" acknowledgment  
+  - [x] Message deletion and reposting
+  - [x] Success confirmation feedback
+
+### Phase 4: Real-time Message Analysis ✅ PARTIALLY IMPLEMENTED
+- [x] **4.1 Message Analysis Engine (Dummy Functions)**
+  - [x] MESSAGE_ANALYSIS_TYPES object with IDs and camelCase keys implemented in [src/lib/ai.ts](mdc:src/lib/ai.ts)
+  - [x] Dummy analysis functions for 8-parameter flagging system
+  - [x] Flag-based detection (pushiness, vagueness, rudeness, etc.)
+  - [x] Realistic mock data generation for testing
+
+- [x] **4.2 Context Analysis**  
+  - [x] Conversation history fetching (last 10 messages)
+  - [x] Message context analysis for better AI understanding
+  - [x] Workspace-specific API token usage
+  - [x] Message filtering (skip bot messages and system messages)
+
+- [x] **4.3 Improvement Suggestions**
+  - [x] AI-generated improved message alternatives
+  - [x] Ephemeral response system with Block Kit formatting
+  - [x] Interactive "Replace Message" functionality working
+  - [x] Original message deletion and improved message posting
+  - [x] User confirmation and success feedback
+
+### Current Implementation Status
+
+### Auto Coaching Flow ✅ WORKING
+1. **Message Event**: User posts in monitored channel → Slack sends `message.channels` event
+2. **Privacy Filter**: Event only sent if bot is member of channel (Slack's automatic filter)
+3. **Authorization Check**: Verify channel is in `botChannelsCollection` (user authorized)
+4. **User Validation**: Confirm user has installed app and is active
+5. **AI Analysis**: Analyze message for communication issues using dummy functions
+6. **Ephemeral Feedback**: Send private coaching suggestions with interactive buttons
+7. **Message Replacement**: User can replace original with improved version
+
+### Phase 4 Remaining Tasks
+- [x] **4.4 Slash Commands** ✅ COMPLETED
+  - [x] `/personalfeedback` - Get analysis of recent communication patterns  
+  - [x] `/rephrase` - Get improved versions of messages (with contextual analysis)
+  - [x] `/settings` - Configure coaching preferences
+  
+- [ ] **4.5 Analytics Storage**
+  - [ ] Store analysis instances in `analysisInstanceCollection`
+  - [ ] Track user engagement and improvement metrics  
+  - [ ] Relationship mapping for targeted feedback
+
+🎯 **IMMEDIATE NEXT STEPS**:
+
+1. **Phase 4 Complete** ✅ - All slash commands implemented with advanced features:
+   - `/personalfeedback` - Background analysis with DM delivery
+   - `/rephrase` - Context-aware message improvement (uses conversation history when bot is in channel)
+   - `/settings` - Modal-based preference management
+
+2. **Begin Phase 5**: Data Storage & Analytics Implementation
+   
+2. **Phase 5**: Data Storage & Analytics  
+   - Store analysis instances for reporting
+   - Track communication patterns and improvements
+   
+3. **Phase 6**: Reporting & Background Jobs
+   - Implement Trigger.dev background job for report generation
+   - Create weekly/monthly analysis reports  
+   - Set up automated report delivery via Slack DM
+
+📂 **KEY FILES COMPLETED**:
+- `src/app/api/slack/events/route.ts` - ✅ Message event handling working
+- `src/app/api/slack/interactive/route.ts` - ✅ Interactive components working  
+- `src/app/api/slack/commands/route.ts` - ✅ Enhanced slash commands with contextual analysis
+- `src/lib/ai.ts` - ✅ AI analysis functions implemented (including contextual variants)
+- `src/lib/prompts/index.ts` - ✅ Contextual prompt templates added
+- `src/lib/slack.ts` - ✅ Slack API integration complete
+- `manifest.json` - ✅ Event subscriptions and scopes fixed
+
+📂 **KEY FILES TO WORK ON NEXT**:
+- `src/lib/server-actions.ts` - Add analysis storage functions for tracking
+- `src/trigger/` - Implement background report generation
+- `src/types/index.ts` - Add analysis instance types for Phase 5
+
+
+**Note**: This plan provides a complete roadmap for building the personal AI coaching Slack app while working within Slack's API limitations. The message replacement system provides a user-friendly alternative to direct editing.
