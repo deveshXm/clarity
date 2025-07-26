@@ -3,9 +3,6 @@ import * as crypto from 'crypto';
 import { botChannelsCollection } from './db';
 import { SlackChannel } from '@/types';
 
-// Initialize Slack Web API client
-export const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
-
 // OAuth configuration
 export const slackOAuthConfig = {
     clientId: process.env.NEXT_PUBLIC_SLACK_CLIENT_ID!,

@@ -6,6 +6,7 @@ import {
     ReportResult
 } from "@/types";
 import { AzureOpenAI } from "openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { QUICK_CHECK_PROMPT, ANALYSIS_PROMPT_TEMPLATE, IMPROVEMENT_PROMPT_TEMPLATE, IMPROVEMENT_WITH_CONTEXT_PROMPT_TEMPLATE, REPHRASE_ANALYSIS_PROMPT_TEMPLATE, REPHRASE_WITH_CONTEXT_ANALYSIS_PROMPT_TEMPLATE, PERSONAL_FEEDBACK_PROMPT, IDENTIFY_TARGET_PROMPT, REPORT_PROMPT_TEMPLATE } from "@/lib/prompts";
 
 export const exampleTask = async (payload: ExampleTaskInput) => {
@@ -33,7 +34,7 @@ const openaiClient = new AzureOpenAI({
 
 const modelName = process.env.AZURE_MODEL_NAME || process.env.AZURE_DEPLOYMENT_NAME || 'gpt-4.1-mini';
 
-async function chatCompletion(messages: any[], temperature = 0): Promise<string> {
+async function chatCompletion(messages: ChatCompletionMessageParam[], temperature = 0): Promise<string> {
     const response = await openaiClient.chat.completions.create({
         messages,
         model: modelName,
@@ -148,7 +149,7 @@ export const analyzeMessageForRephraseWithoutContext = async (
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
     ]);
-    const { flags, target } = parseFlags(raw);
+    const { flags } = parseFlags(raw);
     return { flags: flags ?? [], target: undefined }; // No target identification without context
 };
 
