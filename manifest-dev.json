@@ -1,32 +1,32 @@
 {
     "display_information": {
-        "name": "Clarity",
+        "name": "Clarity-Dev",
         "description": "Your AI communication coach for better workplace messaging.",
         "background_color": "#4A154B",
         "long_description": "Personal AI Coach analyzes your Slack messages in real-time to help improve communication clarity, tone, and effectiveness. Get instant feedback, personalized reports, and actionable suggestions to become a better communicator."
     },
     "features": {
         "bot_user": {
-            "display_name": "Clarity",
+            "display_name": "Clarity-Dev",
             "always_online": true
         },
         "slash_commands": [
             {
                 "command": "/personalfeedback",
-                "url": "https://clarity.rocktangle.com/api/slack/commands",
+                "url": "https://90185304d11c.ngrok-free.app/api/slack/commands",
                 "description": "Get analysis of your recent communication patterns",
                 "should_escape": false
             },
             {
                 "command": "/rephrase",
-                "url": "https://clarity.rocktangle.com/api/slack/commands",
+                "url": "https://90185304d11c.ngrok-free.app/api/slack/commands",
                 "description": "Get improved versions of your messages",
                 "usage_hint": "[message to improve]",
                 "should_escape": false
             },
             {
                 "command": "/settings",
-                "url": "https://clarity.rocktangle.com/api/slack/commands",
+                "url": "https://90185304d11c.ngrok-free.app/api/slack/commands",
                 "description": "Configure your AI coach preferences",
                 "should_escape": false
             }
@@ -34,18 +34,15 @@
     },
     "oauth_config": {
         "redirect_urls": [
-            "https://clarity.rocktangle.com/api/auth/slack/callback"
+            "https://90185304d11c.ngrok-free.app/api/auth/slack/callback"
         ],
         "scopes": {
             "user": [
-                "identity.basic",
-                "identity.email",
-                "identity.team"
+                "chat:write"
             ],
             "bot": [
                 "chat:write",
                 "chat:write.public",
-                "chat:write.customize",
                 "commands",
                 "channels:history",
                 "groups:history",
@@ -64,7 +61,7 @@
     },
     "settings": {
         "event_subscriptions": {
-            "request_url": "https://clarity.rocktangle.com/api/slack/events",
+            "request_url": "https://90185304d11c.ngrok-free.app/api/slack/events",
             "bot_events": [
                 "app_mention",
                 "message.channels",
@@ -73,7 +70,7 @@
         },
         "interactivity": {
             "is_enabled": true,
-            "request_url": "https://clarity.rocktangle.com/api/slack/interactive"
+            "request_url": "https://90185304d11c.ngrok-free.app/api/slack/interactive"
         },
         "org_deploy_enabled": false,
         "socket_mode_enabled": false,

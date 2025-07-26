@@ -49,18 +49,21 @@ export async function POST(request: NextRequest) {
                 text: 'Invalid command format' 
             }, { status: 400 });
         }
-        
-        // Verify user has installed the app
-        const user = await slackUserCollection.findOne({
+
+        // Authenticate user - only registered app users can use commands
+        const appUser = await slackUserCollection.findOne({
             slackId: userId,
             isActive: true
         });
-        
-        if (!user) {
+
+        if (!appUser) {
             return NextResponse.json({
-                text: 'You need to install the Personal AI Coach app first. Please contact your admin.'
+                text: '❌ You need to install our app first. Please visit our website to get started!',
+                response_type: 'ephemeral'
             });
         }
+
+        console.log('✅ Authenticated user for command:', command, 'User:', userId);
         
         // Route to appropriate command handler
         let response;
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
                 response = await handleRephrase(text, userId, channelId);
                 break;
             case '/settings':
-                response = await handleSettings(text, userId, user as unknown as SlackUser, triggerId!); // Pass triggerId
+                response = await handleSettings(text, userId, appUser as unknown as SlackUser, triggerId!); // Pass triggerId
                 break;
             default:
                 response = {

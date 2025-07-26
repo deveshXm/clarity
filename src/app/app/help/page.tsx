@@ -270,20 +270,23 @@ export default function HelpPage() {
           
           <Card withBorder>
             <Stack gap="sm">
-              <Title order={3}>🔄 Message Replacement</Title>
+              <Title order={3}>🔄 Message Updating</Title>
               <Text size="sm" c="dimmed">
                 When you send a message with communication issues, you&apos;ll now get:
               </Text>
               <Text size="sm">
-                                 📝 <strong>Original Message:</strong> &ldquo;Hey can you do this ASAP!!!&rdquo;
+                📝 <strong>Original Message:</strong> &ldquo;Hey can you do this ASAP!!!&rdquo;
                 <br />
                 ✨ <strong>Improved Version:</strong> &ldquo;Hi! Could you please help with this when you have a chance?&rdquo;
                 <br />
                 💡 <strong>Explanation:</strong> Reduces pushiness and adds politeness
                 <br />
-                🔄 <strong>Replace Button:</strong> Deletes original and posts improved version
+                🔄 <strong>Update Button:</strong> Replaces your original message with the improved version
                 <br />
                 ✅ <strong>Keep Original:</strong> Dismisses suggestion if you prefer your style
+              </Text>
+              <Text size="sm" c="dimmed">
+                <strong>Note:</strong> Message updating requires user permissions and only works for registered app users.
               </Text>
             </Stack>
           </Card>

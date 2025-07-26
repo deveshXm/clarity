@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible } from '@/lib/slack';
 import { SlackEventSchema } from '@/types';
 import { slackUserCollection } from '@/lib/db';
@@ -43,10 +43,25 @@ export async function POST(request: NextRequest) {
             
             // Only process message events in channels and groups (not DMs)
             if (event.type === 'message' && (event.channel_type === 'channel' || event.channel_type === 'group')) {
-                await handleMessageEvent(event);
+                console.log('🚀 Scheduling background processing for message event');
+                
+                // Process message event in background to prevent Slack timeout and duplicate events
+                after(async () => {
+                    try {
+                        console.log('🔄 Starting background message processing...');
+                        
+                        await handleMessageEvent(event);
+                        console.log('✅ Background message processing completed');
+                    } catch (error) {
+                        console.error('❌ Background message processing error:', error);
+                        // Don't throw - we've already responded to Slack
+                    }
+                });
             }
         }
         
+        // Return immediate response to Slack to prevent timeouts and duplicate events
+        console.log('⚡ Sending immediate response to Slack');
         return NextResponse.json({ ok: true });
         
     } catch (error) {
@@ -72,6 +87,19 @@ async function handleMessageEvent(event: Record<string, unknown>) {
             return;
         }
         
+        // Only process new messages - skip updated/old messages
+        const messageTimestamp = parseFloat(event.ts as string) * 1000; // Convert to milliseconds
+        const currentTime = Date.now();
+        const timeDifference = currentTime - messageTimestamp;
+        
+        // If message is older than 10 seconds, it's likely an updated message or old event
+        if (timeDifference > 10000) {
+            console.log('⏭️ Skipping old/updated message, age:', Math.round(timeDifference / 1000), 'seconds');
+            return;
+        }
+        
+        console.log('✅ Processing new message, age:', Math.round(timeDifference / 1000), 'seconds');
+
         // Validate event data
         const validatedEvent = SlackEventSchema.parse(event);
         

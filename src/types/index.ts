@@ -61,6 +61,7 @@ export const SlackUserSchema = UserSchema.extend({
     workspaceId: z.string(),
     displayName: z.string(),
     timezone: z.string().optional(),
+    userToken: z.string().optional(), // User's OAuth token for message updating
     isActive: z.boolean().default(true),
     analysisFrequency: z.enum(['weekly', 'monthly']).default('weekly'),
     hasCompletedOnboarding: z.boolean().default(false),

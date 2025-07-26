@@ -102,14 +102,14 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         const data: MessageReplacementData = JSON.parse(action.value);
         const { original_ts, channel, original_text, improved_text, user } = data;
         
-        console.log('🔄 Replacing message:', {
+        console.log('🔄 Updating message:', {
             original: original_text.substring(0, 50) + '...',
             improved: improved_text.substring(0, 50) + '...',
             user,
             channel
         });
         
-        // Verify user has installed the app and get workspace bot token
+        // Verify user has installed the app and get user token
         const appUser = await slackUserCollection.findOne({
             slackId: user,
             isActive: true
@@ -121,63 +121,44 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
             });
         }
         
-        // Get workspace bot token
-        const { workspaceCollection } = await import('@/lib/db');
-        const { ObjectId } = await import('mongodb');
-        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(appUser.workspaceId) });
-        if (!workspace || !workspace.botToken) {
-            console.error('❌ Workspace not found or missing bot token for user:', user);
+        // Check if user has provided user token (required for message updating)
+        if (!appUser.userToken) {
             return NextResponse.json({
-                text: 'Error: Workspace configuration not found.'
+                text: '❌ Please reinstall the app to enable message editing functionality.'
             });
         }
         
-        // Create workspace-specific WebClient
+        // Create user-specific WebClient to update their own message
         const { WebClient } = await import('@slack/web-api');
-        const workspaceSlack = new WebClient(workspace.botToken);
+        const userSlack = new WebClient(appUser.userToken);
         
-        // Step 1: Delete the original message
-        console.log('🗑️ Deleting original message...');
-        const deleteResult = await workspaceSlack.chat.delete({
+        // Update the original message with improved text
+        console.log('📝 Updating message with improved text...');
+        const updateResult = await userSlack.chat.update({
             channel: channel,
-            ts: original_ts
+            ts: original_ts,
+            text: improved_text
         });
         
-        if (!deleteResult.ok) {
-            console.error('Failed to delete original message:', deleteResult.error);
+        if (!updateResult.ok) {
+            console.error('Failed to update message:', updateResult.error);
             return NextResponse.json({
-                text: '❌ Could not delete the original message. Make sure the bot has permission to delete messages.'
+                text: `❌ Could not update the message: ${updateResult.error}. Please try again.`
             });
         }
         
-        // Step 2: Post the improved message as the user (using bot)
-        console.log('📝 Posting improved message...');
-        const postResult = await workspaceSlack.chat.postMessage({
-            channel: channel,
-            text: improved_text,
-            username: appUser.displayName || appUser.name, // Try to match user's display name
-            icon_url: appUser.image || undefined // Use user's profile image if available
-        });
-        
-        if (!postResult.ok) {
-            console.error('Failed to post improved message:', postResult.error);
-            return NextResponse.json({
-                text: '❌ Could not post the improved message. Please try again.'
-            });
-        }
-        
-        console.log('✅ Message replacement successful');
+        console.log('✅ Message update successful');
         
         // Update the ephemeral message to show success
         return NextResponse.json({
             replace_original: true,
-            text: "✅ Message replaced successfully!",
+            text: "✅ Message updated successfully!",
             blocks: [
                 {
                     type: "section",
                     text: {
                         type: "mrkdwn",
-                        text: "✅ *Message replaced successfully!*\n\nYour improved message has been posted. Keep up the great communication!"
+                        text: "✅ *Message updated successfully!*\n\nYour message has been improved. Keep up the great communication!"
                     }
                 },
                 {
@@ -185,7 +166,7 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
                     elements: [
                         {
                             type: "mrkdwn",
-                            text: "💡 *Tip: Use `/personalfeedback` to get your overall communication analysis*"
+                            text: "💡 *Tip: Use `/settings` to adjust coaching preferences*"
                         }
                     ]
                 }
@@ -195,7 +176,7 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
     } catch (error) {
         console.error('Error in message replacement:', error);
         return NextResponse.json({
-            text: '❌ An error occurred while replacing the message. Please try again.'
+            text: '❌ An error occurred while updating the message. Please try again.'
         });
     }
 }

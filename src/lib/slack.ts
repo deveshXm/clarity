@@ -9,7 +9,7 @@ export const slackOAuthConfig = {
     clientSecret: process.env.SLACK_CLIENT_SECRET!,
     redirectUri: process.env.SLACK_REDIRECT_URI!,
     botScopes: [
-        'chat:write',
+        'chat:write',   
         'chat:write.public',
         'chat:write.customize',
         'commands',
@@ -27,9 +27,7 @@ export const slackOAuthConfig = {
         'app_mentions:read'
     ],
     userScopes: [
-        'identity.basic',
-        'identity.email',
-        'identity.team'
+        'chat:write'
     ]
 };
 

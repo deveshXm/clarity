@@ -77,18 +77,40 @@ export async function GET(request: NextRequest) {
             workspaceObjectId = workspaceResult.insertedId;
         }
 
-        // Create or update user with basic OAuth data
+        // Get actual user information using bot token (no identity scopes needed)
+        let actualUserName = 'Slack User';
+        let actualDisplayName = 'Slack User';
+        let userImage = undefined;
+        
+        try {
+            const { WebClient } = await import('@slack/web-api');
+            const botClient = new WebClient(oauthResponse.access_token);
+            const userInfo = await botClient.users.info({ user: authed_user.id });
+            
+            if (userInfo.ok && userInfo.user) {
+                actualUserName = userInfo.user.real_name || userInfo.user.name || 'Slack User';
+                actualDisplayName = userInfo.user.profile?.display_name || userInfo.user.real_name || userInfo.user.name || 'Slack User';
+                userImage = userInfo.user.profile?.image_72; // Profile image
+            }
+        } catch (error) {
+            console.log('Could not fetch user info, using defaults:', error);
+            // Fall back to placeholder values - don't fail the OAuth flow
+        }
+
+        // Create or update user with actual OAuth data
         const userData = {
             slackId: authed_user.id,
             workspaceId: workspaceObjectId.toString(),
-            email: authed_user.id, // Using Slack ID as identifier
-            name: 'Slack User',
-            displayName: 'Slack User',
+            email: authed_user.id, // Using Slack ID as identifier (we don't need actual email)
+            name: actualUserName,
+            displayName: actualDisplayName,
+            image: userImage,
             emailVerified: true,
             timezone: 'America/New_York', // Default timezone
             isActive: true,
             analysisFrequency: 'weekly',
-            hasCompletedOnboarding: false
+            hasCompletedOnboarding: false,
+            userToken: authed_user.access_token // Store user token for message updating
         };
 
         const existingUser = await slackUserCollection.findOne({ 
