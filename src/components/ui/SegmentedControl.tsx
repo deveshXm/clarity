@@ -11,7 +11,7 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
   ({ radius, styles, classNames, ...props }, ref) => {
     const computedStyles =
       styles ??
-      ((theme: any, _params: any, _ctx: any) => ({
+      (() => ({
         root: {
           borderRadius: 9999,
           padding: 4,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect, useMemo, useRef } from 'react';
+import { useState, useTransition, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Title, Button, Stack, Row, Center, Container, Text, Checkbox, SegmentedControl, Card, Skeleton } from '@/components/ui';
 import { validateSlackUser, completeSlackOnboarding, getWorkspaceChannels } from '@/lib/server-actions';
@@ -313,10 +313,7 @@ export default function OnboardingForm() {
     }
   };
 
-  const primaryButtonProps = () => {
-    if (currentStep === 'frequency') return { label: 'Next', loading: isLoadingChannels } as const;
-    return { label: 'Finish', loading: isCompletingSetup } as const;
-  };
+
 
   // Helper to perform smooth right-to-left slide transition between steps
   function startStepTransition(nextStep: OnboardingStep) {

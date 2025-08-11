@@ -73,16 +73,22 @@ export const FileUpload = forwardRef<HTMLInputElement, FileUploadProps>(
         />
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Button
-            component="label"
-            htmlFor="file-upload"
-            variant="outline"
-            size="sm"
-            loading={isUploading}
-            disabled={isUploading}
-          >
-            {preview ? 'Change Logo' : 'Upload Logo'}
-          </Button>
+          <label htmlFor="file-upload" style={{ cursor: isUploading ? 'not-allowed' : 'pointer' }}>
+            <Button
+              variant="outline"
+              size="sm"
+              loading={isUploading}
+              disabled={isUploading}
+              type="button"
+              onClick={() => {
+                if (!isUploading) {
+                  document.getElementById('file-upload')?.click();
+                }
+              }}
+            >
+              {preview ? 'Change Logo' : 'Upload Logo'}
+            </Button>
+          </label>
           
           {preview && (
             <>

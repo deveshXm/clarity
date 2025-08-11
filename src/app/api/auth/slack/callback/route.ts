@@ -114,11 +114,6 @@ export async function GET(request: NextRequest) {
             userToken: authed_user.access_token // Store user token for message updating
         };
 
-        const existingUser = await slackUserCollection.findOne({ 
-            slackId: authed_user.id, 
-            workspaceId: workspaceObjectId.toString() 
-        });
-
         // Upsert user - update existing or create new
         await slackUserCollection.updateOne(
             { slackId: authed_user.id, workspaceId: workspaceObjectId.toString() },
