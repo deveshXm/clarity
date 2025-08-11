@@ -264,65 +264,55 @@ export const sendWelcomeMessage = async (
         const onboardingUrl = `${baseUrl}/app/onboarding?user=${userId}&team=${teamId}`;
         const helpUrl = `${baseUrl}/app/help`;
         
-        const welcomeText = `🎉 *Welcome to Clarity!*
+        const welcomeText = `*Hey there! I'm Clarity*
 
-Hi there! I'm thrilled you've decided to level up your communication skills. I'm here to help you become a more effective, confident communicator in your workplace.
+Thanks for installing me as your Slack assistant for clearer, kinder communication. I help you write more effective messages by providing real-time suggestions and insights.
 
-*What I can do for you:*
-• 🔍 Analyze your messages in real-time and suggest improvements
-• 📝 Help you rephrase messages to be clearer and more professional  
-• 📊 Provide weekly/monthly insights on your communication patterns
-• 🎯 Identify areas like clarity, tone, and effectiveness in your writing
+*What I do:*
+• I analyze your messages and suggest improvements for clarity and tone
+• I help you rephrase messages to be more professional and effective
+• I provide weekly or monthly insights on your communication patterns
+• I identify areas like vagueness, pushiness, and passive-aggressive language
 
-*Your next steps:*
+*Getting started:*
 1. *Complete your setup* → <${onboardingUrl}|Finish Onboarding> (takes 2 minutes)
 2. *Try these commands:*
    • \`/personalfeedback\` - Get insights on your recent messages
-   • \`/rephrase [your message]\` - Get a better version of any text
-   • \`/settings\` - Customize your coaching preferences
+   • \`/rephrase [your message]\` - Get a clearer version of any text
+   • \`/settings\` - Customize your preferences
    • \`/clarity-help\` - View all available commands and features
 
-*How it works:*
-I'll quietly monitor the channels you've selected and provide private suggestions when I notice opportunities to improve your communication. Only you can see my feedback - your teammates won't know I'm helping! 
+*How I work:*
+After you complete setup, I'll quietly monitor your selected channels and provide private suggestions when I identify opportunities to improve your communication. All my feedback is visible only to you.
 
-*Need help?* Check out our <${helpUrl}|Help Center> for examples and best practices.
-
-Ready to become a communication superstar? Let's get started! 🚀`;
+For detailed guides and examples, visit our <${helpUrl}|Documentation>.`;
 
         const blocks = [
             {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "🎉 *Welcome to Your Personal AI Communication Coach!*\n\nHi there! I'm thrilled you've decided to level up your communication skills. I'm here to help you become a more effective, confident communicator in your workplace."
+                    text: "*Hey there! I'm Clarity*\n\nThanks for installing me as your Slack assistant for clearer, kinder communication. I help you write more effective messages by providing real-time suggestions and insights."
                 }
             },
             {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*What I can do for you:*\n• 🔍 Analyze your messages in real-time and suggest improvements\n• 📝 Help you rephrase messages to be clearer and more professional\n• 📊 Provide weekly/monthly insights on your communication patterns\n• 🎯 Identify areas like clarity, tone, and effectiveness in your writing"
+                    text: "*What I do:*\n• I analyze your messages and suggest improvements for clarity and tone\n• I help you rephrase messages to be more professional and effective\n• I provide weekly or monthly insights on your communication patterns\n• I identify areas like vagueness, pushiness, and passive-aggressive language"
                 }
             },
             {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*Your next steps:*"
-                }
-            },
-            {
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: "1. *Complete your setup* → Takes just 2 minutes!\n2. *Try these commands:*\n   • `/personalfeedback` - Get insights on your recent messages\n   • `/rephrase [your message]` - Get a better version of any text\n   • `/settings` - Customize your coaching preferences"
+                    text: "*Getting started:*\n1. *Complete your setup* → Takes just 2 minutes!\n2. *Try these commands:*\n   • `/personalfeedback` - Get insights on your recent messages\n   • `/rephrase [your message]` - Get a clearer version of any text\n   • `/settings` - Customize your preferences"
                 },
                 accessory: {
                     type: "button",
                     text: {
                         type: "plain_text",
-                        text: "Complete Setup",
-                        emoji: true
+                        text: "Complete Setup"
                     },
                     url: onboardingUrl,
                     action_id: "complete_onboarding"
@@ -332,7 +322,7 @@ Ready to become a communication superstar? Let's get started! 🚀`;
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*How it works:*\nI'll quietly monitor the channels you've selected and provide private suggestions when I notice opportunities to improve your communication. Only you can see my feedback - your teammates won't know I'm helping!"
+                    text: "*How I work:*\nAfter you complete setup, I'll quietly monitor your selected channels and provide private suggestions when I identify opportunities to improve your communication. All my feedback is visible only to you."
                 }
             },
             {
@@ -342,20 +332,10 @@ Ready to become a communication superstar? Let's get started! 🚀`;
                         type: "button",
                         text: {
                             type: "plain_text",
-                            text: "Help Center",
-                            emoji: true
+                            text: "Help Center"
                         },
                         url: helpUrl,
                         action_id: "help_center"
-                    }
-                ]
-            },
-            {
-                type: "context",
-                elements: [
-                    {
-                        type: "mrkdwn",
-                        text: "Ready to become a communication superstar? Let's get started! 🚀"
                     }
                 ]
             }

@@ -55,14 +55,14 @@ export async function POST(request: NextRequest) {
             const authUrl = getSlackOAuthUrl();
             
             return NextResponse.json({
-                text: '🤗 Welcome to Clarity! Before I help you write effortlessly, I need you to authorize. Simply click the button below.',
+                text: 'Hey there! I\'m Clarity, your communication assistant. To get started, please authorize me through our website.',
                 response_type: 'ephemeral',
                 blocks: [
                     {
                         type: 'section',
                         text: {
                             type: 'mrkdwn',
-                            text: '🤗 *Welcome to Clarity!* Before I help you write effortlessly, I need you to authorize. Simply click the button below.'
+                            text: '*Hey there! I\'m Clarity* 👋\n\nI\'m your communication assistant, ready to help you write clearer, kinder messages. To get started, please authorize me through our website.'
                         }
                     },
                     {
@@ -72,8 +72,7 @@ export async function POST(request: NextRequest) {
                                 type: 'button',
                                 text: {
                                     type: 'plain_text',
-                                    text: 'Authorize with Website',
-                                    emoji: true
+                                    text: 'Authorize Me'
                                 },
                                 url: authUrl,
                                 action_id: 'authorize_website'
