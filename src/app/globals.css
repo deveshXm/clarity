@@ -111,3 +111,7 @@ html.features-active::-webkit-scrollbar { width: 0; height: 0; }
 /* Feature card aspect ratio */
 .feature-card { aspect-ratio: 16 / 10; }
 
+/* Utility: hide scrollbars but keep scroll behavior */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { width: 0; height: 0; }
+

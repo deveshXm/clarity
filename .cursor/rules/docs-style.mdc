@@ -1,0 +1,203 @@
+---
+description: Consumer Slack app documentation—visual, structure, copy and interaction rules for the @help docs. Use when editing docs content or layout.
+globs: src/app/app/help/**/*.tsx,src/app/globals.css
+---
+
+# Docs System Rulebook (Slack app)
+
+This rule defines the visual language, structure, copy tone, and interaction patterns for our documentation pages. It applies to the docs under [`src/app/app/help`](mdc:src/app/app/help) and their shared styles in [`src/app/globals.css`](mdc:src/app/globals.css).
+
+## Purpose
+- Consumer-friendly, Slack‑first docs (no dev APIs or env variables).
+- Fast scanning, minimal friction, and high readability.
+- Strict consistency across all pages.
+
+## Page Architecture
+- Multi-page docs. Left sidebar navigates to separate pages; do not inline all sections on a single page.
+- **Three-column layout**: Left nav, main content, right TOC (Table of Contents).
+  - Left sidebar: top padding present and fixed (pt-12). Independent `overflow-y: auto`.
+  - Main content: independent scroll; hides native scrollbars using the global `.no-scrollbar` utility.
+  - Right TOC: Sticky positioned, auto-generated from H2/H3 headings with `id` attributes.
+- **InlineTOC**: Chip-style navigation for small screens, rendered under hero section.
+
+Related files:
+- Layout: [`src/app/app/help/layout.tsx`](mdc:src/app/app/help/layout.tsx) - Three-column grid
+- Left Sidebar: [`src/app/app/help/_components/DocsSidebar.tsx`](mdc:src/app/app/help/_components/DocsSidebar.tsx)
+- Right TOC: [`src/app/app/help/_components/DocsTOC.tsx`](mdc:src/app/app/help/_components/DocsTOC.tsx)
+- Inline TOC: [`src/app/app/help/_components/InlineTOC.tsx`](mdc:src/app/app/help/_components/InlineTOC.tsx)
+
+## Main Content Box (Canonical Spec)
+- Max content width: 820px; target 65–75 characters per line.
+- Inner horizontal padding: 24px (page), can use 24–32px where needed.
+
+### **TYPOGRAPHY SYSTEM - THREE SIZES ONLY**
+**Strict hierarchy - use only these three text sizes:**
+1. **Main Page Titles (H1)**: `text-3xl` (30px) - Page titles only
+2. **Section Titles (H2)**: `text-xl` (20px) - Major sections  
+3. **Subheadings (H3)**: `text-base` (16px) - Subsections
+
+**Body Content - Single Size:**
+- **All non-title content**: `text-sm` (14px) - Paragraphs, lists, descriptions, code blocks
+- **Body text color**: `#3e3e3f` - All non-title content uses this hex color
+- **Line spacing**: `leading-loose` - Increased line height for better readability
+
+**List Spacing:**
+- **Between items**: `space-y-3` (12px) - More vertical space between list items
+- **Section margins**: `mb-4` (16px) for headings, `mb-8` (32px) between major sections
+- **Visual separation**: Use `mt-8` (32px) or `mt-12` (48px) for significant topic breaks within pages
+
+**Kicker Labels:**
+- Size: `text-sm`, weight: `font-medium`, color: `text-neutral-500`
+- Must match parent section from sidebar (sentence case): "Get started", "Core", "Reference"
+
+- Spacing scale: 4 / 8 / 16 / 24 / 32 px (prefer multiples of 8).
+- Paragraph rule: avg ≤ 20 words. Break long blocks into bullets or steps.
+- Color scheme: neutral, high-contrast; no gradients; avoid emojis.
+
+## Above‑the‑Fold Order
+Per page, the top of the content must appear in this order:
+1) Grey kicker label (sentence case: "Get started", "Core", "Reference").
+2) H1 in black (`text-3xl`).
+3) One‑line TL;DR (Lead) in `text-sm leading-loose` with `#3e3e3f` color.
+4) Large screenshot card (if relevant) using a placeholder image.
+5) First example or Quickstart (visible within first screenful on desktop).
+
+## Screenshot & Media Rules
+- Use placeholder images from `/public/landing/temp.png` for now.
+- Place screenshots in a card: subtle shadow, 8px radius, 12–16px padding, and a neutral border.
+- Alt text must describe what the user sees (Slack dialogs/commands).
+
+## Examples & Code/Message Blocks
+**CodeBlock Component**: [`src/app/app/help/_components/CodeBlock.tsx`](mdc:src/app/app/help/_components/CodeBlock.tsx)
+- **Clean card design**: No header bar, label appears above the card
+- **Outer spacing**: `my-6` for breathing room between components
+- **Typography**: `text-sm leading-loose` with `#3e3e3f` color for code content
+- **Copy button**: Icon-only button (⧉/✓) in top-right corner of card
+- **Card style**: `rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm`
+- **Usage pattern**: Label prop renders above card, not inside header
+- Long lines indicate horizontal scroll via subtle shadow edges; width matches content column.
+
+## Callout System (Standardized)
+**Callout Component**: [`src/app/app/help/_components/Callout.tsx`](mdc:src/app/app/help/_components/Callout.tsx)
+- **Variants**: NOTE (info), WARNING, SUCCESS, DANGER.
+- **Visual updates**: 
+  - **Light design**: Very subtle background tints using `/30` opacity (`bg-blue-50/30`, `bg-emerald-50/30`, etc.)
+  - **Plain borders**: Light borders using `/50` opacity (`border-blue-200/50`) - **NO thick accent borders**
+  - Increased radius: `rounded-xl` 
+  - Enhanced padding: `p-4 md:p-5`
+  - Body text: `text-sm leading-loose text-[#3e3e3f]` (consistent with body color)
+  - Title remains: `text-sm font-semibold text-neutral-900`
+- **Layout**: Single plain border, no left accent border thickness
+- **Usage**: Follow directly after the paragraph they annotate with consistent spacing
+- Title is bold; body ≤ 2 lines when possible.
+
+## Cards & Grids
+- Section link cards (e.g., on Welcome): 8px radius, neutral border, subtle shadow.
+- Interaction: on hover, increase shadow and set border to black (explicit hover state).
+- Icon container: 36px (approx 9×9 Tailwind) with neutral border and fill; icon neutral-800.
+- Grid: responsive 1 / 2 / 3 columns; gap 16px (or 24px at larger widths).
+
+## Navigation
+- **Link Component**: Use [`src/components/ui/Link.tsx`](mdc:src/components/ui/Link.tsx) wrapper (not direct Next.js Link)
+- **Prefetch disabled**: Links use `prefetch={false}` for consistency
+- **Sentence case**: All navigation labels use sentence case ("Slash commands", "Real-time analysis")
+- **TOC Integration**: All H2/H3 headings must have `id` attributes for right-side TOC generation
+- **Active states**: Left nav active state determined by pathname; lighter accent bars for inactive items
+- Avoid anchor-only navigation for cross-page topics; anchors are fine within a single page.
+
+## Content Style (Slack‑first)
+- User-focused, present tense, plain language. No developer jargon.
+- Do not mention environment variables, tokens, or APIs.
+- **Branding**: Always use "Clarity" as the app name, never "Your App" or generic references.
+- Use Slack‑first steps and examples:
+  - `/personalfeedback` for personal analysis.
+  - `/rephrase <message>` to improve tone.
+  - `/settings` to open settings modal (not command parameters).
+- Examples must be shown within the first 6 lines of the page or immediately after the screenshot.
+- **Settings Integration**: Document how features can be toggled via `/settings` command across relevant pages.
+
+### Headings
+- **Required IDs**: All H2/H3 headings must have `id` attributes for TOC generation
+- **Sentence case**: All headings use sentence case ("Data policy", "Quick setup")
+- Do not place icons inside headings (H1/H2/H3). Icons are permitted in cards or next to paragraphs only.
+
+## Per‑Page Kicker Labels (Sentence Case)
+- Getting Started: "Get started"
+- Commands: "Core"  
+- Auto Coaching: "Core" (formerly Real‑time Analysis)
+- Reports: "Core"
+- Privacy & Security: "Reference"
+- Troubleshooting: "Reference"
+
+**Note**: Enhanced Features page removed - link to non-existent page eliminated from main grid.
+
+## Visual Do/Don't
+Do:
+- **Typography**: Use only the three text sizes (`text-3xl`, `text-xl`, `text-base` for headings; `text-sm` for body)
+- **Spacing**: Use `leading-loose` for all body content and `space-y-3` for lists
+- **Color**: Use `#3e3e3f` for all non-title text content consistently
+- **Dropdowns**: Use `<details>` elements for FAQ-style questions with consistent styling
+- **Callouts**: Keep backgrounds very light (`/30` opacity) with plain light borders (`/50` opacity)
+- Keep paragraphs short; prefer bullets or steps.
+- Add `id` attributes to all H2/H3 headings for TOC generation.
+- Ensure at least one above‑the‑fold example.
+Don't:
+- Use any text sizes other than the three specified heading sizes and `text-sm` for body
+- Use thick accent borders on callouts (no `border-l-4` or similar)
+- Use saturated callout colors; keep tints extremely pale
+- Use emojis; rely on clear labels and icons.
+- Forget to add heading IDs for TOC functionality.
+
+## Acceptance Checklist (Design QA)
+- **Typography**: H1 uses `text-3xl`, H2 uses `text-xl`, H3 uses `text-base`, all body content uses `text-sm`
+- **Color**: All non-title content uses `#3e3e3f` color consistently
+- **Spacing**: Body text uses `leading-loose`, lists use `space-y-3`
+- **TOC**: All H2/H3 headings have `id` attributes; right TOC displays correctly
+- **Components**: CodeBlock has `my-6` spacing, Callout uses very light backgrounds and plain borders
+- **Callouts**: No thick accent borders (`border-l-4`), use `/30` opacity backgrounds and `/50` opacity borders
+- **Dropdowns**: FAQ-style questions use `<details>` elements with consistent `rounded-lg border border-neutral-200/60 bg-white p-3 shadow-sm` styling
+- **Troubleshooting**: All callouts converted to dropdown questions for consistency
+- Grey kicker above H1 in sentence case.
+- Lead under H1; large screenshot card present where relevant.
+- Example visible above the fold.
+- Cards hover with black border; content column width ≤ 820px.
+- Left nav and content scroll independently; three-column layout works.
+
+## Implementation Notes (where to look)
+- Welcome & section grid: [`src/app/app/help/page.tsx`](mdc:src/app/app/help/page.tsx)
+- Subpages: 
+  - Getting Started: [`src/app/app/help/getting-started/page.tsx`](mdc:src/app/app/help/getting-started/page.tsx)
+  - Commands: [`src/app/app/help/commands/page.tsx`](mdc:src/app/app/help/commands/page.tsx)
+  - Auto Coaching: [`src/app/app/help/auto-coaching/page.tsx`](mdc:src/app/app/help/auto-coaching/page.tsx)
+  - Reports: [`src/app/app/help/reports/page.tsx`](mdc:src/app/app/help/reports/page.tsx)
+  - Privacy: [`src/app/app/help/privacy/page.tsx`](mdc:src/app/app/help/privacy/page.tsx)
+  - Troubleshooting: [`src/app/app/help/troubleshooting/page.tsx`](mdc:src/app/app/help/troubleshooting/page.tsx)
+
+## Copy Tone & Microcopy
+- **Sentence case everywhere**: Navigation, headings, labels all use sentence case
+- Friendly, direct, and brief. Avoid passive voice.
+- Buttons and labels are concise: "Get started", "Command reference", "Replace message", "Keep original".
+- **JSX Entity Escaping**: Always escape special characters in JSX text content:
+  - Use `&apos;` for apostrophes: `you'll` → `you&apos;ll`
+  - Use `&ldquo;` and `&rdquo;` for quotes: `"quoted text"` → `&ldquo;quoted text&rdquo;`
+  - Use `&amp;` for ampersands: `A & B` → `A &amp; B`
+- When assumptions are needed, state them clearly in comments or design notes (not user‑facing text).
+
+## Images & Assets
+- Default placeholder: `/public/landing/temp.png` (replace later with real screenshots).
+- Always set `alt` text; describe what the user will see or do.
+
+## Recent Content Improvements (2025)
+- **Branding consistency**: All "Your App" references updated to "Clarity"
+- **Navigation fixes**: Corrected `/realtime` → `/auto-coaching` links, removed non-existent `/features` page
+- **Settings documentation**: Added comprehensive `/settings` modal information across relevant pages
+- **Command accuracy**: Updated `/settings` documentation to reflect modal behavior (not CLI parameters)
+- **Cross-references**: Reports and auto coaching pages now document settings toggles
+- **Import fixes**: Corrected double-slash import paths in components
+- **Visual spacing**: Enhanced section separation with `mt-8`/`mt-12` for better content hierarchy
+
+## Known Constraints
+- No dark mode requirements for docs at this time.
+- No right sidebar content; mirror examples inline if needed.
+- Use neutral borders and shadows; keep the interface minimal and premium.
+
