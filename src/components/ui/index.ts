@@ -27,8 +27,8 @@ export type { ModalProps } from './Modal';
 export { Container } from './Container';
 export type { ContainerProps } from './Container';
 
-export { Stack } from './Stack';
-export type { StackProps } from './Stack';
+export { Stack, Row } from './Stack';
+export type { StackProps, RowProps } from './Stack';
 
 export { Center } from './Center';
 export type { CenterProps } from './Center';
@@ -72,3 +72,9 @@ export type { FadeInProps } from './FadeIn';
 export { Notifications, notifyError, notifySuccess } from './Notifications';
 
 export { Image } from './Image'; 
+
+// Additional form controls
+export { SegmentedControl } from './SegmentedControl';
+export type { SegmentedControlProps } from './SegmentedControl';
+export { Checkbox } from './Checkbox';
+export type { CheckboxProps } from './Checkbox';

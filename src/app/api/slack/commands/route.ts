@@ -2,14 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, sendDirectMessage, isChannelAccessible } from '@/lib/slack';
 import { slackUserCollection } from '@/lib/db';
 import { generatePersonalFeedback, generateImprovedMessage, analyzeMessageForFlags, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
-
-interface SlackUser {
-    analysisFrequency: string;
-    slackId: string;
-    workspaceId: string;
-    name: string;
-    displayName: string;
-}
+import { SlackUser } from '@/types';
 
 export async function POST(request: NextRequest) {
     try {
@@ -50,16 +43,44 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
-        // Authenticate user - only registered app users can use commands
+        // Check if user exists in database (installed via website)
         const appUser = await slackUserCollection.findOne({
             slackId: userId,
             isActive: true
         });
 
         if (!appUser) {
+            // User not in database - show authorization message with Slack installation URL
+            const { getSlackOAuthUrl } = await import('@/lib/slack');
+            const authUrl = getSlackOAuthUrl();
+            
             return NextResponse.json({
-                text: '❌ You need to install our app first. Please visit our website to get started!',
-                response_type: 'ephemeral'
+                text: '🤗 Welcome to Clarity! Before I help you write effortlessly, I need you to authorize. Simply click the button below.',
+                response_type: 'ephemeral',
+                blocks: [
+                    {
+                        type: 'section',
+                        text: {
+                            type: 'mrkdwn',
+                            text: '🤗 *Welcome to Clarity!* Before I help you write effortlessly, I need you to authorize. Simply click the button below.'
+                        }
+                    },
+                    {
+                        type: 'actions',
+                        elements: [
+                            {
+                                type: 'button',
+                                text: {
+                                    type: 'plain_text',
+                                    text: 'Authorize with Website',
+                                    emoji: true
+                                },
+                                url: authUrl,
+                                action_id: 'authorize_website'
+                            }
+                        ]
+                    }
+                ]
             });
         }
 
@@ -76,6 +97,9 @@ export async function POST(request: NextRequest) {
                 break;
             case '/settings':
                 response = await handleSettings(text, userId, appUser as unknown as SlackUser, triggerId!); // Pass triggerId
+                break;
+            case '/clarity-help':
+                response = await handleClarityHelp();
                 break;
             default:
                 response = {
@@ -389,7 +413,7 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
         const { WebClient } = await import('@slack/web-api');
         const workspaceSlack = new WebClient(workspace.botToken);
 
-        // Create modal view with radio buttons
+        // Create modal view with radio buttons and toggle
         const modal = {
             type: 'modal' as const,
             callback_id: 'settings_modal',
@@ -402,16 +426,6 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                 text: 'Save'
             },
             blocks: [
-                {
-                    type: 'section',
-                    text: {
-                        type: 'mrkdwn',
-                        text: `*Current setting:* ${user.analysisFrequency === 'weekly' ? 'Weekly' : 'Monthly'}`
-                    }
-                },
-                {
-                    type: 'divider'
-                },
                 {
                     type: 'input',
                     block_id: 'frequency_selection',
@@ -452,6 +466,45 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                             }
                         ]
                     }
+                },
+                {
+                    type: 'input',
+                    block_id: 'auto_rephrase_selection',
+                    label: {
+                        type: 'plain_text',
+                        text: 'Auto Rephrase'
+                    },
+                    element: {
+                        type: 'checkboxes',
+                        action_id: 'auto_rephrase_checkbox',
+                        initial_options: user.autoRephraseEnabled ? [
+                            {
+                                text: {
+                                    type: 'plain_text',
+                                    text: 'Enable automatic rephrase'
+                                },
+                                value: 'enabled'
+                            }
+                        ] : [],
+                        options: [
+                            {
+                                text: {
+                                    type: 'plain_text',
+                                    text: 'Enable automatic rephrase'
+                                },
+                                value: 'enabled'
+                            }
+                        ]
+                    }
+                },
+                {
+                    type: 'context',
+                    elements: [
+                        {
+                            type: 'mrkdwn',
+                            text: 'When disabled, you can still use `/rephrase [your message]` to get suggestions manually.'
+                        }
+                    ]
                 }
             ]
         };
@@ -474,4 +527,65 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
             response_type: 'ephemeral'
         };
     }
+}
+
+async function handleClarityHelp() {
+    return {
+        text: 'Clarity Help',
+        response_type: 'ephemeral',
+        blocks: [
+            {
+                type: 'header',
+                text: {
+                    type: 'plain_text',
+                    text: 'Clarity Help'
+                }
+            },
+            {
+                type: 'section',
+                fields: [
+                    {
+                        type: 'mrkdwn',
+                        text: '_Show all available Clarity commands and features_\n\n`/clarity-help`'
+                    },
+                    {
+                        type: 'mrkdwn',
+                        text: '_Rephrase your original text for clarity or variation_\n\n`/rephrase your_original_text`'
+                    }
+                ]
+            },
+            {
+                type: 'section',
+                fields: [
+                    {
+                        type: 'mrkdwn',
+                        text: '_Get analysis of your recent communication patterns_\n\n`/personalfeedback`'
+                    },
+                    {
+                        type: 'mrkdwn',
+                        text: '_Configure your AI coach preferences_\n\n`/settings`'
+                    }
+                ]
+            },
+            {
+                type: 'divider'
+            },
+            {
+                type: 'actions',
+                elements: [
+                    {
+                        type: 'button',
+                        text: {
+                            type: 'plain_text',
+                            text: 'Need more help?',
+                            emoji: true
+                        },
+                        style: 'primary',
+                        url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help`,
+                        action_id: 'view_help_guide'
+                    }
+                ]
+            }
+        ]
+    };
 } 

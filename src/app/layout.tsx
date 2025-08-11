@@ -1,6 +1,6 @@
+import './globals.css';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
-import './globals.css';
 
 import { ColorSchemeScript, MantineProvider, mantineHtmlProps } from '@mantine/core';
 import { theme } from '@/lib/theme';

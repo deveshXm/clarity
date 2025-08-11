@@ -260,11 +260,11 @@ export const sendWelcomeMessage = async (
     botToken: string
 ): Promise<boolean> => {
     try {
-        const baseUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://yourapp.com';
+        const baseUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://clarity.rocktangle.com';
         const onboardingUrl = `${baseUrl}/app/onboarding?user=${userId}&team=${teamId}`;
         const helpUrl = `${baseUrl}/app/help`;
         
-        const welcomeText = `🎉 *Welcome to Your Personal AI Communication Coach!*
+        const welcomeText = `🎉 *Welcome to Clarity!*
 
 Hi there! I'm thrilled you've decided to level up your communication skills. I'm here to help you become a more effective, confident communicator in your workplace.
 
@@ -280,6 +280,7 @@ Hi there! I'm thrilled you've decided to level up your communication skills. I'm
    • \`/personalfeedback\` - Get insights on your recent messages
    • \`/rephrase [your message]\` - Get a better version of any text
    • \`/settings\` - Customize your coaching preferences
+   • \`/clarity-help\` - View all available commands and features
 
 *How it works:*
 I'll quietly monitor the channels you've selected and provide private suggestions when I notice opportunities to improve your communication. Only you can see my feedback - your teammates won't know I'm helping! 

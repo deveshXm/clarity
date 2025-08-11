@@ -182,11 +182,11 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **Workspace-Specific Tokens**: Each workspace has its own bot token stored during OAuth installation
 - **Bot Token Storage**: Workspace-specific `botToken` field in workspaceCollection enables per-workspace API calls
 - **Channel Access Control**: Bot only operates in channels explicitly selected during onboarding
+- **Authorization Strategy**: Simple database presence check - if user exists in database, they're authorized
 - **Authentication Flow**:
-  1. User installs Slack app via OAuth
-  2. Bot token and workspace data stored in database
-  3. User redirected to onboarding with query parameters
-  4. Onboarding includes channel selection and bot joining
+  1. **Website Install**: User clicks "Install to Slack" → OAuth → Database entry → Full access
+  2. **Direct Install**: User installs from Slack App Directory → OAuth → Database entry → Full access
+  3. **Command Authorization**: If user NOT in database → Show authorization message with website redirect
 - **Token Usage**: All Slack API calls use workspace-specific tokens from database
 - **No Web Sessions**: Standard Slack app approach - all data tied to Slack user IDs
 
@@ -605,6 +605,39 @@ if (hasChannelAccess) {
 2. Immediate response: "⏳ Analyzing and rephrasing your message..."
 3. Background analysis completes (context-aware if bot in channel)
 4. Ephemeral result shows improved message with tone information
+
+## User Settings & Preferences ✅ IMPLEMENTED
+
+### Settings Command Implementation
+- **Command**: `/settings` - Opens modal for user preference management
+- **Modal Interface**: Clean, unified settings modal with two main options
+- **Settings Available**:
+  - **Report Frequency**: Weekly or Monthly (radio buttons)
+  - **Auto Rephrase**: Enable/disable automatic coaching suggestions (checkbox)
+
+### Settings Modal Design
+- **No Current Settings Display**: Modal shows only the input controls
+- **Simplified Labels**: "Auto Rephrase" (not "Auto Rephrase Suggestions")
+- **Clean Interface**: No dividers or current status text
+- **Help Text**: Context about manual `/rephrase` command when auto is disabled
+
+### Settings Persistence
+- **Database Field**: `autoRephraseEnabled: boolean` in SlackUser schema (default: true)
+- **Immediate Update**: Settings saved in background using `after()` for fast response
+- **Success Feedback**: Modal updates to show "✅ Settings updated" message
+- **Modal Behavior**: Stays open after save, user closes manually
+
+### Auto Coaching Control
+- **Preference Check**: Auto coaching respects `autoRephraseEnabled` setting
+- **Event Processing**: Skip analysis if `user.autoRephraseEnabled === false`
+- **Manual Override**: `/rephrase` command always works regardless of auto setting
+- **Default Behavior**: New users get auto coaching enabled by default
+
+### Implementation Files
+- **Settings Modal**: [src/app/api/slack/commands/route.ts](mdc:src/app/api/slack/commands/route.ts) - `/settings` command handler
+- **Settings Handler**: [src/app/api/slack/interactive/route.ts](mdc:src/app/api/slack/interactive/route.ts) - Modal submission processing
+- **Auto Coaching Check**: [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts) - Preference validation
+- **User Creation**: [src/app/api/auth/slack/callback/route.ts](mdc:src/app/api/auth/slack/callback/route.ts) - OAuth with default settings
 
 ## Slack Integration Best Practices ✅ CRITICAL UPDATES
 

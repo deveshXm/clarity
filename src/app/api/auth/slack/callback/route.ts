@@ -109,6 +109,7 @@ export async function GET(request: NextRequest) {
             timezone: 'America/New_York', // Default timezone
             isActive: true,
             analysisFrequency: 'weekly',
+            autoRephraseEnabled: true, // Default to enabled for new users
             hasCompletedOnboarding: false,
             userToken: authed_user.access_token // Store user token for message updating
         };
@@ -118,27 +119,22 @@ export async function GET(request: NextRequest) {
             workspaceId: workspaceObjectId.toString() 
         });
 
-        if (existingUser) {
-            // Update existing user
-            await slackUserCollection.updateOne(
-                { slackId: authed_user.id, workspaceId: workspaceObjectId.toString() },
-                { 
-                    $set: { 
-                        ...userData, 
-                        updatedAt: new Date() 
-                    } 
+        // Upsert user - update existing or create new
+        await slackUserCollection.updateOne(
+            { slackId: authed_user.id, workspaceId: workspaceObjectId.toString() },
+            { 
+                $set: { 
+                    ...userData, 
+                    updatedAt: new Date() 
+                },
+                $setOnInsert: {
+                    _id: new ObjectId(),
+                    id: new ObjectId().toString(),
+                    createdAt: new Date()
                 }
-            );
-        } else {
-            // Create new user
-            await slackUserCollection.insertOne({
-                _id: new ObjectId(),
-                id: new ObjectId().toString(),
-                ...userData,
-                createdAt: new Date(),
-                updatedAt: new Date()
-            });
-        }
+            },
+            { upsert: true }
+        );
 
         // Send welcome message to the user
         try {

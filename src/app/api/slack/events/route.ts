@@ -125,7 +125,15 @@ async function handleMessageEvent(event: Record<string, unknown>) {
             return;
         }
         
-        console.log('🤖 Bot is active in channel, proceeding with analysis');
+        console.log('🤖 Bot is active in channel, checking user preferences...');
+        
+        // Check if user has auto rephrase enabled
+        if (user.autoRephraseEnabled === false) {
+            console.log('⏭️ Auto rephrase disabled for user, skipping analysis');
+            return;
+        }
+        
+        console.log('✅ Auto rephrase enabled, proceeding with analysis');
         
         // Get workspace bot token for API calls
         const { workspaceCollection } = await import('@/lib/db');
@@ -189,13 +197,6 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         // Build interactive message with Block Kit
         const blocks = [
-            {
-                type: "header",
-                text: {
-                    type: "plain_text",
-                    text: "🤖 AI Communication Coach"
-                }
-            },
             {
                 type: "section",
                 text: {

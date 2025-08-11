@@ -3,7 +3,7 @@
         "name": "Clarity-Dev",
         "description": "Your AI communication coach for better workplace messaging.",
         "background_color": "#4A154B",
-        "long_description": "Personal AI Coach analyzes your Slack messages in real-time to help improve communication clarity, tone, and effectiveness. Get instant feedback, personalized reports, and actionable suggestions to become a better communicator."
+        "long_description": "Clarity is an AI-powered communication coach designed to improve workplace messaging within your workspace. By leveraging advanced natural language processing and a Large Language Model, Clarity helps users quickly enhance, correct, and refine their written content directly in Slack.\n\nWhether you need to improve tone, clarify your sentences, or get coaching on your communication style, Clarity makes it easy to ensure that your communication is always clear, concise, and professional. Say goodbye to communication barriers and hello to smoother workflows!\n\nUse the following commands in any Slack message — whether in public or private channels, group chats, or direct messages — and let Clarity help you communicate better:\n\n`/rephrase` your_text\n`/personalfeedback`\n`/settings`\n`/clarity-help`\n\nPricing plan\nWe offer flexible plans tailored to both individuals and teams:\n\nTrial Plan: Up to 100 message analyses free usage of AI-powered coaching.\nIndividual Plan: Priced at $5/month, this plan includes unlimited AI-powered enhancements, perfect for personal productivity and individual needs.\nTeam Plan: Priced at $10/user/month, this plan supports unlimited AI improvements, ideal for teams collaborating efficiently.\n\nDisclaimer\nOur app utilizes a Large Language Model (LLM) to provide intelligent and context-aware responses. While we strive for accuracy and relevance, users should be aware that the model may occasionally generate inaccurate, incomplete, or inappropriate responses. These outputs are generated based on probabilistic patterns and are not guaranteed to reflect factual information or professional advice."
     },
     "features": {
         "bot_user": {
@@ -11,6 +11,12 @@
             "always_online": true
         },
         "slash_commands": [
+            {
+                "command": "/clarity-help",
+                "url": "https://90185304d11c.ngrok-free.app/api/slack/commands",
+                "description": "Show all available Clarity commands and features",
+                "should_escape": false
+            },
             {
                 "command": "/personalfeedback",
                 "url": "https://90185304d11c.ngrok-free.app/api/slack/commands",

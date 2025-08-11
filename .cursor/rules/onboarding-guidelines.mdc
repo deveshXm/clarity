@@ -1,0 +1,59 @@
+---
+globs: src/app/app/onboarding/*.tsx,src/lib/server-actions.ts
+---
+# Onboarding Flow Guidelines
+
+These rules capture the established patterns in the onboarding UI and related server actions. Reference implementations: [src/app/app/onboarding/OnboardingForm.tsx](mdc:src/app/app/onboarding/OnboardingForm.tsx), [src/app/app/onboarding/page.tsx](mdc:src/app/app/onboarding/page.tsx), and [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts).
+
+## Architecture & Data Flow
+- Validate Slack user via query params `?user={slackId}&team={teamId}` at mount. If missing/invalid or onboarding completed, redirect to `/app/help` immediately.
+- Use server actions directly (imports), not fetch calls:
+  - `validateSlackUser(slackId, teamId)` for initial validation
+  - `getWorkspaceChannels(teamId)` to list channels (filters handled client-side)
+  - `completeSlackOnboarding(slackId, userWorkspaceId, analysisFrequency, selectedChannels?)` to persist and finish
+- Workspace-specific tokens only. Server-side looks up `workspace.botToken` by Slack team ID and never uses a global token.
+- When saving channels, join with workspace token and persist to `botChannelsCollection` using `saveBotChannels()`.
+
+## Steps & State
+- Steps are strictly two: `frequency` then `channels`. Default analysis frequency is `'weekly'`.
+- Channel selection stores compact items with `{ id, name }`. Only allow non-archived channels.
+- Initiate step change to `channels` immediately upon Next click, while channels load in the background. Disable appropriate buttons during fetch.
+
+## UI & Components
+- Always import UI from `@/components/ui` (never from vendor libraries directly). Examples used: `Container`, `Stack`, `Row`, `Center`, `Card`, `Title`, `Text`, `Button`, `Skeleton`, `Checkbox`, `SegmentedControl`.
+- Use a fixed-height scroll container for the channel list:
+  - Row height: 44px constant
+  - Visible rows: 5 (container height = rows * rowHeight + 24 padding)
+  - Ellipsize long labels; prefix private channels with `🔒` and public with `#`.
+- Display lightweight loading states:
+  - Page validating state shows centered text
+  - Channel list shows skeleton rows equal to visible rows
+- Show errors inline below the step body using a subdued, accessible style.
+- Maintain a clean panel layout with a header (title + optional subtitle), body, and footer with Back/Primary actions.
+
+## Navigation & Suspense
+- Wrap the onboarding form in a `Suspense` boundary in the route page with a meaningful fallback. See [page.tsx](mdc:src/app/app/onboarding/page.tsx).
+- Use `useTransition` for submit/finish flows to keep the UI responsive and to drive button `loading` states.
+
+## Animation & Accessibility
+- Use GSAP for step transitions with slide + blur microinteractions.
+  - Detect `prefers-reduced-motion` and shorten/simplify to respect user preference.
+  - Disable pointer events on the stage during transitions to avoid accidental interactions.
+  - Manage outgoing/incoming panels via refs; never conditionally call hooks.
+- Keep hook order stable; render helper functions (e.g., `renderPanel`) should be pure and not define hooks.
+
+## Error Handling & Redirects
+- On validation failures or completed onboarding, redirect to `/app/help`.
+- For transient channel errors, surface a single concise inline error and allow retry.
+- Log server action errors to aid debugging but do not block UX on non-critical failures (e.g., partial channel-join failures are tolerated).
+
+## Data Contracts
+- `validateSlackUser` returns a minimal user object containing `_id`, `slackId`, `workspaceId`, `name`, `analysisFrequency`, and `hasCompletedOnboarding`.
+- `getWorkspaceChannels(teamId)` returns `{ success, channels, error? }` where `channels` is an array of Slack channel metadata filtered client-side.
+- `completeSlackOnboarding` accepts optional `selectedChannels` and handles joining + persistence server-side.
+
+## Content & Copy
+- Keep copy short, friendly, and specific to each step:
+  - Frequency title: “Report frequency” with subtitle “How often should we DM your report?”
+  - Channels title: “Channels” with subtitle “Choose channels to enable AI coaching”
+- Use proper JSX entity escaping for special characters.

@@ -335,6 +335,11 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         // Extract selected frequency from the modal form
         const selectedValue = view.state?.values?.frequency_selection?.frequency_radio?.selected_option?.value;
         
+        // Extract auto rephrase setting from checkbox
+        const autoRephraseElement = view.state?.values?.auto_rephrase_selection?.auto_rephrase_checkbox;
+        const autoRephraseEnabled = autoRephraseElement && 'selected_options' in autoRephraseElement && 
+            Array.isArray(autoRephraseElement.selected_options) && autoRephraseElement.selected_options.length > 0;
+        
         if (!selectedValue || !['weekly', 'monthly'].includes(selectedValue)) {
             return NextResponse.json({
                 response_action: 'update',
@@ -358,7 +363,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
             });
         }
 
-        // Update user's frequency preference in the database
+        // Update user's preferences in the database
         after(async () => {
             try {
                 await slackUserCollection.updateOne(
@@ -366,6 +371,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                     {
                         $set: {
                             analysisFrequency: selectedValue,
+                            autoRephraseEnabled: autoRephraseEnabled,
                             updatedAt: new Date(),
                         },
                     },
@@ -375,7 +381,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
             }
         });
 
-        // Return success modal with updated view
+        // Update modal to show success message
         return NextResponse.json({
             response_action: 'update',
             view: {
@@ -390,17 +396,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                         type: 'section',
                         text: {
                             type: 'mrkdwn',
-                            text: '✅ *Settings changed*'
-                        }
-                    },
-                    {
-                        type: 'divider'
-                    },
-                    {
-                        type: 'section',
-                        text: {
-                            type: 'mrkdwn',
-                            text: `Report frequency updated to: *${selectedValue === 'weekly' ? 'Weekly' : 'Monthly'}*`
+                            text: '✅ Settings updated'
                         }
                     }
                 ]

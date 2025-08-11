@@ -1,0 +1,61 @@
+---
+globs: src/components/ui/**/*.ts,src/components/ui/**/*.tsx
+---
+# UI Components Rules (Frontend-Only)
+
+These rules apply to files under `src/components/ui/**` and govern how UI components are built and used across the app.
+
+## Source of Truth
+- Wrap third-party components (Mantine, Next primitives) with our own components.
+- Export all UI components and their props from `src/components/ui/index.ts`.
+- Always import UI from `@/components/ui` in application code.
+
+## Implementation Guidelines
+- Use `forwardRef` for every component to maintain ref compatibility.
+- Provide explicit prop types and export `...Props` types alongside components.
+- Avoid using the `any` type; prefer precise prop interfaces.
+- Keep components minimal; push feature logic to consuming pages when possible.
+
+## Mantine Integration
+- Never import from `@mantine/core` directly in app code. Only UI wrappers can import Mantine.
+- Use theme tokens from [src/lib/theme.ts](mdc:src/lib/theme.ts) (colors, radius, shadows, typography).
+- Prefer component defaults configured in theme (e.g., `radius`, `shadow`).
+- Do not hardcode arbitrary colors; use theme colors or semantic props.
+
+## Accessibility & UX
+- Respect `prefers-reduced-motion` and reduce animations accordingly in components with motion.
+- Ensure text content uses proper JSX entity escaping for special characters.
+- Provide `aria-` attributes where applicable; pass through additional props.
+
+## Composition
+- Keep layout components (`Container`, `Stack`, `Center`, `Row`) flexible with sizing and spacing props.
+- Keep typography components (`Title`, `Text`) focused on semantics with size/weight variants.
+- Form controls (`TextInput`, `Textarea`, `Checkbox`, `SegmentedControl`) should expose clear value/onChange props and forward other inputs.
+
+## Loading & Feedback
+- Use `Skeleton` and `FormSkeleton` for loading states rather than bespoke spinners.
+- Use `LoadingOverlay` and `LoadingButton` for async flows.
+- Use `ErrorMessage` and `SuccessMessage` for standardized feedback.
+
+## Navigation & Media
+- Use wrapped `Link` with fixed `prefetch={false}`.
+- Use wrapped `Image` for optimization defaults.
+
+## Exports & Naming
+- Name components descriptively (not abbreviations); export both component and `Props` type.
+- Re-export from `index.ts` to provide a single import surface.
+
+## Examples
+- Correct imports in app code:
+  ```ts
+  import { Button, Text, Stack, Container } from '@/components/ui';
+  ```
+- Implementing a new UI wrapper (sketch):
+  ```tsx
+  import { forwardRef } from 'react';
+  import { SomeMantineComponent } from '@mantine/core';
+  export interface SomeComponentProps { /* explicit props */ }
+  export const SomeComponent = forwardRef<HTMLDivElement, SomeComponentProps>((props, ref) => {
+    return <SomeMantineComponent ref={ref} {...props} />;
+  });
+  ```

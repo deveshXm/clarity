@@ -1,5 +1,43 @@
 ---
 description: Follow this rule while making changes in db schema.
+globs: src/lib/**/*.ts,src/types/**/*.ts,src/app/api/**/*.ts
+---
+
+# Database Design & Server Actions Rules
+
+## Operational Guidelines
+
+- Do not run builds unless explicitly asked
+  - Avoid `npm run build` during iterative edits; rely on type checks/lint where needed.
+
+- GSAP is available (FYI)
+  - The project has `gsap` installed for UI work. It is irrelevant for database code; do not add animation deps.
+
+## Architecture (MongoDB Native Driver)
+
+- Use the native MongoDB driver via the shared client at [src/lib/db.ts](mdc:src/lib/db.ts); do not introduce ODM/ORM layers.
+- Database name must come from `process.env.MONGODB_DB_NAME`.
+- All database mutations and reads should live in Server Actions in [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts).
+- Validate all inputs with Zod schemas from [src/types/index.ts](mdc:src/types/index.ts) before performing DB operations.
+
+## Patterns
+
+- Collections: keep workspace-scoped data keyed by workspace identifiers; store Slack workspace `botToken` on the workspace record.
+- Avoid over-normalization; prefer simple documents with clear ownership and indexing.
+- Use explicit TypeScript types inferred from Zod schemas; never use `any`.
+- When adding fields, prefer additive, backward-compatible changes; write guards for optional legacy fields.
+
+## Slack Tokens & Access
+
+- Never use a global Slack bot token. Always look up the workspace-specific token from the database.
+- Keep channel access checks in server actions, not client components.
+
+## Testing & Migrations
+
+- Keep migrations minimal and reversible. For complex changes, write idempotent migration steps in a dedicated script (ask before adding files).
+- Do not create new files without explicit approval in this project; co-locate light migration helpers in [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts) when necessary.
+---
+description: Follow this rule while making changes in db schema.
 alwaysApply: false
 ---
 # Database Design Patterns
@@ -83,6 +121,7 @@ SlackUser {
   slackId: string,         // Slack user ID
   workspaceId: string,     // References workspace ObjectId
   analysisFrequency: 'weekly' | 'monthly',
+  autoRephraseEnabled: boolean,  // Auto coaching toggle (default: true)
   hasCompletedOnboarding: boolean,
   // ... other user fields
 }
@@ -131,20 +170,136 @@ if (!isChannelActive) {
 // Step 1: Receive message event (only from member channels)
 if (event.type === 'message' && (event.channel_type === 'channel' || event.channel_type === 'group')) {
   
-  // Step 2: Validate user has app installed
+  // Step 2: Validate user has app installed (exists in database)
   const user = await slackUserCollection.findOne({ 
     slackId: event.user, 
     isActive: true 
   });
+  if (!user) return; // Skip - user not in database (direct install without website auth)
   
   // Step 3: Check bot is active in this specific channel
   const isChannelActive = await isChannelAccessible(event.channel, user.workspaceId);
+  if (!isChannelActive) return; // Skip - not authorized channel
   
-  // Step 4: Get workspace-specific bot token
+  // Step 4: Check if user has auto rephrase enabled
+  if (user.autoRephraseEnabled === false) {
+    return; // Skip auto coaching - user disabled it
+  }
+  
+  // Step 5: Get workspace-specific bot token
   const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+  if (!workspace?.botToken) return; // Skip - missing token
   
-  // Step 5: Process message with AI analysis
-  // Step 6: Send ephemeral coaching feedback (private to user)
+  // Step 6: Process message with AI analysis
+  // Step 7: Send ephemeral coaching feedback (private to user)
+}
+```
+
+### 4. Command Authorization Pattern ✅ SIMPLIFIED
+**Simple database presence check for command access:**
+
+```typescript
+// Check if user exists in database (authorized via website)
+const appUser = await slackUserCollection.findOne({
+  slackId: userId,
+  isActive: true
+});
+
+if (!appUser) {
+  // User not in database - show authorization message
+  const { getSlackOAuthUrl } = await import('@/lib/slack');
+  const authUrl = getSlackOAuthUrl();
+  
+  return NextResponse.json({
+    text: '🤗 Welcome to Clarity! Before I help you write effortlessly, I need you to authorize. Simply click the button below.',
+    response_type: 'ephemeral',
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '🤗 *Welcome to Clarity!* Before I help you write effortlessly, I need you to authorize. Simply click the button below.'
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'Authorize with Website',
+              emoji: true
+            },
+            url: authUrl,
+            action_id: 'authorize_website'
+          }
+        ]
+      }
+    ]
+  });
+}
+```
+
+### 5. Slack Commands Implementation ✅ CURRENT
+**Available commands in [src/app/api/slack/commands/route.ts](mdc:src/app/api/slack/commands/route.ts):**
+
+```typescript
+// Command routing in switch statement
+switch (command) {
+  case '/clarity-help':
+    response = await handleClarityHelp();
+    break;
+  case '/personalfeedback':
+    response = await handlePersonalFeedback(userId, channelId);
+    break;
+  case '/rephrase':
+    response = await handleRephrase(text, userId, channelId);
+    break;
+  case '/settings':
+    response = await handleSettings(text, userId, appUser as unknown as SlackUser, triggerId!);
+    break;
+}
+```
+
+**Help Command Pattern:**
+```typescript
+// /clarity-help - 2x2 grid layout with help button
+async function handleClarityHelp() {
+  return {
+    text: 'Clarity Help',
+    response_type: 'ephemeral',
+    blocks: [
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: 'Clarity Help' }
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: '_Show all available Clarity commands and features_\n\n`/clarity-help`'
+          },
+          {
+            type: 'mrkdwn', 
+            text: '_Rephrase your original text for clarity or variation_\n\n`/rephrase your_original_text`'
+          }
+        ]
+      },
+      // ... more command rows
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: '*Need more help?*' },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: 'View Guide', emoji: true },
+          style: 'primary',
+          url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help`
+        }
+      }
+    ]
+  };
 }
 ```
 
@@ -341,19 +496,20 @@ const serializedConfig: AccountConfig = {
 }
 ```
 
-### 3. Slack Privacy Protection ✅ IMPLEMENTED
+### 5. Slack Privacy Protection ✅ SIMPLIFIED
 **Multi-layer privacy safeguards:**
 
 ```typescript
 // Layer 1: Slack only sends events from channels where bot is member
 // Layer 2: Our database tracks authorized channels only
-// Layer 3: User must have explicitly installed the app
+// Layer 3: User must exist in database (authorized via website)
 // Layer 4: Ephemeral messages are private (only sender sees feedback)
 
 // Privacy by design:
 // - No message storage (only analysis results)
 // - User controls which channels to enable
 // - Coaching feedback is private and ephemeral
+// - Simple authorization: user in database = authorized
 ```
 
 ## Performance Optimizations

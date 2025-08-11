@@ -1,0 +1,132 @@
+---
+globs: src/app/(public)/**/*.tsx,src/app/(public)/**/*.ts,src/app/(public)/**/*.css
+description: Landing page design/implementation guardrails for the (public) route group, including background mesh, typography, feature scroller behavior, and approved deps.
+---
+
+# Clarity Landing Page – Do’s and Don’ts
+
+## Operational Guidelines (read-first)
+
+- Do not run builds unless explicitly asked
+  - Do not execute `npm run build` or any production build commands unless the user explicitly requests it.
+  - Prefer local lint/type checks only when making iterative edits.
+
+Context files to reference:
+- Light layout and font: [src/app/(public)/layout.tsx](mdc:src/app/(public)/layout.tsx)
+- Landing implementation: [src/app/(public)/page.tsx](mdc:src/app/(public)/page.tsx)
+- Global CSS background/overscroll fixes: [src/app/globals.css](mdc:src/app/globals.css)
+- Background mesh component: [src/app/(public)/components/BackgroundMesh.tsx](mdc:src/app/(public)/components/BackgroundMesh.tsx)
+- Feature scroller component: [src/app/(public)/components/FeatureScroller.tsx](mdc:src/app/(public)/components/FeatureScroller.tsx)
+- CTA button (gradient) component: [src/app/(public)/components/CTAButton.tsx](mdc:src/app/(public)/components/CTAButton.tsx)
+
+## Do’s
+
+- Use the light-mode route group with Manrope font
+  - Keep `main` background `#FAFAF9` and `min-height: 100svh` per layout.
+  - Ensure `html, body` background is also set to avoid white overscroll.
+
+- Keep the background treatment subtle but alive
+  - Animated color bands + visible square grid mesh (48px spacing) with radial fade mask.
+  - Update masks/opacities only; do not replace with heavy imagery.
+
+- Keep brand color usage minimal
+  - Primary accents: sky/cyan family; neutrals for text.
+  - CTA uses the approved gradient button (sky→indigo→cyan) with soft elevation.
+
+- Make the hero brand obvious
+  - Highlight the word “Clarity” with the marker-style background (use `.brand-marker`; CSS defined in [globals.css](mdc:src/app/globals.css)).
+
+- One-feature-at-a-time scroller behavior (critical)
+  - A sticky visual panel shows exactly one feature.
+  - While the section is in view, page scroll is paused; wheel/touch gestures swap features.
+  - Release scroll only at the first/last feature.
+  - Use directional slide (no fade) so the new slide pushes the old slide.
+  - Throttle inputs and require a minimum delta to avoid accidental skips.
+  - Keep large, readable type (title ≥ 32px, desc ≥ 18–20px).
+
+- Video embedding
+  - Use `react-lite-youtube-embed` and the env var `NEXT_PUBLIC_DEMO_VIDEO_ID`; otherwise show the placeholder image.
+
+- Use Mantine wrappers from our UI layer
+  - Import only from `@/components/ui` wrappers (Button, Container, Text, Title, Image, etc.).
+
+- Footer
+  - Keep it subtle with Copyright, Help (`/app/help`), Terms (`/terms`), Privacy (`/privacy`).
+
+## Don’ts
+
+- Don’t introduce a navbar or a heavy footer on the landing.
+- Don’t add emojis, fake testimonials, or company logos.
+- Don’t add additional brand colors or increase contrast beyond the current palette.
+- Don’t use Mantine primitives directly; never import from `@mantine/core` in (public).
+- Don’t reintroduce traditional two-column feature lists that feel crowded.
+- Don’t add new libraries for scrolling without approval.
+
+## Approved/Optional Libraries
+
+ - Approved
+  - `gsap` for micro-interactions and small transitions
+  - `react-lite-youtube-embed` for the demo video
+  - `gsap` with `ScrollTrigger` for the feature scroller (pinned horizontal scrub + snap)
+
+ - Optional (ask before adding)
+  - None at this time
+
+## Implementation Notes (current state)
+
+- Background mesh
+  - Square grid created with repeating linear-gradients (48px spacing) and radial mask; diagonal lines removed per request.
+  - Animated color bands drift slowly beneath the grid.
+  - Background container is fixed to prevent visible vertical drift during the pinned scroller.
+  - Implementation in [BackgroundMesh.tsx](mdc:src/app/(public)/components/BackgroundMesh.tsx).
+
+- Feature scroller
+  - Implemented with `gsap` + `ScrollTrigger` using pin-only; horizontal motion is decoupled from scroll and driven by fixed-duration snaps.
+  - Sticky block shows exactly one feature; content vertically centered in the viewport.
+  - Horizontal motion: x-translation of a flex track; push-style slide (no cross-fade) between features.
+  - Slide changes are thresholded and time-based:
+    - Middle slides: 100px cumulative vertical delta triggers a snap to the next/previous slide.
+    - Snap animation has a fixed duration (~320ms) and easing (e.g., `power3.out`) regardless of scroll speed.
+    - Titles/descriptions update at the end of the snap animation.
+  - Edge handling (first/last slide):
+    - Tiny edge-release threshold to avoid accidental pass-through.
+    - After crossing this small threshold in the outward direction, the section immediately releases: we programmatically nudge the window scroll just beyond the pin boundary so no extra user input is required.
+    - A brief arm delay (~160ms) after landing on an edge absorbs inertia so it doesn’t immediately exit on arrival.
+  - Meta layout is responsive:
+    - Mobile (sm and below): show the full image with no overlay; place title/description/counter below the image.
+    - Tablet/Desktop (md and up): use a subtle bottom overlay inside the card that fades in on slide change.
+  - While active, a CSS class hides the scrollbar to avoid vertical scroll feedback.
+  - Implementation in [FeatureScroller.tsx](mdc:src/app/(public)/components/FeatureScroller.tsx). Keep `.feature-card` aspect ratio and `html.features-active` rules in [globals.css](mdc:src/app/globals.css).
+
+- Image & aspect ratio
+  - Feature card uses a fixed `aspect-ratio: 16/10` across breakpoints to keep layout stable.
+  - Images render with `object-contain` on mobile to avoid side-cropping; switch to `object-cover` on md+ for immersive fill.
+  - Always show the full image on mobile (no overlay covering it).
+
+- Typography
+  - Hero: brand-highlighted “Clarity” in title; responsive clamps.
+  - Feature section uses consistent clamps for hierarchy:
+    - Section title: `clamp(24px, 5.5vw, 36px)`; subtitle: `clamp(14px, 4vw, 20px)`
+    - Mobile meta title: `clamp(20px, 5.5vw, 24px)`; description: `clamp(14px, 4vw, 16px)`; counter small (`text-xs`)
+    - Desktop overlay title: `clamp(20px, 2vw, 28px)`; description: `clamp(14px, 1.6vw, 16px)`
+
+- Button
+  - Gradient, rounded 14px, springy hover lift; keep style consistent across the page.
+  - Use the page-scoped `CTAButton` wrapper (imports Mantine wrapper `Button` from `@/components/ui` and applies the approved gradient): [CTAButton.tsx](mdc:src/app/(public)/components/CTAButton.tsx).
+
+- Pricing & CTA section (updated)
+  - Combined CTA + Pricing as one full-screen section: center-aligned content using `min-h-[100svh]` and flex column.
+  - Post-features CTA text appears above pricing: “Ready to ship messages with clarity?” and supporting copy.
+  - Pricing uses two cards (Free, Pro). Import only from `@/components/ui` wrappers.
+  - Cards equal height: compute tallest card with `useLayoutEffect` and set both `minHeight` accordingly. Recalculate on window resize.
+  - Card layout: use outer Card with `p={0}` and an inner padded wrapper for consistent border spacing.
+  - Pro badge: full-width pill at the bottom of the Pro card, non-interactive, subtle translucent gradient with white border. No absolute positioning.
+  - Footer: outside the pricing section and stuck to the bottom of page (`mt-auto`) so cards can expand freely.
+  - Text sizing: increase contrast; small labels `/ forever` and `/ month` shown at ~14px; feature bullets at base size.
+  - Spacing: keep description-to-bullets gap tight; larger overall inner padding is controlled on the inner wrapper.
+
+## When to escalate
+
+- If scrolling performance regresses, profile image sizes and `ScrollTrigger` bounds first.
+- Avoid adding additional scrolling libraries; keep payload minimal.
+

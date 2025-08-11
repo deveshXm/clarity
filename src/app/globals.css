@@ -59,11 +59,55 @@
 }
 
 /* Micro-interaction: scale buttons on hover */
-.btn-pop {
-  transition: transform 120ms ease;
+.btn-lift { transition: transform 120ms ease, box-shadow 120ms ease; }
+.btn-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(2,6,23,0.08); }
+
+/* Gradient button styling inspired by landing CTA */
+.btn-gradient {
+  background: linear-gradient(92deg, #38BDF8 0%, #60A5FA 50%, #22D3EE 100%) !important;
+  color: #fff !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.2px !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 30px rgba(96,165,250,0.30) !important;
+}
+.btn-gradient:hover { filter: brightness(1.03); box-shadow: 0 14px 34px rgba(96,165,250,0.34) !important; }
+.btn-gradient:active { transform: translateY(0) !important; }
+
+
+
+/* Ensure light background on page root to avoid white overscroll flashes */
+html, body {
+  background: #FAFAF9;
+  min-height: 100%;
 }
 
-.btn-pop:hover {
-  transform: translateY(-2px) scale(1.02);
+/* Landing page: brand marker highlight */
+.brand-marker {
+  background-image: linear-gradient(120deg, rgba(56,189,248,0.45), rgba(34,211,238,0.45));
+  background-repeat: no-repeat;
+  background-size: 100% 38%;
+  background-position: 0 88%;
+  padding: 0 6px;
+  border-radius: 6px;
 }
+
+/* Landing page: animated background keyframes */
+@keyframes meshGlide {
+  0% { transform: translate3d(-4%, -6%, 0) scale(1); }
+  50% { transform: translate3d(4%, 6%, 0) scale(1.03); }
+  100% { transform: translate3d(-4%, -6%, 0) scale(1); }
+}
+
+@keyframes shine {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Hide scrollbar while features scroller is active */
+html.features-active { scrollbar-width: none; -ms-overflow-style: none; }
+html.features-active::-webkit-scrollbar { width: 0; height: 0; }
+
+/* Feature card aspect ratio */
+.feature-card { aspect-ratio: 16 / 10; }
 
