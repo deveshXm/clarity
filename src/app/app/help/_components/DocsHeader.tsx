@@ -2,8 +2,13 @@
 
 import React from 'react';
 import { Link } from '@/components/ui';
+import { Menu } from 'lucide-react';
 
-export default function DocsHeader(): React.ReactElement {
+type DocsHeaderProps = {
+  onOpenMobileNav?: () => void;
+};
+
+export default function DocsHeader({ onOpenMobileNav }: DocsHeaderProps): React.ReactElement {
   const siteUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || '/';
   return (
     <header className="sticky top-0 z-20 w-full border-b border-neutral-200/50 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70">
@@ -11,7 +16,15 @@ export default function DocsHeader(): React.ReactElement {
         <Link href={siteUrl} className="text-base font-semibold tracking-tight text-neutral-900 sm:text-lg">
           Clarity
         </Link>
-        <div className="h-6 w-6" aria-hidden />
+        {/* Mobile menu button */}
+        <button
+          type="button"
+          aria-label="Open navigation menu"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-200/70 text-neutral-700 hover:bg-neutral-50 active:bg-neutral-100 lg:hidden"
+          onClick={() => onOpenMobileNav?.()}
+        >
+          <Menu size={18} />
+        </button>
       </div>
     </header>
   );

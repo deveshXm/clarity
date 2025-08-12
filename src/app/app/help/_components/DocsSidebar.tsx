@@ -5,14 +5,28 @@ import { Link } from '@/components/ui';
 import { usePathname } from 'next/navigation';
 import { nav } from '../_data/nav';
 
-export default function DocsSidebar({ scrollEnabled = false }: { scrollEnabled?: boolean }): React.ReactElement {
+type SidebarVariant = 'desktop' | 'mobile';
+
+export default function DocsSidebar({
+  scrollEnabled = false,
+  variant = 'desktop',
+  onNavigate,
+}: {
+  scrollEnabled?: boolean;
+  variant?: SidebarVariant;
+  onNavigate?: () => void;
+}): React.ReactElement {
   const pathname = usePathname();
 
   return (
-    <aside className={
-      'hidden lg:block h-full w-56 pr-2 pt-12 ' +
-      (scrollEnabled ? 'overflow-y-auto' : 'overflow-hidden')
-    }>
+    <aside
+      className={
+        (variant === 'desktop'
+          ? 'hidden lg:block h-full w-56 pr-2 pt-12 '
+          : 'block h-full w-full pr-0 pt-2 ') +
+        (scrollEnabled ? 'overflow-y-auto' : 'overflow-hidden')
+      }
+    >
       {nav.map((group) => (
         <div key={group.title} className="mb-4">
           <div className="px-2 pb-1 text-xs font-semibold tracking-wide text-neutral-500">
@@ -25,6 +39,7 @@ export default function DocsSidebar({ scrollEnabled = false }: { scrollEnabled?:
                 <Link
                   key={link.href}
                   href={link.href}
+                  onClick={onNavigate}
                   className={
                     'group block rounded-md px-2 py-1.5 text-sm transition-colors ' +
                     (isActive
