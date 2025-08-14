@@ -163,35 +163,38 @@ if (!isChannelActive) {
 }
 ```
 
-### 3. Auto Coaching Message Flow
-**Complete event processing pipeline:**
+### 3. Optimized Auto Coaching Flow ✅ UPDATED
+**Single AI call comprehensive analysis pipeline:**
 
 ```typescript
 // Step 1: Receive message event (only from member channels)
 if (event.type === 'message' && (event.channel_type === 'channel' || event.channel_type === 'group')) {
   
-  // Step 2: Validate user has app installed (exists in database)
+  // Step 2: Validate user has app installed and auto rephrase enabled
   const user = await slackUserCollection.findOne({ 
     slackId: event.user, 
     isActive: true 
   });
-  if (!user) return; // Skip - user not in database (direct install without website auth)
+  if (!user || user.autoRephraseEnabled === false) return;
   
   // Step 3: Check bot is active in this specific channel
   const isChannelActive = await isChannelAccessible(event.channel, user.workspaceId);
   if (!isChannelActive) return; // Skip - not authorized channel
   
-  // Step 4: Check if user has auto rephrase enabled
-  if (user.autoRephraseEnabled === false) {
-    return; // Skip auto coaching - user disabled it
-  }
-  
-  // Step 5: Get workspace-specific bot token
+  // Step 4: Get workspace-specific bot token
   const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
   if (!workspace?.botToken) return; // Skip - missing token
   
-  // Step 6: Process message with AI analysis
-  // Step 7: Send ephemeral coaching feedback (private to user)
+  // Step 5: Always fetch conversation history for better context
+  const conversationHistory = await fetchConversationHistory(event.channel, workspace.botToken, event.ts, 15);
+  
+  // Step 6: Single comprehensive AI analysis (replaces 4 separate AI calls)
+  const analysis = await comprehensiveMessageAnalysis(event.text, conversationHistory);
+  
+  // Step 7: Send ephemeral coaching feedback if needed (private to user)
+  if (analysis.needsCoaching && analysis.flags.length > 0 && analysis.improvedMessage) {
+    // Send interactive Block Kit message with improved version
+  }
 }
 ```
 
@@ -512,6 +515,54 @@ const serializedConfig: AccountConfig = {
 // - Simple authorization: user in database = authorized
 ```
 
+## AI Architecture Optimizations ✅ NEW
+
+### 1. Single AI Call Auto-Coaching
+**Optimized from 4 AI calls to 1 comprehensive call:**
+
+```typescript
+// OLD APPROACH (4 separate AI calls):
+// 1. quickCheckNeedsCoaching(message) → AI Call #1
+// 2. analyzeMessageForFlags(message, context) → AI Call #2  
+// 3. generateImprovedMessage(message, flagType) → AI Call #3
+// 4. identifyMessageTarget(message, context) → AI Call #4
+
+// NEW APPROACH (1 comprehensive AI call):
+const analysis = await comprehensiveMessageAnalysis(message, conversationHistory);
+// Returns: { needsCoaching, flags, target, improvedMessage, reasoning }
+```
+
+### 2. GPT-5 Prompting Best Practices
+**Tone adaptation and natural language generation:**
+
+```typescript
+// Prompt guidelines for improved messages:
+// - Match the user's tone, register, and formality
+// - Keep approximately the same length unless brevity helps
+// - Preserve Slack specifics: @mentions, <#channel> references, links, code
+// - Avoid AI-ish phrasing, hedging, or generic filler
+// - Sound human and natural - like the same person wrote it, just better
+```
+
+### 3. Performance Gains
+- **Speed**: ~75% faster response times (1 AI call vs 4)
+- **Cost**: ~75% reduction in API costs
+- **Accuracy**: Better analysis with full context always available
+- **Reliability**: Fewer API calls = fewer potential failure points
+
+### 4. Azure OpenAI Configuration
+**Optimized for speed with low reasoning effort:**
+
+```typescript
+// src/lib/ai.ts configuration
+const response = await openaiClient.chat.completions.create({
+  messages,
+  model: modelName,
+  reasoning_effort: 'low', // Optimized for speed
+  response_format: { type: 'json_object' },
+});
+```
+
 ## Performance Optimizations
 
 ### 1. Document Size Limits
@@ -612,20 +663,20 @@ export async function upsertAccountConfig(rawData: AccountConfigFormData): Promi
 }
 ```
 
-### Slack Event Processing Pattern
+### Optimized Slack Event Processing Pattern ✅ UPDATED
 ```typescript
 export async function handleMessageEvent(event: SlackMessageEvent): Promise<void> {
   try {
     // Validate event data
     const validatedEvent = SlackEventSchema.parse(event);
     
-    // Check user has installed app  
+    // Check user has installed app and auto rephrase enabled
     const user = await slackUserCollection.findOne({
       slackId: validatedEvent.user,
       isActive: true
     });
     
-    if (!user) return; // Skip - user hasn't installed app
+    if (!user || user.autoRephraseEnabled === false) return;
     
     // Check bot is active in this channel
     const isChannelActive = await isChannelAccessible(
@@ -642,8 +693,21 @@ export async function handleMessageEvent(event: SlackMessageEvent): Promise<void
     
     if (!workspace?.botToken) return; // Skip - no bot token
     
-    // Process with AI analysis and send ephemeral feedback
-    // ... AI analysis logic
+    // Always fetch conversation history for better context
+    const conversationHistory = await fetchConversationHistory(
+      validatedEvent.channel, workspace.botToken, validatedEvent.ts, 15
+    );
+    
+    // Single comprehensive AI analysis (replaces 4 separate AI calls)
+    const analysis = await comprehensiveMessageAnalysis(
+      validatedEvent.text, 
+      conversationHistory
+    );
+    
+    // Send ephemeral coaching feedback if needed
+    if (analysis.needsCoaching && analysis.flags.length > 0 && analysis.improvedMessage) {
+      await sendEphemeralMessage(/* interactive coaching feedback */);
+    }
     
   } catch (error) {
     console.error('Message event processing error:', error);
