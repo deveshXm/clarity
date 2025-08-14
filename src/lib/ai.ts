@@ -35,7 +35,7 @@ const openaiClient = new AzureOpenAI({
 
 const modelName = process.env.AZURE_MODEL_NAME || process.env.AZURE_DEPLOYMENT_NAME || 'gpt-5-nano';
 
-async function chatCompletion(messages: ChatCompletionMessageParam[], temperature = 0): Promise<string> {
+async function chatCompletion(messages: ChatCompletionMessageParam[]): Promise<string> {
     const response = await openaiClient.chat.completions.create({
         messages,
         model: modelName,
@@ -92,7 +92,7 @@ export const generateImprovedMessage = async (message: string, flagType: string)
     const raw = await chatCompletion([
         { role: 'system', content: prompt },
         { role: 'user', content: message },
-    ], 0.5);
+    ]);
     return JSON.parse(raw) as ImprovedMessageResult;
 };
 
@@ -100,7 +100,7 @@ export const generatePersonalFeedback = async (messages: string[]): Promise<Pers
     const raw = await chatCompletion([
         { role: 'system', content: PERSONAL_FEEDBACK_PROMPT },
         { role: 'user', content: messages.slice(-50).join('\n') },
-    ], 0.3);
+    ]);
     return JSON.parse(raw) as PersonalFeedbackResult;
 };
 
@@ -114,7 +114,7 @@ export const generateReport = async (
     const raw = await chatCompletion([
         { role: 'system', content: prompt },
         { role: 'user', content: JSON.stringify({ period, flaggedInstances }).slice(0, 6000) },
-    ], 0.2);
+    ]);
     return JSON.parse(raw) as ReportResult;
 };
 
@@ -165,7 +165,7 @@ export const generateImprovedMessageWithContext = async (
     const raw = await chatCompletion([
         { role: 'system', content: prompt },
         { role: 'user', content: userPrompt },
-    ], 0.5);
+    ]);
     return JSON.parse(raw) as ImprovedMessageResult;
 };
 
