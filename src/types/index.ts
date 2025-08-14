@@ -127,6 +127,32 @@ export const ImprovedMessageResultSchema = z.object({
     tone: z.enum(['professional', 'friendly', 'direct', 'collaborative']),
 });
 
+// Comprehensive Analysis Result (Single AI Call)
+export const ComprehensiveAnalysisResultSchema = z.object({
+    needsCoaching: z.boolean(),
+    flags: z.array(z.object({
+        typeId: z.number().min(1).max(8),
+        type: z.enum(['pushiness', 'vagueness', 'nonObjective', 'circular', 'rudeness', 'passiveAggressive', 'fake', 'oneLiner']),
+        confidence: z.number().min(0).max(1),
+        explanation: z.string(),
+    })),
+    target: z.object({
+        name: z.string(),
+        slackId: z.string(),
+    }).nullable(),
+    improvedMessage: z.object({
+        originalMessage: z.string(),
+        improvedMessage: z.string(),
+        improvements: z.array(z.string()),
+        tone: z.enum(['professional', 'friendly', 'direct', 'collaborative']),
+    }).nullable(),
+    reasoning: z.object({
+        whyNeedsCoaching: z.string(),
+        primaryIssue: z.string(),
+        contextInfluence: z.string(),
+    }),
+});
+
 // Personal Feedback Result
 export const PersonalFeedbackResultSchema = z.object({
     overallScore: z.number().min(0).max(10),
@@ -245,6 +271,7 @@ export type CreateInvitationInput = z.infer<typeof CreateInvitationSchema>;
 // AI Function Types
 export type MessageAnalysisResult = z.infer<typeof MessageAnalysisResultSchema>;
 export type ImprovedMessageResult = z.infer<typeof ImprovedMessageResultSchema>;
+export type ComprehensiveAnalysisResult = z.infer<typeof ComprehensiveAnalysisResultSchema>;
 export type PersonalFeedbackResult = z.infer<typeof PersonalFeedbackResultSchema>;
 export type ReportResult = z.infer<typeof ReportResultSchema>;
 

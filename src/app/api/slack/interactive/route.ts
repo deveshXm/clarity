@@ -18,6 +18,10 @@ interface SlackInteractivePayload {
             selected_option?: {
               value: string;
             };
+            selected_options?: Array<{
+              text: { type: string; text: string };
+              value: string;
+            }>;
           };
         };
       };
@@ -337,8 +341,12 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         
         // Extract auto rephrase setting from checkbox
         const autoRephraseElement = view.state?.values?.auto_rephrase_selection?.auto_rephrase_checkbox;
-        const autoRephraseEnabled = autoRephraseElement && 'selected_options' in autoRephraseElement && 
-            Array.isArray(autoRephraseElement.selected_options) && autoRephraseElement.selected_options.length > 0;
+        console.log('🔍 Auto rephrase element:', JSON.stringify(autoRephraseElement, null, 2));
+        
+        // Handle checkbox state - Slack sends selected_options array when checked, undefined/empty when unchecked
+        const autoRephraseEnabled = autoRephraseElement?.selected_options && 
+            Array.isArray(autoRephraseElement.selected_options) && 
+            autoRephraseElement.selected_options.length > 0;
         
         if (!selectedValue || !['weekly', 'monthly'].includes(selectedValue)) {
             return NextResponse.json({

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible } from '@/lib/slack';
 import { SlackEventSchema } from '@/types';
 import { slackUserCollection } from '@/lib/db';
-import { analyzeMessageForFlags, identifyMessageTarget, generateImprovedMessage, quickCheckNeedsCoaching } from '@/lib/ai';
+import { comprehensiveMessageAnalysis } from '@/lib/ai';
 
 export async function POST(request: NextRequest) {
     try {
@@ -144,18 +144,10 @@ async function handleMessageEvent(event: Record<string, unknown>) {
             return;
         }
         
-        // STEP 1: Quick check if message might need coaching (no context needed)
-        console.log('🔍 Step 1: Quick coaching check...');
-        const needsCoaching = await quickCheckNeedsCoaching(validatedEvent.text);
+        // OPTIMIZED: Single comprehensive AI analysis (replaces 4 separate AI calls)
+        console.log('🔍 Starting comprehensive message analysis...');
         
-        if (!needsCoaching) {
-            console.log('✅ Quick check: No coaching needed');
-            return;
-        }
-        
-        console.log('⚠️ Quick check: Message may need coaching, proceeding to detailed analysis');
-        
-        // STEP 2: Fetch conversation context only when needed
+        // Always fetch conversation history for better context
         console.log('📚 Fetching conversation history for context...');
         const conversationHistory = await fetchConversationHistory(
             validatedEvent.channel,
@@ -166,34 +158,36 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         console.log('Fetched conversation history:', conversationHistory.length, 'messages');
         
-        // STEP 3: Detailed analysis with conversation context
-        console.log('🔍 Step 2: Detailed analysis with context...');
-        const analysisResult = await analyzeMessageForFlags(
+        // Single AI call for all analysis steps
+        const analysis = await comprehensiveMessageAnalysis(
             validatedEvent.text,
             conversationHistory
         );
         
-        console.log('Analysis result:', analysisResult);
+        console.log('Comprehensive analysis result:', {
+            needsCoaching: analysis.needsCoaching,
+            flagsFound: analysis.flags.length,
+            hasTarget: !!analysis.target,
+            hasImprovement: !!analysis.improvedMessage,
+            reasoning: analysis.reasoning.primaryIssue
+        });
         
-        // If no flags were found, no need to send feedback
-        if (analysisResult.flags.length === 0) {
-            console.log('✅ No communication issues detected');
+        // If no coaching needed, exit early
+        if (!analysis.needsCoaching || analysis.flags.length === 0) {
+            console.log('✅ No coaching needed:', analysis.reasoning.whyNeedsCoaching);
             return;
         }
         
-        console.log('🚩 Communication issues found:', analysisResult.flags.map(f => f.type));
+        console.log('🚩 Communication issues found:', analysis.flags.map(f => f.type));
         
-        // Generate improved message for the primary issue
-        const primaryFlag = analysisResult.flags[0];
-        console.log('🎯 Generating improved message for:', primaryFlag.type);
+        // Use the improved message from comprehensive analysis
+        if (!analysis.improvedMessage) {
+            console.log('❌ No improved message generated, skipping feedback');
+            return;
+        }
         
-        const improvedMessage = await generateImprovedMessage(validatedEvent.text, primaryFlag.type);
-        
-        // Identify message target (who the message is directed to) - for future use
-        await identifyMessageTarget(
-            validatedEvent.text,
-            conversationHistory
-        );
+        const primaryFlag = analysis.flags[0];
+        const improvedMessage = analysis.improvedMessage;
         
         // Build interactive message with Block Kit
         const blocks = [

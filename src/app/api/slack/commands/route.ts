@@ -467,24 +467,26 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                     }
                 },
                 {
-                    type: 'input',
+                    type: 'section',
                     block_id: 'auto_rephrase_selection',
-                    label: {
-                        type: 'plain_text',
-                        text: 'Auto Rephrase'
+                    text: {
+                        type: 'mrkdwn',
+                        text: '*Auto Rephrase*\nGet automatic coaching suggestions as you type'
                     },
-                    element: {
+                    accessory: {
                         type: 'checkboxes',
                         action_id: 'auto_rephrase_checkbox',
-                        initial_options: user.autoRephraseEnabled ? [
-                            {
-                                text: {
-                                    type: 'plain_text',
-                                    text: 'Enable automatic rephrase'
-                                },
-                                value: 'enabled'
-                            }
-                        ] : [],
+                        ...(user.autoRephraseEnabled ? {
+                            initial_options: [
+                                {
+                                    text: {
+                                        type: 'plain_text',
+                                        text: 'Enable automatic rephrase'
+                                    },
+                                    value: 'enabled'
+                                }
+                            ]
+                        } : {}),
                         options: [
                             {
                                 text: {
