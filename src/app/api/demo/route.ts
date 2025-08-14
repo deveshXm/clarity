@@ -135,30 +135,42 @@ async function generateManagerReply(currentMessage: string, conversationHistory:
     replyType: 'thread' | 'new';
     reasoning: string;
 }> {
-    const managerPrompt = `You are AliceBot, a friendly AI assistant. Respond ONLY to the current message the user just sent.
+    const managerPrompt = `You are AliceBot, a Software Engineer working in the development department. You're part of the team and chat casually with your colleagues.
 
-Rules:
-- Keep responses SHORT (1-2 sentences max)
-- Be casual and friendly
-- Respond to what they JUST said, ignore conversation history
-- Match their tone and energy
-- You can choose to be rude, polite.
+Your personality as a Software Engineer:
+- Keep responses SHORT (1-2 sentences max, like quick Slack messages)
+- Be casual, friendly, and helpful like a teammate
+- Use the conversation history to understand context and ongoing discussions
+- Respond to the CURRENT message but consider the conversation flow
+- Match the team's tone and energy
+- Offer technical insights, ask clarifying questions, or provide encouragement
+- Sound like a real developer who's part of the team
+
+Examples based on context:
+- If discussing bugs/fixes: "Nice catch! Did you check the logs for any related errors?"
+- If discussing features: "Sounds good! Are we handling edge cases for that?"  
+- If someone greets you: "Hey there! 👋 What are we working on?"
+- If discussing launches: "Exciting! Do we have the rollback plan ready just in case?"
+- If someone's frustrated: "That's rough! Want me to take a look at it with you?"
 
 ALWAYS respond with valid JSON:
 {
-  "reply": "your short response here",
-  "replyType": "new",
-  "reasoning": "responding to current message"
+  "reply": "your short, contextual response as a software engineer",
+  "replyType": "new" or "thread",
+  "reasoning": "brief explanation of your choice"
 }`;
 
-    // Remove unused variable
-    // const conversationText = conversationHistory.length > 0 
-    //     ? conversationHistory.join('\n') 
-    //     : 'No previous conversation context available.';
+    // Add conversation history for better context
+    const conversationText = conversationHistory.length > 0 
+        ? conversationHistory.slice(-20).join('\n') // Last 20 messages
+        : 'No previous conversation context available.';
 
-    const userPrompt = `Current message: "${currentMessage}"
+    const userPrompt = `CURRENT MESSAGE: "${currentMessage}"
 
-Respond with a short, casual reply to this message only. Return valid JSON.`;
+RECENT CONVERSATION HISTORY (last 20 messages for context):
+${conversationText}
+
+As a Software Engineer teammate, respond to the current message considering the conversation context. Keep it short and casual like a quick Slack reply. Return valid JSON.`;
 
     try {
         console.log('🧠 Sending to AI:', {
@@ -195,17 +207,21 @@ Respond with a short, casual reply to this message only. Return valid JSON.`;
             historyLength: conversationHistory.length
         });
         
-        // More dynamic fallback responses based on current message
-        let fallbackReply = 'Hey! Alice here 🤖';
+        // More dynamic fallback responses based on current message (as Software Engineer)
+        let fallbackReply = 'Hey! AliceBot here 👩‍💻';
         
         if (currentMessage.toLowerCase().includes('hate') || currentMessage.includes('IDIOT')) {
-            fallbackReply = 'Oops, sorry about that! Let me try to be more helpful 😅';
+            fallbackReply = 'Oops, my bad! Let me be more helpful 😅';
         } else if (currentMessage.toLowerCase().includes('how') && currentMessage.toLowerCase().includes('going')) {
-            fallbackReply = 'Going well! How about you? 😊';
+            fallbackReply = 'Going well! Working on any interesting problems? 🤔';
         } else if (currentMessage.toLowerCase().includes('normally') || currentMessage.toLowerCase().includes('casual')) {
-            fallbackReply = 'Sure thing! I\'ll keep it casual 😊';
+            fallbackReply = 'Sure thing! I\'ll keep it dev-friendly 😊';
         } else if (currentMessage.toLowerCase().includes('hi') || currentMessage.toLowerCase().includes('hello')) {
-            fallbackReply = 'Hey there! 👋';
+            fallbackReply = 'Hey there! 👋 What are we building today?';
+        } else if (currentMessage.toLowerCase().includes('bug') || currentMessage.toLowerCase().includes('error')) {
+            fallbackReply = 'Oof, bugs! Need help debugging? 🐛';
+        } else if (currentMessage.toLowerCase().includes('deploy') || currentMessage.toLowerCase().includes('launch')) {
+            fallbackReply = 'Deployment time! Got the checklist ready? 🚀';
         }
         
         return {
