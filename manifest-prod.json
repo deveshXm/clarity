@@ -70,8 +70,10 @@
             "request_url": "https://clarity.rocktangle.com/api/slack/events",
             "bot_events": [
                 "app_mention",
+                "app_uninstalled",
                 "message.channels",
-                "message.groups"
+                "message.groups",
+                "tokens_revoked"
             ]
         },
         "interactivity": {

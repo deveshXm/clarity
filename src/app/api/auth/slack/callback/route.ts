@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exchangeOAuthCode, sendWelcomeMessage } from '@/lib/slack';
 import { workspaceCollection, slackUserCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
+import { WebClient } from '@slack/web-api';
 
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
@@ -48,7 +49,8 @@ export async function GET(request: NextRequest) {
             workspaceId: team.id,
             name: team.name,
             domain: team.name?.toLowerCase().replace(/\s+/g, '-') || 'unknown',
-            botToken: oauthResponse.access_token // Store workspace-specific bot token
+            botToken: oauthResponse.access_token, // Store workspace-specific bot token
+            isActive: true // Reactivate workspace on install
         };
 
         const existingWorkspace = await workspaceCollection.findOne({ workspaceId: team.id });
@@ -71,6 +73,7 @@ export async function GET(request: NextRequest) {
             const workspaceResult = await workspaceCollection.insertOne({
                 _id: new ObjectId(),
                 ...workspaceData,
+                isActive: true, // Ensure new workspaces are active
                 createdAt: new Date(),
                 updatedAt: new Date()
             });
@@ -83,7 +86,7 @@ export async function GET(request: NextRequest) {
         let userImage = undefined;
         
         try {
-            const { WebClient } = await import('@slack/web-api');
+
             const botClient = new WebClient(oauthResponse.access_token);
             const userInfo = await botClient.users.info({ user: authed_user.id });
             
@@ -97,39 +100,73 @@ export async function GET(request: NextRequest) {
             // Fall back to placeholder values - don't fail the OAuth flow
         }
 
-        // Create or update user with actual OAuth data
-        const userData = {
-            slackId: authed_user.id,
-            workspaceId: workspaceObjectId.toString(),
-            email: authed_user.id, // Using Slack ID as identifier (we don't need actual email)
-            name: actualUserName,
-            displayName: actualDisplayName,
-            image: userImage,
-            emailVerified: true,
-            timezone: 'America/New_York', // Default timezone
-            isActive: true,
-            analysisFrequency: 'weekly',
-            autoRephraseEnabled: true, // Default to enabled for new users
-            hasCompletedOnboarding: false,
-            userToken: authed_user.access_token // Store user token for message updating
+        // Initialize default subscription for new users
+        const now = new Date();
+        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+        
+        const defaultSubscription = {
+            tier: 'FREE' as const,
+            status: 'active' as const,
+            currentPeriodStart: now,
+            currentPeriodEnd: nextMonth,
+            monthlyUsage: {
+                autoCoaching: 0,
+                manualRephrase: 0,
+                personalFeedback: 0,
+            },
+            createdAt: now,
+            updatedAt: now,
         };
 
-        // Upsert user - update existing or create new
-        await slackUserCollection.updateOne(
-            { slackId: authed_user.id, workspaceId: workspaceObjectId.toString() },
-            { 
-                $set: { 
-                    ...userData, 
-                    updatedAt: new Date() 
-                },
-                $setOnInsert: {
-                    _id: new ObjectId(),
-                    id: new ObjectId().toString(),
-                    createdAt: new Date()
+        // Check if user already exists
+        const existingUser = await slackUserCollection.findOne({ 
+            slackId: authed_user.id, 
+            workspaceId: workspaceObjectId.toString() 
+        });
+
+        if (existingUser) {
+            // User exists - just reactivate them and update basic info (preserve subscription and usage)
+            console.log('🔄 Reactivating existing user:', authed_user.id);
+            await slackUserCollection.updateOne(
+                { slackId: authed_user.id, workspaceId: workspaceObjectId.toString() },
+                { 
+                    $set: { 
+                        isActive: true, // Reactivate user
+                        name: actualUserName,
+                        displayName: actualDisplayName,
+                        image: userImage,
+                        userToken: authed_user.access_token, // Update user token
+                        updatedAt: new Date()
+                        // Don't reset subscription, usage, or onboarding status
+                    }
                 }
-            },
-            { upsert: true }
-        );
+            );
+        } else {
+            // New user - create with default subscription
+            console.log('✨ Creating new user:', authed_user.id);
+            const newUserData = {
+                _id: new ObjectId(),
+                id: new ObjectId().toString(),
+                slackId: authed_user.id,
+                workspaceId: workspaceObjectId.toString(),
+                email: authed_user.id, // Using Slack ID as identifier
+                name: actualUserName,
+                displayName: actualDisplayName,
+                image: userImage,
+                emailVerified: true,
+                timezone: 'America/New_York', // Default timezone
+                isActive: true,
+                analysisFrequency: 'weekly',
+                autoRephraseEnabled: true, // Default to enabled for new users
+                hasCompletedOnboarding: false,
+                userToken: authed_user.access_token,
+                subscription: defaultSubscription,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+
+            await slackUserCollection.insertOne(newUserData);
+        }
 
         // Send welcome message to the user
         try {

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible } from '@/lib/slack';
+import { workspaceCollection, slackUserCollection } from '@/lib/db';
+import { ObjectId } from 'mongodb';
 import { SlackEventSchema } from '@/types';
-import { slackUserCollection } from '@/lib/db';
 import { comprehensiveMessageAnalysis } from '@/lib/ai';
+import { validateUserAccess, incrementUsage } from '@/lib/subscription';
 
 export async function POST(request: NextRequest) {
     try {
@@ -40,6 +42,46 @@ export async function POST(request: NextRequest) {
         // Handle event callbacks
         if (eventData.type === 'event_callback') {
             const event = eventData.event;
+            
+            // Handle app uninstall event
+            if (event.type === 'app_uninstalled') {
+                console.log('🗑️ App uninstall event received:', JSON.stringify(event, null, 2));
+                console.log('🗑️ Full event data:', JSON.stringify(eventData, null, 2));
+                
+                // The team ID might be in the event itself or in the parent eventData
+                const teamId = event.team_id || eventData.team_id;
+                console.log('🗑️ Extracted team ID:', teamId);
+                
+                // Process uninstall in background
+                after(async () => {
+                    try {
+                        await handleAppUninstall(teamId);
+                        console.log('✅ App uninstall processing completed');
+                    } catch (error) {
+                        console.error('❌ App uninstall processing error:', error);
+                    }
+                });
+            }
+            
+            // Handle tokens revoked event (fallback for app uninstall)
+            if (event.type === 'tokens_revoked') {
+                console.log('🔑 Tokens revoked event received:', JSON.stringify(event, null, 2));
+                console.log('🔑 Full event data:', JSON.stringify(eventData, null, 2));
+                
+                // The team ID might be in the event itself or in the parent eventData
+                const teamId = event.team_id || eventData.team_id;
+                console.log('🔑 Extracted team ID:', teamId);
+                
+                // Process token revocation (same as uninstall) in background
+                after(async () => {
+                    try {
+                        await handleAppUninstall(teamId);
+                        console.log('✅ Token revocation processing completed');
+                    } catch (error) {
+                        console.error('❌ Token revocation processing error:', error);
+                    }
+                });
+            }
             
             // Only process message events in channels and groups (not DMs)
             if (event.type === 'message' && (event.channel_type === 'channel' || event.channel_type === 'group')) {
@@ -103,16 +145,15 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         // Validate event data
         const validatedEvent = SlackEventSchema.parse(event);
         
-        // Check if the user who sent the message has installed our app
-        const user = await slackUserCollection.findOne({
-            slackId: validatedEvent.user,
-            isActive: true
-        });
+        // Check subscription access and get user in one call
+        const accessCheck = await validateUserAccess(validatedEvent.user, 'autoCoaching');
         
-        if (!user) {
-            console.log('❌ User not found or inactive:', validatedEvent.user);
+        if (!accessCheck.allowed) {
+            console.log('⏭️ Auto coaching access denied:', accessCheck.reason);
             return;
         }
+        
+        const user = accessCheck.user!; // We know it exists from validation
         
         console.log('✅ Processing message from user:', user.displayName);
         console.log('📝 Message text:', validatedEvent.text);
@@ -136,8 +177,6 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         console.log('✅ Auto rephrase enabled, proceeding with analysis');
         
         // Get workspace bot token for API calls
-        const { workspaceCollection } = await import('@/lib/db');
-        const { ObjectId } = await import('mongodb');
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
         if (!workspace || !workspace.botToken) {
             console.error('❌ Workspace not found or missing bot token for user:', user.slackId);
@@ -267,6 +306,10 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         if (success) {
             console.log('✅ Ephemeral feedback sent successfully');
+            
+            // Track usage after successful auto-coaching
+            await incrementUsage(validatedEvent.user, 'autoCoaching');
+            console.log('📊 Usage tracked for autoCoaching feature');
         } else {
             console.error('❌ Failed to send ephemeral feedback');
         }
@@ -276,5 +319,63 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
     } catch (error) {
         console.error('Error handling message event:', error);
+    }
+}
+
+async function handleAppUninstall(teamId: string) {
+    try {
+        console.log('🔄 Processing app uninstall for team:', teamId);
+        
+        if (!teamId) {
+            console.error('❌ No team ID provided for app uninstall');
+            return;
+        }
+        
+        // Find the workspace by Slack team ID
+        const workspace = await workspaceCollection.findOne({ workspaceId: teamId });
+        
+        if (!workspace) {
+            console.log('⚠️ Workspace not found for team:', teamId);
+            console.log('🔍 Searching all workspaces to debug...');
+            
+            // Debug: List all workspaces to see what we have
+            const allWorkspaces = await workspaceCollection.find({}).toArray();
+            console.log('📋 All workspaces:', allWorkspaces.map(w => ({ 
+                id: w._id, 
+                workspaceId: w.workspaceId, 
+                name: w.name 
+            })));
+            return;
+        }
+        
+        // Deactivate all users in this workspace instead of deleting them
+        // This preserves their subscription, usage history, and settings
+        const result = await slackUserCollection.updateMany(
+            { workspaceId: workspace._id.toString() },
+            { 
+                $set: { 
+                    isActive: false,
+                    updatedAt: new Date()
+                }
+            }
+        );
+        
+        console.log(`🔄 Deactivated ${result.modifiedCount} users from workspace ${teamId}`);
+        
+        // Optionally deactivate the workspace as well (but keep the record)
+        await workspaceCollection.updateOne(
+            { workspaceId: teamId },
+            { 
+                $set: { 
+                    isActive: false,
+                    updatedAt: new Date()
+                }
+            }
+        );
+        
+        console.log(`✅ Successfully processed app uninstall for workspace ${teamId}`);
+        
+    } catch (error) {
+        console.error('Error processing app uninstall:', error);
     }
 } 

@@ -6,6 +6,7 @@ import LiteYouTubeEmbed from 'react-lite-youtube-embed';
 import 'react-lite-youtube-embed/dist/LiteYouTubeEmbed.css';
 
 import { Card, Container, Image, Link, Stack, Text, Title } from '@/components/ui';
+import { SUBSCRIPTION_TIERS } from '@/types';
 import BackgroundMesh from './components/BackgroundMesh';
 import FeatureScroller from './components/FeatureScroller';
 import CTAButton from './components/CTAButton';
@@ -152,46 +153,26 @@ export default function LandingPage() {
               <div className="p-8 pb-12 h-full flex flex-col">
               <Stack gap="lg" className="flex-1">
                 <div className="flex items-baseline justify-between">
-                  <Title order={3} size="h3" fw={900} style={{ color: '#0F172A', fontSize: '26px' }}>Free</Title>
+                  <Title order={3} size="h3" fw={900} style={{ color: '#0F172A', fontSize: '26px' }}>{SUBSCRIPTION_TIERS.FREE.name}</Title>
                   <div className="flex items-baseline gap-1">
-                    <Title order={2} size="h2" fw={900} style={{ color: '#0F172A', fontSize: '30px' }}>$0</Title>
-                    <Text size="sm" style={{ color: '#94A3B8', fontSize: '14px' }}>/ forever</Text>
+                    <Title order={2} size="h2" fw={900} style={{ color: '#0F172A', fontSize: '30px' }}>${SUBSCRIPTION_TIERS.FREE.price}</Title>
+                    <Text size="sm" style={{ color: '#94A3B8', fontSize: '14px' }}>{SUBSCRIPTION_TIERS.FREE.priceLabel}</Text>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Text size="sm" style={{ color: '#334155', fontSize: '18px' }}>
-                    Quick start with core coaching.
+                  <Text size="sm" style={{ color: '#334155', fontSize: '18px', marginBottom: 16 }}>
+                    {SUBSCRIPTION_TIERS.FREE.description}
                   </Text>
-                  <div style={{ borderTop: '1px solid rgba(2,6,23,0.08)' }} />
                   <ul className="space-y-2">
-                    <li className="flex items-center gap-2 text-base" style={{ color: '#0F172A' }}>
-                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-                        <path d="M7.5 13.5L4.5 10.5" stroke="#10B981" strokeWidth="2" strokeLinecap="round" />
-                        <path d="M7.5 13.5L15.5 5.5" stroke="#10B981" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                      Instant, private suggestions
-                    </li>
-                    <li className="flex items-center gap-2 text-base" style={{ color: '#0F172A' }}>
-                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-                        <path d="M5 5L15 15" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" />
-                        <path d="M15 5L5 15" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                      Context-aware rephrase
-                    </li>
-                    <li className="flex items-center gap-2 text-base" style={{ color: '#0F172A' }}>
-                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-                        <path d="M7.5 13.5L4.5 10.5" stroke="#10B981" strokeWidth="2" strokeLinecap="round" />
-                        <path d="M7.5 13.5L15.5 5.5" stroke="#10B981" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                      One‑tap message replace
-                    </li>
-                    <li className="flex items-center gap-2 text-base" style={{ color: '#0F172A' }}>
-                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-                        <path d="M7.5 13.5L4.5 10.5" stroke="#10B981" strokeWidth="2" strokeLinecap="round" />
-                        <path d="M7.5 13.5L15.5 5.5" stroke="#10B981" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                      Basic tone guardrails
-                    </li>
+                    {SUBSCRIPTION_TIERS.FREE.displayFeatures.map((feature, index) => (
+                      <li key={index} className="flex items-center gap-2 text-base" style={{ color: '#0F172A' }}>
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
+                          <path d="M7.5 13.5L4.5 10.5" stroke={feature.included ? "#10B981" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
+                          <path d="M7.5 13.5L15.5 5.5" stroke={feature.included ? "#10B981" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                        {feature.limitLabel}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </Stack>
@@ -212,46 +193,26 @@ export default function LandingPage() {
               <div className="p-8 pb-12 h-full flex flex-col">
               <Stack gap="lg" className="flex-1">
                 <div className="flex items-baseline justify-between">
-                  <Title order={3} size="h3" fw={900} style={{ color: '#FFFFFF', fontSize: '26px' }}>Pro</Title>
+                  <Title order={3} size="h3" fw={900} style={{ color: '#FFFFFF', fontSize: '26px' }}>{SUBSCRIPTION_TIERS.PRO.name}</Title>
                   <div className="flex items-baseline gap-1">
-                    <Title order={2} size="h2" fw={900} style={{ color: '#FFFFFF', fontSize: '30px' }}>$4</Title>
-                    <Text size="sm" style={{ color: 'rgba(255,255,255,0.95)', fontSize: '14px' }}>/ month</Text>
+                    <Title order={2} size="h2" fw={900} style={{ color: '#FFFFFF', fontSize: '30px' }}>${SUBSCRIPTION_TIERS.PRO.price}</Title>
+                    <Text size="sm" style={{ color: 'rgba(255,255,255,0.95)', fontSize: '14px' }}>{SUBSCRIPTION_TIERS.PRO.priceLabel}</Text>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Text size="sm" style={{ color: 'rgba(255,255,255,0.95)', fontSize: '18px' }}>
-                    Advanced, context-aware coaching.
+                  <Text size="sm" style={{ color: 'rgba(255,255,255,0.95)', fontSize: '18px', marginBottom: 16 }}>
+                    {SUBSCRIPTION_TIERS.PRO.description}
                   </Text>
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.25)' }} />
                   <ul className="space-y-2">
-                    <li className="flex items-center gap-2 text-base" style={{ color: '#FFFFFF' }}>
-                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-                        <path d="M7.5 13.5L4.5 10.5" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-                        <path d="M7.5 13.5L15.5 5.5" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                      Instant, private suggestions
-                    </li>
-                    <li className="flex items-center gap-2 text-base" style={{ color: '#FFFFFF' }}>
-                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-                        <path d="M7.5 13.5L4.5 10.5" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-                        <path d="M7.5 13.5L15.5 5.5" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                      Context-aware rephrase
-                    </li>
-                    <li className="flex items-center gap-2 text-base" style={{ color: '#FFFFFF' }}>
-                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-                        <path d="M7.5 13.5L4.5 10.5" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-                        <path d="M7.5 13.5L15.5 5.5" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                      Weekly coaching reports
-                    </li>
-                    <li className="flex items-center gap-2 text-base" style={{ color: '#FFFFFF' }}>
-                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-                        <path d="M7.5 13.5L4.5 10.5" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-                        <path d="M7.5 13.5L15.5 5.5" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                      Priority insights & updates
-                    </li>
+                    {SUBSCRIPTION_TIERS.PRO.displayFeatures.map((feature, index) => (
+                      <li key={index} className="flex items-center gap-2 text-base" style={{ color: '#FFFFFF' }}>
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
+                          <path d="M7.5 13.5L4.5 10.5" stroke={feature.included ? "#FFFFFF" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
+                          <path d="M7.5 13.5L15.5 5.5" stroke={feature.included ? "#FFFFFF" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                        {feature.limitLabel}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </Stack>

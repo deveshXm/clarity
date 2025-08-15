@@ -54,6 +54,7 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
   - Provide meaningful loading fallbacks for better UX
 - **ESLint Compliance**: Follow all ESLint rules without exceptions - fix issues rather than disable rules
 - **Build Verification**: Always run `npm run build` before completing tasks to ensure no build errors
+- **Import Optimization**: All API routes have been refactored to use static imports for better performance and type safety
 
 ## Framework-First Approach
 - **Next.js 15** - we are using nextjs 15 version
@@ -70,37 +71,63 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
   - Database operations: Check [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts) first
 - **Reuse over recreation**: If similar functionality exists, extend or modify rather than duplicate
 
+## Import Management & Performance ✅ IMPLEMENTED
+- **Static imports only**: NEVER use dynamic imports (`await import()` or `require()`) in API routes
+- **Top-level imports**: All imports must be declared at the top of the file for optimal performance
+- **Build-time optimization**: Static imports enable better tree-shaking and bundle optimization
+- **Common import patterns**:
+  ```typescript
+  // ✅ CORRECT - Static imports at top
+  import { NextRequest, NextResponse } from 'next/server';
+  import { ObjectId } from 'mongodb';
+  import { workspaceCollection } from '@/lib/db';
+  import { WebClient } from '@slack/web-api';
+  
+  export async function POST(request: NextRequest) {
+    // Use imports directly without dynamic loading
+    const workspace = await workspaceCollection.findOne({ _id: new ObjectId(id) });
+    const slack = new WebClient(token);
+  }
+  
+  // ❌ WRONG - Dynamic imports (performance penalty)
+  export async function POST(request: NextRequest) {
+    const { ObjectId } = await import('mongodb');
+    const { workspaceCollection } = await import('@/lib/db');
+  }
+  ```
+- **Type safety benefits**: Static imports provide better TypeScript inference and error checking
+- **Consistency**: All API routes in [src/app/api/](mdc:src/app/api) follow this pattern
+
 ## UI Component Architecture
 - **Mantine as base**: Always use Mantine library components as the foundation
 - **Wrapper pattern**: Create wrapper components in [src/components/ui/](mdc:src/components/ui) to prevent vendor lock-in
 - **NEVER use Mantine directly**: NEVER import or use Mantine components directly in any application code. ALL Mantine components must be wrapped in UI components first
 - **UI components only**: Always import components from `@/components/ui` - never from `@mantine/core` or any other UI library
+- **NO RAW DIVS**: Never use raw `<div>` elements - always use appropriate Mantine wrapper components like `Stack`, `Row`, `Center`, `Card`, etc.
 - **Forward refs**: Always use `forwardRef` for UI components to maintain ref compatibility
 - **Export pattern**: Export wrapped components from [src/components/ui/index.ts](mdc:src/components/ui/index.ts)
 - **Next.js components**: Wrap Next.js components (Link, Image, etc.) with custom components using `forwardRef` to maintain fixed values and consistency
+- **Layout Components**: Use semantic Mantine components for all layout needs:
+  - `<Stack>` for vertical layouts
+  - `<Row>` (Group wrapper) for horizontal layouts  
+  - `<Center>` for centering content
+  - `<Container>` for page-level containers
 - **Example structures**:
   ```typescript
   // ❌ WRONG - Never do this
   import { Button, Text, Stack } from '@mantine/core';
   
+  // ❌ WRONG - Never use raw divs
+  <div style={{ display: 'flex', justifyContent: 'center' }}>
+    <div style={{ padding: 20 }}>Content</div>
+  </div>
+  
   // ✅ CORRECT - Always do this
-  import { Button, Text, Stack } from '@/components/ui';
+  import { Button, Text, Stack, Row, Center } from '@/components/ui';
   
-  // src/components/ui/Button.tsx
-  import { Button as MantineButton } from '@mantine/core';
-  import { forwardRef } from 'react';
-  
-  export const Button = forwardRef<HTMLButtonElement, ButtonProps>((props, ref) => {
-    return <MantineButton ref={ref} {...props} />;
-  });
-  
-  // src/components/ui/Link.tsx
-  import NextLink from 'next/link';
-  import { forwardRef } from 'react';
-  
-  export const Link = forwardRef<HTMLAnchorElement, LinkProps>((props, ref) => {
-    return <NextLink ref={ref} prefetch={false} {...props} />;
-  });
+  <Row justify="center">
+    <Stack p={20}>Content</Stack>
+  </Row>
   ```
 
 ## Mantine UI Setup
@@ -168,6 +195,45 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **Configuration location**: Colors defined in theme/config files (to be determined)
 - **No arbitrary colors**: Avoid using arbitrary Tailwind colors or CSS color values
 - **Consistency**: Maintain visual consistency across all components and pages
+
+## Subscription System & Pricing Management ✅ CENTRALIZED
+- **Single Source of Truth**: All subscription data managed in [src/types/index.ts](mdc:src/types/index.ts) `SUBSCRIPTION_TIERS` object
+- **No Hardcoded Features**: Never hardcode pricing, features, or descriptions in UI components
+- **Dynamic UI Content**: All pricing cards, feature lists, and descriptions pull from `SUBSCRIPTION_TIERS`
+- **Easy Updates**: Change pricing, features, or descriptions in one place to update everywhere
+- **Consistent Display**: Both onboarding and landing page use identical subscription data
+- **Feature Structure**: Each tier includes:
+  ```typescript
+  {
+    name: 'Free',
+    price: 0,
+    description: 'Quick start with core coaching.',
+    priceLabel: '/ forever',
+    displayFeatures: [
+      {
+        name: 'Feature name',
+        description: 'Feature description',
+        included: true,
+        limit?: 50,
+        limitLabel: 'Display text'
+      }
+    ]
+  }
+  ```
+- **Usage Pattern**: Always import and use `SUBSCRIPTION_TIERS` from types:
+  ```typescript
+  import { SUBSCRIPTION_TIERS } from '@/types';
+  
+  // ✅ CORRECT - Dynamic content
+  <Text>{SUBSCRIPTION_TIERS.FREE.description}</Text>
+  {SUBSCRIPTION_TIERS.FREE.displayFeatures.map(feature => (
+    <Text key={feature.name}>{feature.limitLabel}</Text>
+  ))}
+  
+  // ❌ WRONG - Hardcoded content
+  <Text>Quick start with core coaching.</Text>
+  <Text>50 auto coaching/month</Text>
+  ```
 
 ## Database Architecture
 - **Use Native MongoDB Driver**: The project uses MongoDB's native Node.js driver (not Mongoose)
@@ -291,12 +357,15 @@ if (event.type === 'message' && (event.channel_type === 'channel' || event.chann
   - Slack commands, events, and interactive components
   - Webhook endpoints from external services
   - Third-party integrations that require traditional REST endpoints
+  - Demo bots and testing endpoints (e.g., `/api/demo`)
 - **Server Actions for**:
   - Database operations (with workspace-specific token lookups)
   - Form submissions and onboarding flow
   - Data mutations and channel management
   - Business logic and AI operations
 - **Workspace Token Pattern**: Server actions fetch workspace-specific bot tokens from database before making Slack API calls
+- **Demo Bot Pattern**: Simple single-file implementations in `/api/demo` with separate environment variables and minimal dependencies
+- **Import Standards**: All API routes use static imports only - see Import Management section for details
 
 ## Project Structure Reference
 - **Auth pages**: [src/app/(auth)/](mdc:src/app/(auth)/) - Login, register, etc.
@@ -329,10 +398,16 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
    - Help documentation: [src/app/app/help/page.tsx](mdc:src/app/app/help/page.tsx)  
    - Team invitations: [src/app/app/invite/page.tsx](mdc:src/app/app/invite/page.tsx)
 
-3. **API Routes** — [src/app/api/](mdc:src/app/api)
+3. **API Routes** — [src/app/api/](mdc:src/app/api) ✅ OPTIMIZED
    - Slack OAuth callback: [src/app/api/auth/slack/callback/route.ts](mdc:src/app/api/auth/slack/callback/route.ts)
    - Slack commands: [src/app/api/slack/commands/route.ts](mdc:src/app/api/slack/commands/route.ts)
    - Slack events: [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts)
+   - Slack interactive: [src/app/api/slack/interactive/route.ts](mdc:src/app/api/slack/interactive/route.ts)
+   - Stripe checkout: [src/app/api/stripe/checkout/route.ts](mdc:src/app/api/stripe/checkout/route.ts)
+   - Stripe portal: [src/app/api/stripe/portal/route.ts](mdc:src/app/api/stripe/portal/route.ts)
+   - Stripe webhooks: [src/app/api/stripe/webhooks/route.ts](mdc:src/app/api/stripe/webhooks/route.ts)
+   - Demo bot: [src/app/api/demo/route.ts](mdc:src/app/api/demo/route.ts) - Single-file AI reply bot for testing
+   - **Import Standard**: All routes use static imports for optimal performance and type safety
 
 ### Middleware & Authentication
 - **Middleware**: [src/middleware.ts](mdc:src/middleware.ts) - Protects `/app/*` routes with session validation and onboarding flow
@@ -388,28 +463,224 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
   await db.collection('configs').insertOne(validatedData);
   ```
 
-## Onboarding Flow Implementation ✅ COMPLETED
+## Onboarding Flow Implementation ✅ UPDATED
 - **Multi-step form**: [src/app/app/onboarding/OnboardingForm.tsx](mdc:src/app/app/onboarding/OnboardingForm.tsx) handles Slack user onboarding
 - **User Identification**: Query parameters (`?user={slackId}&team={teamId}`) for validation
-- **Step 1**: Analysis frequency selection (weekly/monthly)
-- **Step 2**: Channel selection - users choose which channels to enable AI coaching
-- **Step 3**: Team member email invitations (optional)
+- **Step Flow**: `frequency` → `channels` → `payment` → complete
+  - **Step 1**: Analysis frequency selection (weekly/monthly)
+  - **Step 2**: Channel selection - users choose which channels to enable AI coaching
+  - **Step 3**: Payment plan selection - Free vs Pro with dynamic pricing cards
+- **Payment Step Features**:
+  - **Congratulations Message**: "🎉 You're all set up! Get even more features with our Pro plan."
+  - **Side-by-Side Cards**: FREE and PRO plans using `SUBSCRIPTION_TIERS` data
+  - **Dynamic Container Width**: Adjusts from 480px to 640px for payment step to accommodate horizontal cards
+  - **Mantine Layout**: Uses `Row justify="center"` with proper flex properties for horizontal card display
+  - **Button Actions**: 
+    - Free: "Continue with Free" → completes onboarding → `/app/help`
+    - Pro: "Upgrade to Pro" → Stripe checkout → `/app/help` after success
 - **Server Actions**: 
   - `validateSlackUser()` - Validates user and checks onboarding status
   - `getWorkspaceChannels()` - Fetches available channels using workspace-specific bot token
   - `saveBotChannels()` - Joins bot to selected channels and stores in database
   - `completeSlackOnboarding()` - Saves preferences, channels, and marks onboarding complete
+- **Layout Patterns**:
+  - **Container Responsive Width**: `maxWidth: currentStep === 'payment' ? 640 : 480`
+  - **Card Flex Properties**: `minWidth: 280, maxWidth: 280, flexShrink: 0`
+  - **Row Layout**: `<Row justify="center" gap={24} wrap="wrap" align="stretch">`
 - **One-time completion**: `hasCompletedOnboarding` flag prevents re-access
 - **Bot Integration**: Bot automatically joins selected channels during onboarding
 - **Completion**: Sets `hasCompletedOnboarding: true` on user document for middleware routing
 
 ## Key Collections ✅ UPDATED
 - **workspaceCollection**: Slack workspace/team data (workspaceId, name, domain, **botToken**)
-- **slackUserCollection**: Slack user data with onboarding tracking (slackId, analysisFrequency, hasCompletedOnboarding)
+- **slackUserCollection**: Slack user data with onboarding tracking and **subscription** field (slackId, analysisFrequency, hasCompletedOnboarding, **subscription**)
 - **botChannelsCollection**: Tracks which channels bot is active in (workspaceId, channelId, channelName, addedAt)
 - **invitationCollection**: Email invitations sent by users during onboarding
 - **analysisInstanceCollection**: Future - will store message analysis results
 - **Legacy collections**: userCollection, accountConfigCollection (for reference only)
+
+## Payment & Subscription Architecture ✅ IMPLEMENTED
+
+### Subscription System Overview
+- **Provider**: Stripe for payment processing and subscription management
+- **Tiers**: FREE (default) and PRO (paid) tiers with feature limits
+- **Billing**: Monthly billing cycles with automatic usage reset
+- **User-Based**: All limits and pricing are per-user, not per-workspace
+- **No Admin Dashboard**: Backend-only implementation with Stripe handling UI
+
+### Subscription Configuration ✅ CENTRALIZED
+- **Configuration Location**: [src/types/index.ts](mdc:src/types/index.ts) - All subscription types, tiers, and pricing
+- **Subscription Tiers**:
+  ```typescript
+  export const SUBSCRIPTION_TIERS = {
+    FREE: {
+      name: 'Free',
+      price: 0,
+      monthlyLimits: {
+        autoCoaching: 50,      // Auto coaching suggestions
+        manualRephrase: 10,    // Manual /rephrase commands  
+        personalFeedback: 2,   // Personal feedback reports
+      },
+      features: {
+        basicAnalysis: true,   // Basic AI analysis
+        weeklyReports: false,  // Weekly communication reports
+        prioritySupport: false // Priority customer support
+      }
+    },
+    PRO: {
+      name: 'Pro',
+      price: 2000, // $20.00 in cents
+      monthlyLimits: {
+        autoCoaching: -1,      // Unlimited
+        manualRephrase: -1,    // Unlimited
+        personalFeedback: -1,  // Unlimited
+      },
+      features: {
+        basicAnalysis: true,
+        weeklyReports: true,
+        prioritySupport: true
+      }
+    }
+  } as const;
+  ```
+
+### Database Schema Integration ✅ IMPLEMENTED
+- **Subscription Field**: Added to `SlackUserSchema` in [src/types/index.ts](mdc:src/types/index.ts)
+- **Schema Structure**:
+  ```typescript
+  export const SubscriptionSchema = z.object({
+    tier: z.enum(['FREE', 'PRO']).default('FREE'),
+    status: z.enum(['active', 'cancelled', 'past_due']).default('active'),
+    currentPeriodStart: z.coerce.date(),
+    currentPeriodEnd: z.coerce.date(),
+    stripeCustomerId: z.string().optional(),
+    stripeSubscriptionId: z.string().optional(),
+    monthlyUsage: z.object({
+      autoCoaching: z.number().default(0),
+      manualRephrase: z.number().default(0),
+      personalFeedback: z.number().default(0),
+    }),
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date(),
+  });
+  ```
+
+### Subscription Management Functions ✅ IMPLEMENTED
+- **Location**: [src/lib/subscription.ts](mdc:src/lib/subscription.ts) - Individual server functions
+- **Core Functions**:
+  - `validateUserAccess(userId, feature)` - Check subscription limits and access
+  - `incrementUsage(userId, feature)` - Track feature usage
+  - `updateSubscription(userId, updates)` - Update subscription data
+  - `resetMonthlyUsage(userId)` - Reset usage counters for new billing period
+  - `getSubscriptionStatus(userId)` - Get current subscription and usage info
+  - `needsBillingReset(userId)` - Check if billing period reset is needed
+
+### Access Control Integration ✅ IMPLEMENTED
+- **Command Integration**: All Slack commands check subscription limits before processing
+- **Auto Coaching**: Event handler validates access before AI analysis
+- **Usage Tracking**: Increment counters after successful feature usage
+- **Rate Limiting**: Monthly limits enforced with user-friendly messages
+
+### Stripe Integration ✅ IMPLEMENTED
+
+#### Stripe Configuration
+- **Client Setup**: [src/lib/stripe.ts](mdc:src/lib/stripe.ts) - Stripe client with API version `2025-07-30.basil`
+- **Price IDs**: Defined in [src/types/index.ts](mdc:src/types/index.ts) for environment-specific pricing
+- **Webhook Endpoint**: [src/app/api/stripe/webhooks/route.ts](mdc:src/app/api/stripe/webhooks/route.ts)
+
+#### Stripe API Endpoints
+- **Checkout**: [src/app/api/stripe/checkout/route.ts](mdc:src/app/api/stripe/checkout/route.ts) - Create checkout sessions
+- **Customer Portal**: [src/app/api/stripe/portal/route.ts](mdc:src/app/api/stripe/portal/route.ts) - Manage subscriptions
+- **Webhooks**: [src/app/api/stripe/webhooks/route.ts](mdc:src/app/api/stripe/webhooks/route.ts) - Handle Stripe events
+
+#### Webhook Event Handling ✅ CRITICAL
+- **Supported Events**:
+  - `checkout.session.completed` - New subscription creation
+  - `customer.subscription.created` - Subscription activation
+  - `customer.subscription.updated` - Subscription changes
+  - `customer.subscription.deleted` - Subscription cancellation
+  - `invoice.payment_succeeded` - Successful payment processing
+  - `invoice.payment_failed` - Failed payment handling
+
+#### Type Safety with Stripe ✅ RESOLVED
+- **Challenge**: Stripe TypeScript definitions don't include all runtime properties
+- **Solution**: Use proper type casting for accessing runtime properties
+- **Pattern**:
+  ```typescript
+  // Access properties that exist at runtime but not in TypeScript definitions
+  const subscriptionData = subscription as unknown as Record<string, unknown>;
+  const currentPeriodStart = subscriptionData.current_period_start as number;
+  
+  const invoiceData = invoice as unknown as Record<string, unknown>;
+  const subscriptionId = invoiceData.subscription as string;
+  ```
+
+### User Initialization ✅ IMPLEMENTED
+- **OAuth Integration**: [src/app/api/auth/slack/callback/route.ts](mdc:src/app/api/auth/slack/callback/route.ts)
+- **Default Subscription**: New users get FREE tier with active status and zero usage
+- **Initialization Pattern**:
+  ```typescript
+  const defaultSubscription = {
+    tier: 'FREE' as const,
+    status: 'active' as const,
+    currentPeriodStart: new Date(),
+    currentPeriodEnd: nextMonth,
+    monthlyUsage: {
+      autoCoaching: 0,
+      manualRephrase: 0,
+      personalFeedback: 0,
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  ```
+
+### Feature Access Patterns ✅ IMPLEMENTED
+
+#### Pre-Feature Validation
+```typescript
+// Before processing any feature
+const accessCheck = await validateUserAccess(userId, 'autoCoaching');
+if (!accessCheck.allowed) {
+  if (accessCheck.upgradeRequired) {
+    return generateUpgradeMessage('autoCoaching', accessCheck.reason, userId);
+  }
+  return generateLimitReachedMessage('autoCoaching', currentUsage, limit, resetDate, userId);
+}
+const user = accessCheck.user!; // User is included in successful validation
+```
+
+#### Post-Feature Usage Tracking
+```typescript
+// After successful feature usage (in background)
+after(async () => {
+  if (success) {
+    await incrementUsage(userId, 'autoCoaching');
+  }
+});
+```
+
+### User Experience Messages ✅ IMPLEMENTED
+- **Upgrade Messages**: Professional upgrade prompts with Stripe checkout links
+- **Limit Reached**: Friendly messages showing current usage and reset dates
+- **Slack Formatting**: Uses proper Slack mrkdwn formatting (`*bold*`, `_italic_`)
+
+### Billing Cycle Management ✅ IMPLEMENTED
+- **Monthly Reset**: Usage counters reset on billing anniversary date
+- **Automatic Processing**: Webhook handlers manage billing period updates
+- **Grace Period**: No interruption during payment processing
+
+### Environment Configuration
+- **Stripe Keys**: `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`
+- **Price IDs**: Environment-specific Stripe price identifiers
+- **Database**: Subscription data stored in existing MongoDB collections
+
+### Best Practices ✅ ENFORCED
+- **Single User Fetch**: `validateUserAccess` fetches user once and includes in result
+- **Background Processing**: Usage tracking happens in `after()` blocks
+- **Type Safety**: Proper Zod validation for all subscription data
+- **Error Handling**: Graceful degradation when Stripe operations fail
+- **Consistency**: All subscription logic centralized in dedicated functions
 
 ## Trigger.dev Background Jobs Architecture
 
@@ -553,9 +824,6 @@ export const exampleTask = task({
   - **Without Context**: `analyzeMessageForRephraseWithoutContext()` - Analyzes only the provided message text
 - **Context-Aware Improvements**: `generateImprovedMessageWithContext()` creates suggestions that fit conversation flow
 - **Privacy-First**: Only accesses conversation data when bot is explicitly added to channels
-
----
-_Use this snapshot alongside the guidelines above to maintain consistency and avoid duplicating functionality._
 
 ## Slack Slash Command Modal Responses
 - When a slash command opens a modal via `views.open`, **never** wait for the API call to resolve before responding to Slack.
@@ -805,6 +1073,160 @@ const responseText = `🤖 *Hey there! Here's your personal feedback*\n` +
 - "Here's what I'd love to see you try next" instead of "Action Items"
 - Encouraging emojis and supportive tone throughout
 
+## Stripe Billing Portal Integration ✅ IMPLEMENTED
+
+### Settings Modal with Billing Section
+The `/settings` command now includes integrated billing management:
+
+```typescript
+// Settings modal with billing section
+const modal = {
+  blocks: [
+    // ... existing settings (frequency, auto rephrase)
+    {
+      type: 'divider'
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Billing & Subscription*\n${subscriptionStatusText}`
+      },
+      accessory: {
+        type: 'button',
+        text: {
+          type: 'plain_text',
+          text: billingButtonText,
+          emoji: true
+        },
+        ...(isPaidUser ? {} : { style: 'primary' }),
+        url: billingUrl,
+        action_id: 'billing_action'
+      }
+    }
+  ]
+};
+```
+
+### Subscription Tier Configuration ✅ UPDATED
+**Current subscription structure in [src/types/index.ts](mdc:src/types/index.ts):**
+
+```typescript
+export const SUBSCRIPTION_TIERS = {
+  FREE: {
+    name: 'Free',
+    price: 0,
+    monthlyLimits: {
+      autoCoaching: 50,        // messages per month
+      manualRephrase: 50,      // messages per month  
+      personalFeedback: 5,     // reports per month
+    },
+    features: {
+      reports: true,
+      advancedReportAnalytics: false
+    }
+  },
+  PRO: {
+    name: 'Pro', 
+    price: 10, // $10/month
+    monthlyLimits: {
+      autoCoaching: 1000,      // messages per month
+      manualRephrase: 1000,    // messages per month  
+      personalFeedback: 100,   // reports per month
+    },
+    features: {
+      reports: true,
+      advancedReportAnalytics: true
+    }
+  }
+} as const;
+```
+
+### MongoDB ObjectId Integration ✅ CRITICAL
+**All Stripe operations now use MongoDB `_id` instead of `slackId`:**
+
+```typescript
+// ✅ CORRECT - Use MongoDB ObjectId for Stripe operations
+const billingUrl = isPaidUser 
+  ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/portal?user=${encodeURIComponent(user._id)}`
+  : `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?user=${encodeURIComponent(user._id)}`;
+
+// ✅ CORRECT - Convert ObjectId to string for Stripe
+const session = await createCheckoutSession(
+  user._id.toString(), // Convert to string
+  STRIPE_PRICE_IDS.PRO_MONTHLY,
+  '', // Use Stripe default success page
+  `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help` // Back button redirect
+);
+
+// ✅ CORRECT - Convert string back to ObjectId for database queries
+const user = await slackUserCollection.findOne({ 
+  _id: new ObjectId(userId) // Convert string back to ObjectId
+});
+```
+
+### Stripe Checkout Flow ✅ UPDATED
+**Simplified checkout with Stripe defaults:**
+
+```typescript
+// Success: Uses Stripe default success page (no custom redirect)
+// Cancel/Back: Redirects to /app/help for easy navigation
+const session = await createCheckoutSession(
+  userId,
+  priceId,
+  '', // Stripe default success page
+  `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help` // Back button
+);
+```
+
+### User Experience Patterns ✅ IMPLEMENTED
+
+**Settings Modal Layout:**
+```
+┌─────────────────────────────┐
+│         Settings            │
+├─────────────────────────────┤
+│ Report Frequency            │ 
+│ ○ Weekly  ● Monthly         │
+├─────────────────────────────┤
+│ Auto Rephrase              │
+│ ☑ Enable automatic rephrase │
+├─────────────────────────────┤
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+├─────────────────────────────┤
+│ Billing & Subscription      │
+│ Current Plan: Pro - $10/mo  │
+│ (active)                    │
+│         [Manage Billing] ←──┤ Opens in new tab
+├─────────────────────────────┤
+│           [Save]            │
+└─────────────────────────────┘
+```
+
+**Conditional Button Logic:**
+- **FREE users**: Blue "Upgrade to Pro" button → Stripe Checkout
+- **PRO users**: Gray "Manage Billing" button → Stripe Customer Portal
+- **Modal persistence**: Settings modal stays open after billing button click
+
+### Subscription Validation Patterns ✅ UPDATED
+**Simplified rate limiting (no unlimited `-1` values):**
+
+```typescript
+// All features now have numeric limits
+const accessCheck = await validateUserAccess(userId, 'personalFeedback');
+if (!accessCheck.allowed) {
+  if (accessCheck.upgradeRequired) {
+    return generateUpgradeMessage('personalFeedback', accessCheck.reason, accessCheck.user?._id);
+  }
+  return generateLimitReachedMessage('personalFeedback', currentUsage, limit, resetDate, accessCheck.user?._id);
+}
+```
+
+### Error Handling Patterns ✅ IMPLEMENTED
+- **ObjectId Conversion**: Always use `.toString()` for Stripe operations
+- **Database Queries**: Always use `new ObjectId()` for MongoDB operations  
+- **Button Styling**: Use conditional styling (no `'default'` style, only `'primary'` or omit)
+- **Webhook Processing**: Handle MongoDB ObjectId strings from Stripe metadata
 
 ---
 _Use this snapshot alongside the guidelines above to maintain consistency and avoid duplicating functionality._

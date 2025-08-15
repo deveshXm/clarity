@@ -70,8 +70,10 @@
             "request_url": "https://90185304d11c.ngrok-free.app/api/slack/events",
             "bot_events": [
                 "app_mention",
+                "app_uninstalled",
                 "message.channels",
-                "message.groups"
+                "message.groups",
+                "tokens_revoked"
             ]
         },
         "interactivity": {

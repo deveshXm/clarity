@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature } from '@/lib/slack';
-import { after } from 'next/server';
-import { slackUserCollection } from '@/lib/db';
+import { slackUserCollection, workspaceCollection } from '@/lib/db';
+import { ObjectId } from 'mongodb';
+import { WebClient } from '@slack/web-api';
 // Define types inline for now
 interface SlackInteractivePayload {
   type: string;
@@ -133,7 +134,7 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         }
         
         // Create user-specific WebClient to update their own message
-        const { WebClient } = await import('@slack/web-api');
+
         const userSlack = new WebClient(appUser.userToken);
         
         // Update the original message with improved text
@@ -216,8 +217,7 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         }
         
         // Get workspace bot token
-        const { workspaceCollection } = await import('@/lib/db');
-        const { ObjectId } = await import('mongodb');
+
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(appUser.workspaceId) });
         if (!workspace || !workspace.botToken) {
             console.error('❌ Workspace not found or missing bot token for user:', userId);
@@ -228,7 +228,7 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         }
         
         // Create workspace-specific WebClient
-        const { WebClient } = await import('@slack/web-api');
+
         const workspaceSlack = new WebClient(workspace.botToken);
         
         // Post the improved message as the user (using bot with custom username)

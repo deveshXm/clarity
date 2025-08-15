@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, fetchConversationHistory, sendDirectMessage, isChannelAccessible } from '@/lib/slack';
-import { slackUserCollection } from '@/lib/db';
+import { verifySlackSignature, fetchConversationHistory, sendDirectMessage, isChannelAccessible, getSlackOAuthUrl } from '@/lib/slack';
+import { slackUserCollection, workspaceCollection } from '@/lib/db';
+import { ObjectId } from 'mongodb';
+import { WebClient } from '@slack/web-api';
 import { generatePersonalFeedback, generateImprovedMessage, analyzeMessageForFlags, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
-import { SlackUser } from '@/types';
+import { SlackUser, getTierConfig } from '@/types';
+import { validateUserAccess, incrementUsage, generateUpgradeMessage, generateLimitReachedMessage, generateProLimitReachedMessage } from '@/lib/subscription';
+
 
 export async function POST(request: NextRequest) {
     try {
@@ -51,7 +55,6 @@ export async function POST(request: NextRequest) {
 
         if (!appUser) {
             // User not in database - show authorization message with Slack installation URL
-            const { getSlackOAuthUrl } = await import('@/lib/slack');
             const authUrl = getSlackOAuthUrl();
             
             return NextResponse.json({
@@ -125,19 +128,41 @@ export async function POST(request: NextRequest) {
 
 async function handlePersonalFeedback(userId: string, channelId: string) {
     try {
-        // Get user and workspace information for bot token
-        const user = await slackUserCollection.findOne({
-            slackId: userId,
-            isActive: true
-        });
+        // Check subscription access and get user in one call
+        const accessCheck = await validateUserAccess(userId, 'personalFeedback');
+        
+        if (!accessCheck.allowed) {
+            if (accessCheck.upgradeRequired) {
+                return generateUpgradeMessage('personalFeedback', accessCheck.reason || 'Feature requires upgrade', accessCheck.user?._id);
+            }
+            
+            // Check if user is PRO (no upgrade needed, show contact us instead)
+            if (accessCheck.user?.subscription?.tier === 'PRO') {
 
-        if (!user) {
-            throw new Error('User not found or inactive');
+                const proConfig = getTierConfig('PRO');
+                return generateProLimitReachedMessage(
+                    'personalFeedback',
+                    accessCheck.user.subscription.monthlyUsage.personalFeedback || 0,
+                    proConfig.monthlyLimits.personalFeedback,
+                    accessCheck.resetDate || new Date()
+                );
+            }
+            
+            // FREE user limit reached
+            const freeConfig = getTierConfig('FREE');
+            return generateLimitReachedMessage(
+                'personalFeedback',
+                accessCheck.user?.subscription?.monthlyUsage.personalFeedback || 0,
+                freeConfig.monthlyLimits.personalFeedback,
+                accessCheck.resetDate || new Date(),
+                accessCheck.user?._id
+            );
         }
 
+        const user = accessCheck.user!; // We know it exists from validation
+
         // Get workspace-specific bot token
-        const { workspaceCollection } = await import('@/lib/db');
-        const { ObjectId } = await import('mongodb');
+
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
         
         if (!workspace || !workspace.botToken) {
@@ -237,6 +262,10 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
                 
                 if (dmSent) {
                     console.log('✅ Personal feedback report sent via DM to user:', userId);
+                    
+                    // Track usage after successful processing
+                    await incrementUsage(userId, 'personalFeedback');
+                    console.log('📊 Usage tracked for personalFeedback feature');
                 } else {
                     console.error('❌ Failed to send personal feedback report via DM to user:', userId);
                 }
@@ -281,19 +310,40 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
             };
         }
 
-        // Get user and workspace information for bot token
-        const user = await slackUserCollection.findOne({
-            slackId: userId,
-            isActive: true
-        });
-
-        if (!user) {
-            throw new Error('User not found or inactive');
+        // Check subscription access and get user in one call
+        const accessCheck = await validateUserAccess(userId, 'manualRephrase');
+        
+        if (!accessCheck.allowed) {
+            if (accessCheck.upgradeRequired) {
+                return generateUpgradeMessage('manualRephrase', accessCheck.reason || 'Feature requires upgrade', accessCheck.user?._id);
+            }
+            
+            // Check if user is PRO (no upgrade needed, show contact us instead)
+            if (accessCheck.user?.subscription?.tier === 'PRO') {
+                const proConfig = getTierConfig('PRO');
+                return generateProLimitReachedMessage(
+                    'manualRephrase',
+                    accessCheck.user.subscription.monthlyUsage.manualRephrase || 0,
+                    proConfig.monthlyLimits.manualRephrase,
+                    accessCheck.resetDate || new Date()
+                );
+            }
+            
+            // FREE user limit reached
+            const freeConfig = getTierConfig('FREE');
+            return generateLimitReachedMessage(
+                'manualRephrase',
+                accessCheck.user?.subscription?.monthlyUsage.manualRephrase || 0,
+                freeConfig.monthlyLimits.manualRephrase,
+                accessCheck.resetDate || new Date(),
+                accessCheck.user?._id
+            );
         }
 
+        const user = accessCheck.user!; // We know it exists from validation
+
         // Get workspace-specific bot token
-        const { workspaceCollection } = await import('@/lib/db');
-        const { ObjectId } = await import('mongodb');
+
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
         
         if (!workspace || !workspace.botToken) {
@@ -325,7 +375,7 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
                 }
                 
                 // Create workspace-specific WebClient
-                const { WebClient } = await import('@slack/web-api');
+
                 const workspaceSlack = new WebClient(workspace.botToken);
                 
                 if (analysisResult.flags.length === 0) {
@@ -360,12 +410,16 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
                 
                 console.log('✅ Rephrase results sent as ephemeral message to user:', userId);
                 
+                // Track usage after successful processing
+                await incrementUsage(userId, 'manualRephrase');
+                console.log('📊 Usage tracked for manualRephrase feature');
+                
             } catch (error) {
                 console.error('❌ Error in background rephrase analysis:', error);
                 
                 // Send error message as ephemeral if possible
                 try {
-                    const { WebClient } = await import('@slack/web-api');
+    
                     const workspaceSlack = new WebClient(workspace.botToken);
                     
                     await workspaceSlack.chat.postEphemeral({
@@ -397,8 +451,7 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
 async function handleSettings(text: string, userId: string, user: SlackUser, triggerId: string) {
     try {
         // Get workspace bot token for this user
-        const { workspaceCollection } = await import('@/lib/db');
-        const { ObjectId } = await import('mongodb');
+
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
         
         if (!workspace || !workspace.botToken) {
@@ -409,10 +462,27 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
         }
 
         // Create workspace-specific WebClient
-        const { WebClient } = await import('@slack/web-api');
         const workspaceSlack = new WebClient(workspace.botToken);
 
-        // Create modal view with radio buttons and toggle
+        // Get subscription info for billing section
+        const subscription = user.subscription || {
+            tier: 'FREE' as const,
+            status: 'active' as const
+        };
+        const tierConfig = getTierConfig(subscription.tier);
+        
+        // Determine billing section content
+        const isPaidUser = subscription.tier === 'PRO' && subscription.stripeCustomerId;
+        const billingUrl = isPaidUser 
+            ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/portal?user=${encodeURIComponent(user._id)}`
+            : `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?user=${encodeURIComponent(user._id)}`;
+        
+        const billingButtonText = isPaidUser ? 'Manage Billing' : 'Upgrade to Pro';
+        const subscriptionStatusText = isPaidUser 
+            ? `*Current Plan:* ${tierConfig.name} - $${tierConfig.price}/month (${subscription.status})`
+            : `*Current Plan:* ${tierConfig.name} (${subscription.status})`;
+
+        // Create modal view with radio buttons, toggle, and billing section
         const modal = {
             type: 'modal' as const,
             callback_id: 'settings_modal',
@@ -506,6 +576,27 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                             text: 'When disabled, you can still use `/rephrase [your message]` to get suggestions manually.'
                         }
                     ]
+                },
+                {
+                    type: 'divider'
+                },
+                {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: `*Billing & Subscription*\n${subscriptionStatusText}`
+                    },
+                    accessory: {
+                        type: 'button',
+                        text: {
+                            type: 'plain_text',
+                            text: billingButtonText,
+                            emoji: true
+                        },
+                        ...(isPaidUser ? {} : { style: 'primary' }),
+                        url: billingUrl,
+                        action_id: 'billing_action'
+                    }
                 }
             ]
         };

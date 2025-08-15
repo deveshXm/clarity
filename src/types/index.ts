@@ -38,6 +38,7 @@ export const WorkspaceSchema = z.object({
     name: z.string(),
     domain: z.string().optional(),
     botToken: z.string(), // Workspace-specific bot token from OAuth
+    isActive: z.boolean().default(true), // Track if workspace is active
     createdAt: z.coerce.date(),
     updatedAt: z.coerce.date(),
 });
@@ -55,6 +56,32 @@ export const BotChannelSchema = z.object({
 
 export const CreateBotChannelSchema = BotChannelSchema.omit({ _id: true, addedAt: true });
 
+// Subscription Schema
+export const SubscriptionSchema = z.object({
+    // Tier and billing info
+    tier: z.enum(['FREE', 'PRO']).default('FREE'),
+    status: z.enum(['active', 'cancelled', 'past_due']).default('active'),
+    
+    // Billing cycle (for usage reset)
+    currentPeriodStart: z.coerce.date(),
+    currentPeriodEnd: z.coerce.date(),
+    
+    // Stripe integration
+    stripeCustomerId: z.string().optional(),
+    stripeSubscriptionId: z.string().optional(),
+    
+    // Usage tracking (resets on billing cycle)
+    monthlyUsage: z.object({
+        autoCoaching: z.number().default(0),
+        manualRephrase: z.number().default(0),
+        personalFeedback: z.number().default(0),
+    }),
+    
+    // Timestamps
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date(),
+});
+
 // Slack User Schema (extends base User)
 export const SlackUserSchema = UserSchema.extend({
     slackId: z.string(),
@@ -66,6 +93,7 @@ export const SlackUserSchema = UserSchema.extend({
     analysisFrequency: z.enum(['weekly', 'monthly']).default('weekly'),
     autoRephraseEnabled: z.boolean().default(true), // Auto coaching toggle
     hasCompletedOnboarding: z.boolean().default(false),
+    subscription: SubscriptionSchema.optional(), // Subscription data
 });
 
 export const CreateSlackUserSchema = SlackUserSchema.omit({ _id: true, id: true, createdAt: true, updatedAt: true });
@@ -261,6 +289,7 @@ export type Workspace = z.infer<typeof WorkspaceSchema>;
 export type CreateWorkspaceInput = z.infer<typeof CreateWorkspaceSchema>;
 export type BotChannel = z.infer<typeof BotChannelSchema>;
 export type CreateBotChannelInput = z.infer<typeof CreateBotChannelSchema>;
+export type Subscription = z.infer<typeof SubscriptionSchema>;
 export type SlackUser = z.infer<typeof SlackUserSchema>;
 export type CreateSlackUserInput = z.infer<typeof CreateSlackUserSchema>;
 export type AnalysisInstance = z.infer<typeof AnalysisInstanceSchema>;
@@ -301,6 +330,132 @@ export type UpdateAccountConfigInput = z.infer<typeof UpdateAccountConfigSchema>
 // Example Task (for boilerplate)
 export type ExampleTaskType = (typeof ExampleTaskTypeSchema)['Enum'];
 export type ExampleTaskInput = z.infer<typeof ExampleTaskInputSchema>;
+
+// SUBSCRIPTION SYSTEM TYPES & CONFIG
+
+// Subscription Tiers Configuration
+export const SUBSCRIPTION_TIERS = {
+  FREE: {
+    name: 'Free',
+    price: 0,
+    description: 'Quick start with core coaching.',
+    priceLabel: '/ forever',
+    monthlyLimits: {
+      autoCoaching: 50,        // messages per month
+      manualRephrase: 50,      // messages per month  
+      personalFeedback: 1,     // personal feedback reports per month
+    },
+    features: {
+      reports: true,      // Paid only
+      advancedReportAnalytics: false // Paid only
+    },
+    displayFeatures: [
+      {
+        name: 'Auto coaching suggestions',
+        description: 'Get instant, private suggestions to improve your messages',
+        included: true,
+        limit: 50,
+        limitLabel: 'auto coaching/month'
+      },
+      {
+        name: 'Manual rephrase',
+        description: 'Use /rephrase command to improve specific messages',
+        included: true,
+        limit: 50,
+        limitLabel: 'manual rephrase/month'
+      },
+      {
+        name: 'Personal feedback reports',
+        description: 'Get detailed analysis of your communication patterns',
+        included: true,
+        limit: 1,
+        limitLabel: 'personal feedback/month'
+      },
+      {
+        name: 'Basic tone guardrails',
+        description: 'Prevent common communication issues',
+        included: true,
+        limitLabel: 'Basic tone guardrails'
+      }
+    ]
+  },
+  PRO: {
+    name: 'Pro', 
+    price: 10, // $10/month
+    description: 'Advanced, context-aware coaching.',
+    priceLabel: '/ month',
+    monthlyLimits: {
+      autoCoaching: 1000,        // messages per month
+      manualRephrase: 1000,      // messages per month  
+      personalFeedback: 1,    // personal feedback reports per month
+    },
+    features: {
+      reports: true,       // Enabled
+      advancedReportAnalytics: true  // Enabled
+    },
+    displayFeatures: [
+      {
+        name: 'Auto coaching suggestions',
+        description: 'Get instant, private suggestions to improve your messages',
+        included: true,
+        limit: 1000,
+        limitLabel: 'auto coaching/month'
+      },
+      {
+        name: 'Manual rephrase',
+        description: 'Use /rephrase command to improve specific messages',
+        included: true,
+        limit: 1000,
+        limitLabel: 'manual rephrase/month'
+      },
+      {
+        name: 'Personal feedback reports',
+        description: 'Get detailed analysis of your communication patterns',
+        included: true,
+        limit: 1,
+        limitLabel: 'personal feedback/month'
+      },
+      {
+        name: 'Advanced report analytics',
+        description: 'Deep insights and trends in your communication',
+        included: true,
+        limitLabel: 'Advanced report analytics'
+      }
+    ]
+  }
+} as const;
+
+// Subscription Types
+export type SubscriptionTier = keyof typeof SUBSCRIPTION_TIERS;
+export type SubscriptionFeature = keyof typeof SUBSCRIPTION_TIERS.FREE.monthlyLimits | keyof typeof SUBSCRIPTION_TIERS.FREE.features;
+
+// Subscription Check Result
+export interface SubscriptionCheckResult {
+  allowed: boolean;
+  reason?: string;
+  upgradeRequired?: boolean;
+  user?: SlackUser;
+  remainingUsage?: number;
+  resetDate?: Date;
+}
+
+// Stripe Price IDs Configuration
+export const STRIPE_PRICE_IDS = {
+  PRO_MONTHLY: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || 'price_pro_monthly',
+} as const;
+
+// Helper functions for subscription management
+export function getTierConfig(tier: SubscriptionTier) {
+  return SUBSCRIPTION_TIERS[tier];
+}
+
+export function isRateLimitedFeature(feature: string): feature is keyof typeof SUBSCRIPTION_TIERS.FREE.monthlyLimits {
+  return feature in SUBSCRIPTION_TIERS.FREE.monthlyLimits;
+}
+
+export function isPaidFeature(feature: string): feature is keyof typeof SUBSCRIPTION_TIERS.FREE.features {
+  return feature in SUBSCRIPTION_TIERS.FREE.features;
+}
 
 // Server Action Result Type
 export interface ServerActionResult<T = unknown> {

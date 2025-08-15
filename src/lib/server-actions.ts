@@ -162,7 +162,8 @@ export async function validateSlackUser(slackId: string, teamId: string) {
                 workspaceId: user.workspaceId,
                 name: user.name,
                 analysisFrequency: user.analysisFrequency,
-                hasCompletedOnboarding: user.hasCompletedOnboarding || false
+                hasCompletedOnboarding: user.hasCompletedOnboarding || false,
+                subscription: user.subscription // Include subscription data for onboarding
             }
         };
 
