@@ -1232,5 +1232,69 @@ if (!accessCheck.allowed) {
 - **Button Styling**: Use conditional styling (no `'default'` style, only `'primary'` or omit)
 - **Webhook Processing**: Handle MongoDB ObjectId strings from Stripe metadata
 
+## Comprehensive Logging & Error Tracking ✅ IMPLEMENTED
+
+### Logging Architecture
+- **Logger Utility**: [src/lib/logger.ts](mdc:src/lib/logger.ts) - Structured logging with INFO, WARN, ERROR, DEBUG levels
+- **PostHog Integration**: [src/lib/posthog.ts](mdc:src/lib/posthog.ts) - Server-side error and event tracking
+- **Client Analytics**: [src/hooks/useAnalytics.ts](mdc:src/hooks/useAnalytics.ts) - Renamed to `usePostHog` for direct usage
+
+### Mandatory Error Tracking Pattern ✅ ENFORCED
+**Every API route MUST have comprehensive error tracking:**
+
+```typescript
+} catch (error) {
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    
+    // Structured logging for developers
+    logError('Descriptive error message', errorObj, { 
+        endpoint: '/api/route/path',
+        user_id: userId,
+        operation: 'specific_operation'
+    });
+    
+    // PostHog analytics for business insights
+    trackError(userId || 'anonymous', errorObj, { 
+        endpoint: '/api/route/path',
+        operation: 'specific_operation',
+        context: 'additional_context'
+    });
+    
+    return NextResponse.json({ error: 'User-friendly message' }, { status: 500 });
+}
+```
+
+### Success Operation Logging ✅ IMPLEMENTED
+**Track successful operations with info logs:**
+
+```typescript
+logInfo('Operation completed successfully', { 
+    user_id: userId,
+    endpoint: '/api/route/path',
+    operation: 'specific_operation',
+    // Additional success context...
+});
+```
+
+### Event Tracking Rules ✅ UPDATED
+- **Use centralized events**: All event names in [src/lib/analytics/events.ts](mdc:src/lib/analytics/events.ts)
+- **Follow naming convention**: `category:object_action` format (e.g., `feature:auto_coaching_triggered`)
+- **AUTO_COACHING_TRIGGERED**: Only fire when rephrased message is actually sent to user
+- **No skipped events**: Don't track when no action is taken
+
+### Logging Levels Usage
+- **INFO**: Successful operations, user journeys, business metrics
+- **WARN**: Recoverable issues, deprecation warnings
+- **ERROR**: Failures, exceptions, critical issues requiring attention
+- **DEBUG**: Development debugging, detailed flow tracing
+
+### Required Imports for API Routes
+```typescript
+// Standard logging imports for all API routes
+import { logError, logInfo } from '@/lib/logger';
+import { trackError, trackEvent } from '@/lib/posthog';
+import { EVENTS } from '@/lib/analytics/events';
+```
+
 ---
 _Use this snapshot alongside the guidelines above to maintain consistency and avoid duplicating functionality._

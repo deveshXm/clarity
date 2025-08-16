@@ -7,6 +7,7 @@ posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
   capture_pageview: false,  // Manual control for better tracking
   capture_exceptions: true,
   debug: process.env.NODE_ENV === 'development',
+  defaults: '2025-05-24',
   loaded: (posthog) => {
     // Enable debug mode in development
     if (process.env.NODE_ENV === 'development') {
