@@ -25,15 +25,15 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/ingest/static/:path*',
-        destination: 'https://us-assets.i.posthog.com/static/:path*',
+        destination: 'https://clarity.rocktangle.com/static/:path*',
       },
       {
         source: '/ingest/:path*',
-        destination: 'https://us.i.posthog.com/:path*',
+        destination: 'https://clarity.rocktangle.com/:path*',
       },
       {
         source: '/ingest/flags',
-        destination: 'https://us.i.posthog.com/flags',
+        destination: 'https://clarity.rocktangle.com/flags',
       },
     ];
   },
