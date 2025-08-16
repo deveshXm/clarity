@@ -27,6 +27,32 @@ globs: src/lib/**/*.ts,src/types/**/*.ts,src/app/api/**/*.ts
 - Use explicit TypeScript types inferred from Zod schemas; never use `any`.
 - When adding fields, prefer additive, backward-compatible changes; write guards for optional legacy fields.
 
+## User Lifecycle Management ✅ IMPLEMENTED
+
+- **Never delete users or workspaces** - use `isActive: boolean` field for deactivation
+- **Install/Reinstall Flow**: Set `isActive: true` and preserve existing subscription/usage data
+- **Uninstall Flow**: Set `isActive: false` but preserve all user data (subscription, usage, preferences)
+- **Prevents Usage Abuse**: Users can't reset limits by uninstalling/reinstalling
+- **OAuth Callback Pattern**:
+  ```typescript
+  const existingUser = await slackUserCollection.findOne({ slackId, workspaceId });
+  if (existingUser) {
+    // Reactivate existing user - preserve subscription and usage
+    await slackUserCollection.updateOne(
+      { slackId, workspaceId },
+      { $set: { isActive: true, updatedAt: new Date() } }
+    );
+  } else {
+    // Create new user with default FREE subscription
+    await slackUserCollection.insertOne(newUserData);
+  }
+  ```
+- **App Uninstall Handler**: Listen for `app_uninstalled` and `tokens_revoked` events in [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts)
+- **Manifest Events Required**: Add both `app_uninstalled` and `tokens_revoked` to bot_events in manifest files
+- **Uninstall Processing**: `handleAppUninstall(teamId)` function deactivates all workspace users and workspace
+- **Workspace Deactivation**: Both users and workspaces get `isActive: false` on uninstall
+- **Debug Logging**: Enhanced event logging to troubleshoot team_id extraction from Slack payloads
+
 ## Slack Tokens & Access
 
 - Never use a global Slack bot token. Always look up the workspace-specific token from the database.

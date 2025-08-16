@@ -3,6 +3,9 @@ import { createCheckoutSession } from '@/lib/stripe';
 import { slackUserCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackUser, STRIPE_PRICE_IDS } from '@/types';
+import { trackEvent, trackError } from '@/lib/posthog';
+import { EVENTS } from '@/lib/analytics/events';
+import { logError, logInfo } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,6 +13,7 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('user');
     
     if (!userId) {
+      logError('Missing user parameter in checkout request');
       return NextResponse.json({ 
         error: 'Missing user parameter' 
       }, { status: 400 });
@@ -21,13 +25,27 @@ export async function GET(request: NextRequest) {
     }) as SlackUser | null;
     
     if (!user) {
+      logError('User not found for checkout', undefined, { user_id: userId });
       return NextResponse.json({ 
         error: 'User not found' 
       }, { status: 404 });
     }
     
+    // Track upgrade attempt (server-side for reliability)
+    trackEvent(user.slackId, EVENTS.SUBSCRIPTION_UPGRADE_CLICKED, {
+      source: 'direct_link',
+      current_tier: user.subscription?.tier || 'FREE',
+      workspace_id: user.workspaceId,
+    });
+    
     // Check if user already has Pro subscription
     if (user.subscription?.tier === 'PRO' && user.subscription?.status === 'active') {
+      logInfo('User already has Pro subscription', { 
+        user_id: user.slackId,
+        subscription_status: user.subscription.status,
+        endpoint: '/api/stripe/checkout'
+      });
+      
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?message=already_subscribed`
       );
@@ -41,11 +59,36 @@ export async function GET(request: NextRequest) {
       `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?payment=cancelled`
     );
     
+    // Track checkout session creation
+    trackEvent(user.slackId, EVENTS.SUBSCRIPTION_CHECKOUT_STARTED, {
+      session_id: session.id,
+      price_id: STRIPE_PRICE_IDS.PRO_MONTHLY,
+      workspace_id: user.workspaceId,
+    });
+    
+    logInfo('Stripe checkout session created', { 
+      user_id: user.slackId,
+      session_id: session.id,
+      price_id: STRIPE_PRICE_IDS.PRO_MONTHLY,
+      endpoint: '/api/stripe/checkout'
+    });
+    
     // Redirect to Stripe Checkout
     return NextResponse.redirect(session.url!);
     
   } catch (error) {
-    console.error('Stripe checkout error:', error);
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('user');
+    
+    logError('Stripe checkout error', error instanceof Error ? error : new Error(String(error)), {
+      user_id: userId,
+      endpoint: '/api/stripe/checkout'
+    });
+    
+    trackError(userId || 'anonymous', error instanceof Error ? error : new Error(String(error)), {
+      endpoint: '/api/stripe/checkout',
+    });
+    
     return NextResponse.json({ 
       error: 'Failed to create checkout session' 
     }, { status: 500 });

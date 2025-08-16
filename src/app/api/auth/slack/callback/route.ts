@@ -3,6 +3,9 @@ import { exchangeOAuthCode, sendWelcomeMessage } from '@/lib/slack';
 import { workspaceCollection, slackUserCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
+import { trackEvent, identifyUser, trackError } from '@/lib/posthog';
+import { EVENTS } from '@/lib/analytics/events';
+import { logError, logInfo } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
@@ -10,17 +13,33 @@ export async function GET(request: NextRequest) {
     const error = searchParams.get('error');
     const state = searchParams.get('state');
 
-    console.log('OAuth callback received:', { code: code?.substring(0, 20) + '...', error, state });
+    logInfo('OAuth callback received', { 
+        has_code: !!code,
+        has_error: !!error,
+        state,
+        endpoint: '/api/auth/slack/callback'
+    });
+
+
+
+    // Track OAuth start (server-side for reliability)
+    trackEvent('anonymous', EVENTS.AUTH_SLACK_OAUTH_STARTED, {
+        has_code: !!code,
+        has_error: !!error,
+        state,
+    });
 
     // Handle OAuth error
     if (error) {
-        console.error('Slack OAuth error:', error);
+        logError('Slack OAuth error', new Error(error), { state });
+        trackError('anonymous', new Error(`OAuth error: ${error}`), { oauth_error: error, state });
         return NextResponse.redirect(new URL('/?error=oauth_error', request.url));
     }
 
     // Handle missing code
     if (!code) {
-        console.error('No authorization code received');
+        logError('No authorization code received', undefined, { state });
+        trackError('anonymous', new Error('Missing authorization code'), { state });
         return NextResponse.redirect(new URL('/?error=missing_code', request.url));
     }
 
@@ -124,9 +143,15 @@ export async function GET(request: NextRequest) {
             workspaceId: workspaceObjectId.toString() 
         });
 
+        let isNewUser = false;
+        
         if (existingUser) {
             // User exists - just reactivate them and update basic info (preserve subscription and usage)
-            console.log('🔄 Reactivating existing user:', authed_user.id);
+            logInfo('Reactivating existing user', { 
+                slack_user_id: authed_user.id,
+                workspace_id: workspaceObjectId.toString()
+            });
+            
             await slackUserCollection.updateOne(
                 { slackId: authed_user.id, workspaceId: workspaceObjectId.toString() },
                 { 
@@ -141,9 +166,25 @@ export async function GET(request: NextRequest) {
                     }
                 }
             );
+            
+            // Identify returning user
+            identifyUser(authed_user.id, {
+                slack_user_id: authed_user.id,
+                workspace_id: workspaceObjectId.toString(),
+                workspace_name: team.name,
+                is_returning_user: true,
+                subscription_tier: ((existingUser as Record<string, unknown>)?.subscription as Record<string, unknown>)?.tier || 'FREE',
+            });
+            
         } else {
             // New user - create with default subscription
-            console.log('✨ Creating new user:', authed_user.id);
+            isNewUser = true;
+            logInfo('Creating new user', { 
+                slack_user_id: authed_user.id,
+                workspace_id: workspaceObjectId.toString(),
+                workspace_name: team.name
+            });
+            
             const newUserData = {
                 _id: new ObjectId(),
                 id: new ObjectId().toString(),
@@ -166,6 +207,16 @@ export async function GET(request: NextRequest) {
             };
 
             await slackUserCollection.insertOne(newUserData);
+            
+            // Identify new user
+            identifyUser(authed_user.id, {
+                slack_user_id: authed_user.id,
+                workspace_id: workspaceObjectId.toString(),
+                workspace_name: team.name,
+                is_new_user: true,
+                subscription_tier: 'FREE',
+                signup_method: 'slack_oauth',
+            });
         }
 
         // Send welcome message to the user
@@ -177,24 +228,50 @@ export async function GET(request: NextRequest) {
             );
             
             if (welcomeMessageSent) {
-                console.log('✅ Welcome message sent to user:', authed_user.id);
+                logInfo('Welcome message sent successfully', { slack_user_id: authed_user.id });
             } else {
-                console.error('❌ Failed to send welcome message to user:', authed_user.id);
+                logError('Failed to send welcome message', undefined, { slack_user_id: authed_user.id });
             }
         } catch (error) {
-            console.error('Error sending welcome message:', error);
+            logError('Error sending welcome message', error instanceof Error ? error : new Error(String(error)), {
+                slack_user_id: authed_user.id
+            });
             // Don't fail the OAuth flow if welcome message fails - just log it
         }
 
+        // Track successful OAuth completion (server-side for reliability)
+        trackEvent(authed_user.id, EVENTS.AUTH_SLACK_OAUTH_COMPLETED, {
+            workspace_id: workspaceObjectId.toString(),
+            workspace_name: team.name,
+            is_new_user: isNewUser,
+            is_new_workspace: !existingWorkspace,
+        });
+
         // Simply redirect to onboarding with user context - no session needed
-        console.log('OAuth callback successful, app installed for user:', authed_user.id);
+        logInfo('OAuth callback successful', { 
+            slack_user_id: authed_user.id,
+            workspace_id: workspaceObjectId.toString(),
+            is_new_user: isNewUser,
+            workspace_name: team.name
+        });
+        
         const onboardingUrl = new URL(process.env.NEXT_PUBLIC_BETTER_AUTH_URL! + '/app/onboarding', request.url);
         onboardingUrl.searchParams.set('user', authed_user.id);
         onboardingUrl.searchParams.set('team', team.id);
         return NextResponse.redirect(onboardingUrl);
 
     } catch (error) {
-        console.error('Slack OAuth callback error:', error);
+        logError('Slack OAuth callback error', error instanceof Error ? error : new Error(String(error)), {
+            code: code?.substring(0, 20),
+            state
+        });
+        
+        trackError('anonymous', error instanceof Error ? error : new Error(String(error)), {
+            endpoint: '/api/auth/slack/callback',
+            code: code?.substring(0, 20),
+            state
+        });
+        
         return NextResponse.redirect(new URL('/?error=callback_error', request.url));
     }
 } 

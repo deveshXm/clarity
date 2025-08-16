@@ -4,6 +4,8 @@ import { updateSubscription, resetMonthlyUsage, needsBillingReset } from '@/lib/
 import { slackUserCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackUser } from '@/types';
+import { trackError } from '@/lib/posthog';
+import { logError, logInfo } from '@/lib/logger';
 import Stripe from 'stripe';
 
 export async function POST(request: NextRequest) {
@@ -30,6 +32,12 @@ export async function POST(request: NextRequest) {
     
     console.log('🎣 Received Stripe webhook:', event.type);
     
+    logInfo('Stripe webhook received', { 
+      event_type: event.type,
+      event_id: event.id,
+      endpoint: '/api/stripe/webhooks'
+    });
+
     switch (event.type) {
       case 'checkout.session.completed':
         await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
@@ -64,7 +72,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
     
   } catch (error) {
-    console.error('❌ Stripe webhook error:', error);
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    logError('Stripe webhook error', errorObj, { 
+      endpoint: '/api/stripe/webhooks'
+    });
+    trackError('anonymous', errorObj, { 
+      endpoint: '/api/stripe/webhooks',
+      operation: 'webhook_processing'
+    });
     return NextResponse.json({ 
       error: 'Webhook processing failed' 
     }, { status: 400 });
@@ -115,7 +130,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       }
     }
   } catch (error) {
-    console.error('Error syncing existing subscription:', error);
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    logError('Error syncing existing subscription', errorObj, { 
+      customer_id: customerId,
+      operation: 'sync_existing_subscription'
+    });
+    trackError('anonymous', errorObj, { 
+      operation: 'sync_existing_subscription',
+      context: 'checkout_session_completed'
+    });
     // Don't fail the entire webhook - this is a best-effort sync
   }
 }
@@ -218,7 +241,15 @@ async function handleCustomerUpdated(customer: Stripe.Customer) {
       }
     }
   } catch (error) {
-    console.error('Error syncing subscription after customer update:', error);
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    logError('Error syncing subscription after customer update', errorObj, { 
+      customer_id: customer.id,
+      operation: 'sync_subscription_customer_update'
+    });
+    trackError('anonymous', errorObj, { 
+      operation: 'sync_subscription_customer_update',
+      context: 'customer_updated'
+    });
   }
 }
 

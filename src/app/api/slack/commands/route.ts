@@ -6,6 +6,8 @@ import { WebClient } from '@slack/web-api';
 import { generatePersonalFeedback, generateImprovedMessage, analyzeMessageForFlags, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
 import { SlackUser, getTierConfig } from '@/types';
 import { validateUserAccess, incrementUsage, generateUpgradeMessage, generateLimitReachedMessage, generateProLimitReachedMessage } from '@/lib/subscription';
+import { trackError } from '@/lib/posthog';
+import { logError, logInfo } from '@/lib/logger';
 
 
 export async function POST(request: NextRequest) {
@@ -46,6 +48,14 @@ export async function POST(request: NextRequest) {
                 text: 'Invalid command format' 
             }, { status: 400 });
         }
+
+        logInfo('Slack command received', { 
+            command,
+            user_id: userId,
+            channel_id: channelId,
+            has_text: !!text,
+            endpoint: '/api/slack/commands'
+        });
 
         // Check if user exists in database (installed via website)
         const appUser = await slackUserCollection.findOne({
@@ -118,7 +128,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(response);
         
     } catch (error) {
-        console.error('Slack commands error:', error);
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Slack commands error', errorObj, { 
+            endpoint: '/api/slack/commands'
+        });
+        trackError('anonymous', errorObj, { 
+            endpoint: '/api/slack/commands',
+            operation: 'slack_command_processing'
+        });
         return NextResponse.json({
             text: 'Sorry, there was an error processing your command. Please try again.',
             response_type: 'ephemeral'
@@ -182,7 +199,11 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
         // Schedule background analysis using after()
         after(async () => {
             try {
-                console.log('📊 Starting background personal feedback analysis for user:', userId);
+                logInfo('Starting background personal feedback analysis', { 
+                    user_id: userId,
+                    channel_id: channelId,
+                    operation: 'personal_feedback_analysis'
+                });
                 
                 // Get user's last 40 messages from conversation history using workspace-specific token
                 const conversationHistory = await fetchConversationHistory(channelId, workspace.botToken, undefined, 40);
@@ -216,12 +237,26 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
                     
                     console.log('🎯 Relationship insights found:', relationshipInsights.length);
                 } catch (error) {
-                    console.error('Error analyzing relationship context:', error);
+                    const errorObj = error instanceof Error ? error : new Error(String(error));
+                    logError('Error analyzing relationship context', errorObj, { 
+                        user_id: userId,
+                        operation: 'relationship_analysis'
+                    });
+                    trackError(userId, errorObj, { 
+                        operation: 'relationship_analysis',
+                        context: 'personal_feedback'
+                    });
                 }
                 
                 // Generate personal feedback
                 const feedback = await generatePersonalFeedback(conversationHistory);
-                console.log('🤖 Generated feedback with score:', feedback.overallScore);
+                logInfo('Generated personal feedback', { 
+                    user_id: userId,
+                    overall_score: feedback.overallScore,
+                    patterns_count: feedback.patterns?.length || 0,
+                    improvements_count: feedback.improvements?.length || 0,
+                    operation: 'personal_feedback_generation'
+                });
                 
                 // Format response for DM with friendly coaching tone
                 const scoreEmoji = feedback.overallScore >= 8 ? '🟢 You\'re crushing it!' : feedback.overallScore >= 6 ? '🟡 Looking good!' : '🔴 Let\'s level up together!';
@@ -271,7 +306,16 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
                 }
                 
             } catch (error) {
-                console.error('❌ Error in background personal feedback analysis:', error);
+                const errorObj = error instanceof Error ? error : new Error(String(error));
+                logError('Error in background personal feedback analysis', errorObj, { 
+                    user_id: userId,
+                    channel_id: channelId,
+                    operation: 'personal_feedback_analysis'
+                });
+                trackError(userId, errorObj, { 
+                    operation: 'personal_feedback_analysis',
+                    context: 'background_processing'
+                });
                 
                 // Send error message via DM if possible
                 try {
@@ -281,7 +325,15 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
                         workspace.botToken
                     );
                 } catch (dmError) {
-                    console.error('❌ Failed to send error message via DM:', dmError);
+                    const dmErrorObj = dmError instanceof Error ? dmError : new Error(String(dmError));
+                    logError('Failed to send error message via DM', dmErrorObj, { 
+                        user_id: userId,
+                        operation: 'send_error_dm'
+                    });
+                    trackError(userId, dmErrorObj, { 
+                        operation: 'send_error_dm',
+                        context: 'personal_feedback_error'
+                    });
                 }
             }
         });
@@ -293,7 +345,16 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
         };
         
     } catch (error) {
-        console.error('Error in personalfeedback command:', error);
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error in personalfeedback command', errorObj, { 
+            user_id: userId,
+            channel_id: channelId,
+            operation: 'personalfeedback_command'
+        });
+        trackError(userId, errorObj, { 
+            operation: 'personalfeedback_command',
+            context: 'command_initialization'
+        });
         return {
             text: 'Sorry, I couldn&apos;t start your feedback analysis. Please try again later.',
             response_type: 'ephemeral'
@@ -415,11 +476,19 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
                 console.log('📊 Usage tracked for manualRephrase feature');
                 
             } catch (error) {
-                console.error('❌ Error in background rephrase analysis:', error);
+                const errorObj = error instanceof Error ? error : new Error(String(error));
+                logError('Error in background rephrase analysis', errorObj, { 
+                    user_id: userId,
+                    channel_id: channelId,
+                    operation: 'rephrase_analysis'
+                });
+                trackError(userId, errorObj, { 
+                    operation: 'rephrase_analysis',
+                    context: 'background_processing'
+                });
                 
                 // Send error message as ephemeral if possible
                 try {
-    
                     const workspaceSlack = new WebClient(workspace.botToken);
                     
                     await workspaceSlack.chat.postEphemeral({
@@ -428,7 +497,16 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
                         text: '❌ Sorry, I encountered an error while rephrasing your message. Please try again later or contact support if the issue persists.'
                     });
                 } catch (ephemeralError) {
-                    console.error('❌ Failed to send error message as ephemeral:', ephemeralError);
+                    const ephemeralErrorObj = ephemeralError instanceof Error ? ephemeralError : new Error(String(ephemeralError));
+                    logError('Failed to send error message as ephemeral', ephemeralErrorObj, { 
+                        user_id: userId,
+                        channel_id: channelId,
+                        operation: 'send_ephemeral_error'
+                    });
+                    trackError(userId, ephemeralErrorObj, { 
+                        operation: 'send_ephemeral_error',
+                        context: 'rephrase_error'
+                    });
                 }
             }
         });
@@ -440,7 +518,16 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
         };
         
     } catch (error) {
-        console.error('Error in rephrase command:', error);
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error in rephrase command', errorObj, { 
+            user_id: userId,
+            channel_id: channelId,
+            operation: 'rephrase_command'
+        });
+        trackError(userId, errorObj, { 
+            operation: 'rephrase_command',
+            context: 'command_initialization'
+        });
         return {
             text: 'Sorry, I couldn\'t start rephrasing your message. Please try again later.',
             response_type: 'ephemeral'
@@ -613,7 +700,15 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
         return null;
         
     } catch (error) {
-        console.error('Error in settings command:', error);
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error in settings command', errorObj, { 
+            user_id: userId,
+            operation: 'settings_command'
+        });
+        trackError(userId, errorObj, { 
+            operation: 'settings_command',
+            context: 'command_processing'
+        });
         return {
             text: 'Sorry, I couldn\'t process your settings request. Please try again.',
             response_type: 'ephemeral'

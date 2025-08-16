@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Title, Button, Stack, Row, Center, Container, Text, Checkbox, SegmentedControl, Card, Skeleton } from '@/components/ui';
 import { validateSlackUser, completeSlackOnboarding, getWorkspaceChannels } from '@/lib/server-actions';
 import { SlackChannel, SUBSCRIPTION_TIERS } from '@/types';
+import { usePostHog } from '@/hooks/useAnalytics';
+import { EVENTS, ONBOARDING_STEPS } from '@/lib/analytics/events';
 import { gsap } from 'gsap';
 
 type OnboardingStep = 'frequency' | 'channels' | 'payment';
@@ -32,6 +34,7 @@ export default function OnboardingForm() {
   const [isLoadingChannels, setIsLoadingChannels] = useState(false);
   const [isCompletingSetup, startCompletingSetup] = useTransition();
   const [isValidating, setIsValidating] = useState(true);
+  const { track, identify } = usePostHog();
   // Transition state (GSAP)
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [outgoingStep, setOutgoingStep] = useState<OnboardingStep | null>(null);
@@ -86,6 +89,19 @@ export default function OnboardingForm() {
         setAnalysisFrequency(result.user.analysisFrequency || 'weekly');
         setIsValidating(false);
 
+        // Track onboarding start and identify user
+        identify(result.user.slackId, {
+          slack_user_id: result.user.slackId,
+          workspace_id: result.user.workspaceId,
+          subscription_tier: result.user.subscription?.tier || 'FREE',
+          display_name: result.user.name,
+        });
+
+        track(EVENTS.ONBOARDING_STARTED, {
+          workspace_id: result.user.workspaceId,
+          subscription_tier: result.user.subscription?.tier || 'FREE',
+        });
+
       } catch (error) {
         console.error('Error validating user:', error);
         router.replace('/app/help');
@@ -93,12 +109,18 @@ export default function OnboardingForm() {
     }
 
     validateUser();
-  }, [searchParams, router]);
+  }, [searchParams, router, identify, track]);
 
   async function handleFrequencyNext(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setIsLoadingChannels(true);
+    
+    // Track frequency step completion
+    track(EVENTS.ONBOARDING_STEP_COMPLETED, {
+      step: ONBOARDING_STEPS.FREQUENCY,
+      analysis_frequency: analysisFrequency,
+    });
     
     try {
       // Fetch workspace channels with team ID
@@ -127,6 +149,13 @@ export default function OnboardingForm() {
   function handleChannelsNext(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    
+    // Track channels step completion
+    track(EVENTS.ONBOARDING_STEP_COMPLETED, {
+      step: ONBOARDING_STEPS.CHANNELS,
+      channels_selected: selectedChannels.length,
+      channel_names: selectedChannels.map(c => c.name),
+    });
     
     // Check if user already has PRO subscription - skip payment step
     const hasProSubscription = user?.subscription?.tier === 'PRO' && user?.subscription?.status === 'active';
@@ -158,6 +187,15 @@ export default function OnboardingForm() {
           throw new Error(result.error);
         }
 
+        // Track onboarding completion
+        track(EVENTS.ONBOARDING_COMPLETED, {
+          workspace_id: user.workspaceId,
+          analysis_frequency: analysisFrequency,
+          channels_selected: selectedChannels.length,
+          subscription_tier: user.subscription?.tier || 'FREE',
+          completion_path: user.subscription?.tier === 'PRO' ? 'pro_skip_payment' : 'free_complete',
+        });
+
         console.log('Onboarding completed successfully');
         
         // Redirect to help page
@@ -170,12 +208,25 @@ export default function OnboardingForm() {
   }
 
   function handleContinueWithFree() {
+    // Track payment step completion with free choice
+    track(EVENTS.ONBOARDING_STEP_COMPLETED, {
+      step: ONBOARDING_STEPS.PAYMENT,
+      choice: 'free',
+    });
+    
     // Complete onboarding with free plan
     completeOnboarding();
   }
 
   async function handleUpgradeToPro() {
     if (!user) return;
+    
+    // Track upgrade click from onboarding
+    track(EVENTS.SUBSCRIPTION_UPGRADE_CLICKED, {
+      source: 'onboarding',
+      step: 'payment',
+      subscription_tier: user.subscription?.tier || 'FREE',
+    });
     
     try {
       // Create checkout session using the existing API endpoint

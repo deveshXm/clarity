@@ -5,6 +5,9 @@ import { ObjectId } from 'mongodb';
 import { SlackEventSchema } from '@/types';
 import { comprehensiveMessageAnalysis } from '@/lib/ai';
 import { validateUserAccess, incrementUsage } from '@/lib/subscription';
+import { trackEvent, trackError } from '@/lib/posthog';
+import { EVENTS } from '@/lib/analytics/events';
+import { logError, logSlackEvent } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
     try {
@@ -14,20 +17,21 @@ export async function POST(request: NextRequest) {
         const timestamp = request.headers.get('x-slack-request-timestamp');
         
         if (!signature || !timestamp) {
-            console.error('Missing Slack signature or timestamp');
+            logError('Missing Slack signature or timestamp');
             return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
         }
         
         // Verify request signature
         const signingSecret = process.env.SLACK_SIGNING_SECRET;
         if (!signingSecret) {
-            console.error('Missing SLACK_SIGNING_SECRET environment variable');
+            logError('Missing SLACK_SIGNING_SECRET environment variable');
             return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
         }
         
         const isValid = verifySlackSignature(signingSecret, signature, timestamp, body);
         if (!isValid) {
-            console.error('Invalid Slack signature');
+            logError('Invalid Slack signature');
+            trackError('anonymous', new Error('Invalid Slack signature'), { endpoint: '/api/slack/events' });
             return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
         }
         
@@ -114,7 +118,7 @@ export async function POST(request: NextRequest) {
 
 async function handleMessageEvent(event: Record<string, unknown>) {
     try {
-        console.log('📨 Received message event:', {
+        logSlackEvent('message_received', {
             user: event.user,
             text: typeof event.text === 'string' ? event.text.substring(0, 100) + '...' : '',
             channel: event.channel,
@@ -125,7 +129,7 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         // Skip bot messages and system messages
         if (event.bot_id || event.subtype) {
-            console.log('⏭️ Skipping bot/system message');
+
             return;
         }
         
@@ -136,11 +140,11 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         // If message is older than 10 seconds, it's likely an updated message or old event
         if (timeDifference > 10000) {
-            console.log('⏭️ Skipping old/updated message, age:', Math.round(timeDifference / 1000), 'seconds');
+
             return;
         }
         
-        console.log('✅ Processing new message, age:', Math.round(timeDifference / 1000), 'seconds');
+
 
         // Validate event data
         const validatedEvent = SlackEventSchema.parse(event);
@@ -149,15 +153,13 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         const accessCheck = await validateUserAccess(validatedEvent.user, 'autoCoaching');
         
         if (!accessCheck.allowed) {
-            console.log('⏭️ Auto coaching access denied:', accessCheck.reason);
+
             return;
         }
         
         const user = accessCheck.user!; // We know it exists from validation
         
-        console.log('✅ Processing message from user:', user.displayName);
-        console.log('📝 Message text:', validatedEvent.text);
-        console.log('📍 Channel:', validatedEvent.channel);
+
         
         // Check if bot is active in this channel
         const isChannelActive = await isChannelAccessible(validatedEvent.channel, user.workspaceId);
@@ -213,11 +215,10 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         // If no coaching needed, exit early
         if (!analysis.needsCoaching || analysis.flags.length === 0) {
-            console.log('✅ No coaching needed:', analysis.reasoning.whyNeedsCoaching);
             return;
         }
         
-        console.log('🚩 Communication issues found:', analysis.flags.map(f => f.type));
+
         
         // Use the improved message from comprehensive analysis
         if (!analysis.improvedMessage) {
@@ -306,6 +307,16 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         if (success) {
             console.log('✅ Ephemeral feedback sent successfully');
+            
+            // Track successful auto coaching trigger (only when message is actually sent)
+            trackEvent(user.slackId, EVENTS.FEATURE_AUTO_COACHING_TRIGGERED, {
+                channel: validatedEvent.channel,
+                flags_found: analysis.flags.map(f => f.type),
+                primary_issue: analysis.reasoning.primaryIssue,
+                has_target: !!analysis.target,
+                message_length: validatedEvent.text.length,
+                workspace_id: user.workspaceId,
+            });
             
             // Track usage after successful auto-coaching
             await incrementUsage(validatedEvent.user, 'autoCoaching');

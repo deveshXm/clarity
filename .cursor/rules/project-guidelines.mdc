@@ -593,14 +593,18 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
 - **Customer Portal**: [src/app/api/stripe/portal/route.ts](mdc:src/app/api/stripe/portal/route.ts) - Manage subscriptions
 - **Webhooks**: [src/app/api/stripe/webhooks/route.ts](mdc:src/app/api/stripe/webhooks/route.ts) - Handle Stripe events
 
-#### Webhook Event Handling ✅ CRITICAL
+#### Webhook Event Handling ✅ ENHANCED
 - **Supported Events**:
-  - `checkout.session.completed` - New subscription creation
+  - `checkout.session.completed` - New subscription creation **with existing subscription sync**
   - `customer.subscription.created` - Subscription activation
   - `customer.subscription.updated` - Subscription changes
+  - `customer.subscription.resumed` - Subscription resumption
   - `customer.subscription.deleted` - Subscription cancellation
+  - `customer.updated` - Customer portal interactions (fallback sync)
   - `invoice.payment_succeeded` - Successful payment processing
   - `invoice.payment_failed` - Failed payment handling
+- **Enhanced Checkout Handling**: Proactively syncs existing subscriptions when no webhook is sent
+- **Customer Portal Support**: Handles "Use existing subscription" flow without webhook events
 
 #### Type Safety with Stripe ✅ RESOLVED
 - **Challenge**: Stripe TypeScript definitions don't include all runtime properties

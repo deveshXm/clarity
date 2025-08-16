@@ -49,3 +49,5 @@ __pycache__/
 
 .trigger
 .env*.local
+
+.env.local

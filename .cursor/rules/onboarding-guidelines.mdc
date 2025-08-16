@@ -5,17 +5,25 @@ globs: src/app/app/onboarding/*.tsx,src/lib/server-actions.ts
 
 These rules capture the established patterns in the onboarding UI and related server actions. Reference implementations: [src/app/app/onboarding/OnboardingForm.tsx](mdc:src/app/app/onboarding/OnboardingForm.tsx), [src/app/app/onboarding/page.tsx](mdc:src/app/app/onboarding/page.tsx), and [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts).
 
-## Architecture & Data Flow
+## Architecture & Data Flow ✅ ENHANCED
 - Validate Slack user via query params `?user={slackId}&team={teamId}` at mount. If missing/invalid or onboarding completed, redirect to `/app/help` immediately.
 - Use server actions directly (imports), not fetch calls:
-  - `validateSlackUser(slackId, teamId)` for initial validation
+  - `validateSlackUser(slackId, teamId)` for initial validation **with subscription data**
   - `getWorkspaceChannels(teamId)` to list channels (filters handled client-side)
   - `completeSlackOnboarding(slackId, userWorkspaceId, analysisFrequency, selectedChannels?)` to persist and finish
+- **Enhanced User Validation**: `validateSlackUser` now returns subscription data for PRO user detection
+- **Subscription-Aware Interface**: SlackUser interface includes optional subscription field
 - Workspace-specific tokens only. Server-side looks up `workspace.botToken` by Slack team ID and never uses a global token.
 - When saving channels, join with workspace token and persist to `botChannelsCollection` using `saveBotChannels()`.
 
-## Steps & State
-- Steps are strictly two: `frequency` then `channels`. Default analysis frequency is `'weekly'`.
+## Steps & State ✅ UPDATED
+- **Dynamic Step Flow**: `frequency` → `channels` → `payment` (conditional)
+- **PRO User Logic**: Skip payment step if `user.subscription.tier === 'PRO'` and `status === 'active'`
+- **Step Flow Patterns**:
+  - **FREE Users**: `frequency` → `channels` → `payment` → complete
+  - **PRO Users**: `frequency` → `channels` → complete (skip payment)
+- **Button Labels**: "Complete Setup" for PRO users in channels step, "Next" for FREE users
+- **PRO Visual Indicator**: Show congratulations card in channels step for existing PRO subscribers
 - Channel selection stores compact items with `{ id, name }`. Only allow non-archived channels.
 - Initiate step change to `channels` immediately upon Next click, while channels load in the background. Disable appropriate buttons during fetch.
 

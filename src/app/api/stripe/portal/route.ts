@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPortalSession } from '@/lib/stripe';
 import { slackUserCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
+import { trackError } from '@/lib/posthog';
+import { logError, logInfo } from '@/lib/logger';
 import { SlackUser } from '@/types';
 
 export async function GET(request: NextRequest) {
@@ -33,11 +35,26 @@ export async function GET(request: NextRequest) {
       `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?tab=subscription`
     );
     
+    logInfo('Stripe portal session created (GET)', { 
+      user_id: userId,
+      customer_id: user.subscription.stripeCustomerId,
+      endpoint: '/api/stripe/portal'
+    });
+
     // Redirect to Stripe Customer Portal
     return NextResponse.redirect(session.url);
     
   } catch (error) {
-    console.error('Stripe portal error:', error);
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    const userId = new URL(request.url).searchParams.get('user');
+    logError('Stripe portal error (GET)', errorObj, { 
+      endpoint: '/api/stripe/portal',
+      user_id: userId
+    });
+    trackError(userId || 'anonymous', errorObj, { 
+      endpoint: '/api/stripe/portal',
+      operation: 'create_portal_session_get'
+    });
     return NextResponse.json({ 
       error: 'Failed to create portal session' 
     }, { status: 500 });
@@ -73,12 +90,33 @@ export async function POST(request: NextRequest) {
       `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?tab=subscription`
     );
     
+    logInfo('Stripe portal session created (POST)', { 
+      user_id: userId,
+      customer_id: user.subscription.stripeCustomerId,
+      endpoint: '/api/stripe/portal'
+    });
+
     return NextResponse.json({ 
       portalUrl: session.url 
     });
     
   } catch (error) {
-    console.error('Stripe portal error:', error);
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    let userId = 'anonymous';
+    try {
+      const body = await request.json();
+      userId = body.userId || 'anonymous';
+    } catch {
+      // Body already consumed or invalid
+    }
+    logError('Stripe portal error (POST)', errorObj, { 
+      endpoint: '/api/stripe/portal',
+      user_id: userId
+    });
+    trackError(userId, errorObj, { 
+      endpoint: '/api/stripe/portal',
+      operation: 'create_portal_session_post'
+    });
     return NextResponse.json({ 
       error: 'Failed to create portal session' 
     }, { status: 500 });

@@ -3,6 +3,8 @@ import { verifySlackSignature } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
+import { trackError } from '@/lib/posthog';
+import { logError, logInfo } from '@/lib/logger';
 // Define types inline for now
 interface SlackInteractivePayload {
   type: string;
@@ -66,10 +68,11 @@ export async function POST(request: NextRequest) {
         // Parse interactive payload (Slack sends it as form data)
         const payload = JSON.parse(new URLSearchParams(body).get('payload') || '{}');
         
-        console.log('🔄 Interactive component triggered:', {
+        logInfo('Interactive component triggered', {
             type: payload.type,
             action_id: payload.actions?.[0]?.action_id,
-            user: payload.user?.id
+            user_id: payload.user?.id,
+            endpoint: '/api/slack/interactive'
         });
         
         // Handle different types of interactions
@@ -95,7 +98,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ text: 'Unknown interaction' });
         
     } catch (error) {
-        console.error('Slack interactive components error:', error);
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Slack interactive components error', errorObj, { 
+            endpoint: '/api/slack/interactive'
+        });
+        trackError('anonymous', errorObj, { 
+            endpoint: '/api/slack/interactive',
+            operation: 'interactive_component_processing'
+        });
         return NextResponse.json({ 
             text: 'Sorry, there was an error processing your action. Please try again.' 
         }, { status: 500 });
@@ -179,7 +189,14 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         });
         
     } catch (error) {
-        console.error('Error in message replacement:', error);
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error in message replacement', errorObj, { 
+            operation: 'message_replacement'
+        });
+        trackError(payload.user?.id || 'anonymous', errorObj, { 
+            operation: 'message_replacement',
+            context: 'interactive_action'
+        });
         return NextResponse.json({
             text: '❌ An error occurred while updating the message. Please try again.'
         });
@@ -275,7 +292,14 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         });
         
     } catch (error) {
-        console.error('Error sending improved message:', error);
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error sending improved message', errorObj, { 
+            operation: 'send_improved_message'
+        });
+        trackError(payload.user?.id || 'anonymous', errorObj, { 
+            operation: 'send_improved_message',
+            context: 'interactive_action'
+        });
         return NextResponse.json({
             replace_original: true,
             text: '❌ An error occurred while sending the message. Please try again.'
@@ -385,7 +409,15 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                     },
                 );
             } catch (err) {
-                console.error('DB update error in settings submission:', err);
+                const errorObj = err instanceof Error ? err : new Error(String(err));
+                logError('DB update error in settings submission', errorObj, { 
+                    user_id: userId,
+                    operation: 'settings_db_update'
+                });
+                trackError(userId, errorObj, { 
+                    operation: 'settings_db_update',
+                    context: 'background_processing'
+                });
             }
         });
 
@@ -412,7 +444,15 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         });
         
     } catch (error) {
-        console.error('Error handling settings submission:', error);
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error handling settings submission', errorObj, { 
+            user_id: payload.user?.id,
+            operation: 'settings_submission'
+        });
+        trackError(payload.user?.id || 'anonymous', errorObj, { 
+            operation: 'settings_submission',
+            context: 'interactive_action'
+        });
         return NextResponse.json({
             response_action: 'update',
             view: {
