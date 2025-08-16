@@ -2,7 +2,7 @@ import posthog from "posthog-js"
 
 // Optimized PostHog client configuration for Next.js
 posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
-  api_host: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/ingest`,
+  api_host: '/clarity-ui96',
   autocapture: false,  // Manual control in Next.js (PostHog recommended)
   capture_pageview: false,  // Manual control for better tracking
   capture_exceptions: true,
