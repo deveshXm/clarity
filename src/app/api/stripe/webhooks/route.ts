@@ -4,7 +4,8 @@ import { updateSubscription, resetMonthlyUsage, needsBillingReset } from '@/lib/
 import { slackUserCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackUser } from '@/types';
-import { trackError } from '@/lib/posthog';
+import { trackEvent, trackError } from '@/lib/posthog';
+import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
 import Stripe from 'stripe';
 
@@ -36,6 +37,13 @@ export async function POST(request: NextRequest) {
       event_type: event.type,
       event_id: event.id,
       endpoint: '/api/stripe/webhooks'
+    });
+
+    // Track webhook processing
+    trackEvent('system', EVENTS.API_STRIPE_WEBHOOK_PROCESSED, {
+      event_type: event.type,
+      event_id: event.id,
+      created: new Date(event.created * 1000).toISOString(),
     });
 
     switch (event.type) {
@@ -78,7 +86,8 @@ export async function POST(request: NextRequest) {
     });
     trackError('anonymous', errorObj, { 
       endpoint: '/api/stripe/webhooks',
-      operation: 'webhook_processing'
+      operation: 'webhook_processing',
+      category: ERROR_CATEGORIES.STRIPE_WEBHOOK
     });
     return NextResponse.json({ 
       error: 'Webhook processing failed' 

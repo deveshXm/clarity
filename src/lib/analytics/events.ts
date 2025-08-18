@@ -1,49 +1,42 @@
-// Event definitions following PostHog best practices
+// Event definitions for backend API tracking only
+// Frontend events handled automatically by PostHog autocapture
 // Using category:object_action format as recommended by PostHog
 
 export const EVENTS = {
-  // === MARKETING & CONVERSION ===
-  MARKETING_LANDING_PAGE_VIEWED: 'marketing:landing_page_viewed',
-  MARKETING_INSTALL_SLACK_CLICKED: 'marketing:install_slack_clicked',
+  // === BACKEND API EVENTS ===
+  API_SLACK_COMMAND_RECEIVED: 'api:slack_command_received',
+  API_SLACK_EVENT_PROCESSED: 'api:slack_event_processed',
+  API_SLACK_INTERACTIVE_RECEIVED: 'api:slack_interactive_received',
+  API_AI_ANALYSIS_COMPLETED: 'api:ai_analysis_completed',
+  API_MESSAGE_REPLACED: 'api:message_replaced',
+  API_SUBSCRIPTION_CHECKOUT_CREATED: 'api:subscription_checkout_created',
+  API_SUBSCRIPTION_PORTAL_ACCESSED: 'api:subscription_portal_accessed',
+  API_STRIPE_WEBHOOK_PROCESSED: 'api:stripe_webhook_processed',
   
-  // === AUTHENTICATION ===
+  // === AUTHENTICATION & ONBOARDING ===
   AUTH_SLACK_OAUTH_STARTED: 'auth:slack_oauth_started',
   AUTH_SLACK_OAUTH_COMPLETED: 'auth:slack_oauth_completed',
   AUTH_SLACK_OAUTH_FAILED: 'auth:slack_oauth_failed',
-  
-  // === ONBOARDING ===
-  ONBOARDING_STARTED: 'onboarding:started',
-  ONBOARDING_STEP_COMPLETED: 'onboarding:step_completed',
+  ONBOARDING_USER_VALIDATED: 'onboarding:user_validated',
+  ONBOARDING_CHANNELS_SAVED: 'onboarding:channels_saved',
   ONBOARDING_COMPLETED: 'onboarding:completed',
   
-  // === SUBSCRIPTION ===
-  SUBSCRIPTION_UPGRADE_CLICKED: 'subscription:upgrade_clicked',
-  SUBSCRIPTION_CHECKOUT_STARTED: 'subscription:checkout_started',
-  SUBSCRIPTION_CHECKOUT_COMPLETED: 'subscription:checkout_completed',
-  SUBSCRIPTION_ACTIVATED: 'subscription:activated',
-  SUBSCRIPTION_CANCELLED: 'subscription:cancelled',
-  SUBSCRIPTION_BILLING_PORTAL_ACCESSED: 'subscription:billing_portal_accessed',
-  
-  // === FEATURE USAGE ===
+  // === FEATURE USAGE (Backend) ===
   FEATURE_AUTO_COACHING_TRIGGERED: 'feature:auto_coaching_triggered',
   FEATURE_MESSAGE_REPLACED: 'feature:message_replaced',
-  FEATURE_MESSAGE_KEPT_ORIGINAL: 'feature:message_kept_original',
-  FEATURE_SLASH_COMMAND_USED: 'feature:slash_command_used',
-  FEATURE_PERSONAL_FEEDBACK_REQUESTED: 'feature:personal_feedback_requested',
-  
-  // === USER SETTINGS ===
-  SETTINGS_OPENED: 'settings:opened',
-  SETTINGS_UPDATED: 'settings:updated',
+  FEATURE_PERSONAL_FEEDBACK_GENERATED: 'feature:personal_feedback_generated',
+  FEATURE_SETTINGS_UPDATED: 'feature:settings_updated',
   
   // === USAGE LIMITS ===
   LIMITS_USAGE_LIMIT_REACHED: 'limits:usage_limit_reached',
   LIMITS_UPGRADE_PROMPT_SHOWN: 'limits:upgrade_prompt_shown',
   LIMITS_FEATURE_ACCESS_DENIED: 'limits:feature_access_denied',
   
-  // === ERRORS ===
-  ERROR_API_ERROR: 'error:api_error',
-  ERROR_AI_ANALYSIS_FAILED: 'error:ai_analysis_failed',
-  ERROR_STRIPE_WEBHOOK_FAILED: 'error:stripe_webhook_failed',
+  // === ERRORS (Simplified) ===
+  ERROR_SERVER: 'error:server_error',
+  ERROR_SLACK_API: 'error:slack_api_error',
+  ERROR_AI_FAILURE: 'error:ai_failure',
+  ERROR_STRIPE_WEBHOOK: 'error:stripe_webhook_failed',
 } as const;
 
 export const ONBOARDING_STEPS = {
@@ -62,6 +55,13 @@ export const SLASH_COMMANDS = {
 export const SUBSCRIPTION_TIERS = {
   FREE: 'FREE',
   PRO: 'PRO',
+} as const;
+
+export const ERROR_CATEGORIES = {
+  SERVER: 'server_error',
+  SLACK_API: 'slack_api_error', 
+  AI_FAILURE: 'ai_failure',
+  STRIPE_WEBHOOK: 'stripe_webhook_failed',
 } as const;
 
 export const FEATURES = {

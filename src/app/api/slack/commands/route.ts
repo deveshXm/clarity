@@ -6,7 +6,8 @@ import { WebClient } from '@slack/web-api';
 import { generatePersonalFeedback, generateImprovedMessage, analyzeMessageForFlags, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
 import { SlackUser, getTierConfig } from '@/types';
 import { validateUserAccess, incrementUsage, generateUpgradeMessage, generateLimitReachedMessage, generateProLimitReachedMessage } from '@/lib/subscription';
-import { trackError } from '@/lib/posthog';
+import { trackEvent, trackError } from '@/lib/posthog';
+import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
 
 
@@ -61,6 +62,17 @@ export async function POST(request: NextRequest) {
         const appUser = await slackUserCollection.findOne({
             slackId: userId,
             isActive: true
+        });
+
+        // Track command received
+        trackEvent(userId, EVENTS.API_SLACK_COMMAND_RECEIVED, {
+            command: command,
+            channel_id: channelId,
+            user_name: appUser?.name || 'Unknown',
+            workspace_id: appUser?.workspaceId || 'Unknown',
+            subscription_tier: appUser?.subscription?.tier || 'FREE',
+            has_text: !!text,
+            text_length: text?.length || 0,
         });
 
         if (!appUser) {
@@ -134,7 +146,8 @@ export async function POST(request: NextRequest) {
         });
         trackError('anonymous', errorObj, { 
             endpoint: '/api/slack/commands',
-            operation: 'slack_command_processing'
+            operation: 'slack_command_processing',
+            category: ERROR_CATEGORIES.SERVER
         });
         return NextResponse.json({
             text: 'Sorry, there was an error processing your command. Please try again.',
@@ -256,6 +269,20 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
                     patterns_count: feedback.patterns?.length || 0,
                     improvements_count: feedback.improvements?.length || 0,
                     operation: 'personal_feedback_generation'
+                });
+
+                // Track personal feedback generation
+                trackEvent(userId, EVENTS.FEATURE_PERSONAL_FEEDBACK_GENERATED, {
+                    user_name: user.name,
+                    workspace_id: user.workspaceId,
+                    channel_id: channelId,
+                    overall_score: feedback.overallScore,
+                    patterns_count: feedback.patterns?.length || 0,
+                    improvements_count: feedback.improvements?.length || 0,
+                    strengths_count: feedback.strengths?.length || 0,
+                    recommendations_count: feedback.recommendations?.length || 0,
+                    relationship_insights_count: relationshipInsights.length,
+                    conversation_messages_analyzed: conversationHistory.length,
                 });
                 
                 // Format response for DM with friendly coaching tone
@@ -439,6 +466,18 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
 
                 const workspaceSlack = new WebClient(workspace.botToken);
                 
+                // Track AI analysis completion
+                trackEvent(userId, EVENTS.API_AI_ANALYSIS_COMPLETED, {
+                    user_name: user.name,
+                    workspace_id: user.workspaceId,
+                    channel_id: channelId,
+                    message_length: text.length,
+                    analysis_type: 'manual_rephrase',
+                    flags_found: analysisResult.flags.length,
+                    has_context: hasChannelAccess,
+                    context_messages: conversationHistory.length,
+                });
+
                 if (analysisResult.flags.length === 0) {
                     // Send ephemeral message for messages that don't need improvement
                     await workspaceSlack.chat.postEphemeral({
@@ -687,6 +726,14 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                 }
             ]
         };
+
+        // Track settings modal opened
+        trackEvent(userId, EVENTS.API_SLACK_INTERACTIVE_RECEIVED, {
+            user_name: user.name,
+            workspace_id: user.workspaceId,
+            interaction_type: 'settings_modal_opened',
+            subscription_tier: subscription.tier,
+        });
 
         // Open the modal
         workspaceSlack.views.open({

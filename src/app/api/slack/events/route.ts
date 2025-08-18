@@ -6,7 +6,7 @@ import { SlackEventSchema } from '@/types';
 import { comprehensiveMessageAnalysis } from '@/lib/ai';
 import { validateUserAccess, incrementUsage } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
-import { EVENTS } from '@/lib/analytics/events';
+import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logSlackEvent } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
@@ -31,7 +31,10 @@ export async function POST(request: NextRequest) {
         const isValid = verifySlackSignature(signingSecret, signature, timestamp, body);
         if (!isValid) {
             logError('Invalid Slack signature');
-            trackError('anonymous', new Error('Invalid Slack signature'), { endpoint: '/api/slack/events' });
+            trackError('anonymous', new Error('Invalid Slack signature'), { 
+                endpoint: '/api/slack/events',
+                category: ERROR_CATEGORIES.SLACK_API
+            });
             return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
         }
         
@@ -153,7 +156,14 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         const accessCheck = await validateUserAccess(validatedEvent.user, 'autoCoaching');
         
         if (!accessCheck.allowed) {
-
+            // Track event processed but skipped
+            trackEvent(validatedEvent.user, EVENTS.API_SLACK_EVENT_PROCESSED, {
+                event_type: 'message',
+                channel_id: validatedEvent.channel,
+                processed: false,
+                skip_reason: 'access_denied',
+                subscription_tier: accessCheck.user?.subscription?.tier || 'FREE',
+            });
             return;
         }
         
@@ -211,6 +221,21 @@ async function handleMessageEvent(event: Record<string, unknown>) {
             hasTarget: !!analysis.target,
             hasImprovement: !!analysis.improvedMessage,
             reasoning: analysis.reasoning.primaryIssue
+        });
+
+        // Track AI analysis completion
+        trackEvent(validatedEvent.user, EVENTS.API_AI_ANALYSIS_COMPLETED, {
+            user_name: user.name,
+            workspace_id: user.workspaceId,
+            channel_id: validatedEvent.channel,
+            message_length: validatedEvent.text.length,
+            analysis_type: 'auto_coaching',
+            flags_found: analysis.flags.length,
+            needs_coaching: analysis.needsCoaching,
+            has_target: !!analysis.target,
+            has_improvement: !!analysis.improvedMessage,
+            context_messages: conversationHistory.length,
+            primary_issue: analysis.reasoning.primaryIssue,
         });
         
         // If no coaching needed, exit early
@@ -310,12 +335,15 @@ async function handleMessageEvent(event: Record<string, unknown>) {
             
             // Track successful auto coaching trigger (only when message is actually sent)
             trackEvent(user.slackId, EVENTS.FEATURE_AUTO_COACHING_TRIGGERED, {
-                channel: validatedEvent.channel,
+                user_name: user.name,
+                workspace_id: user.workspaceId,
+                channel_id: validatedEvent.channel,
                 flags_found: analysis.flags.map(f => f.type),
                 primary_issue: analysis.reasoning.primaryIssue,
                 has_target: !!analysis.target,
                 message_length: validatedEvent.text.length,
-                workspace_id: user.workspaceId,
+                subscription_tier: user.subscription?.tier || 'FREE',
+                target_name: analysis.target?.name || null,
             });
             
             // Track usage after successful auto-coaching

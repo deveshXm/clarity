@@ -15,6 +15,8 @@ import {
 } from '@/lib/db';
 import { AccountConfigFormData, AccountConfigFormDataSchema, ServerActionResult, CreateBotChannelInput } from '@/types';
 import { nowTimestamp } from './utils';
+import { trackEvent } from './posthog';
+import { EVENTS } from './analytics/events';
 import { 
     sendOnboardingReminderMessage
 } from './slack';
@@ -154,6 +156,14 @@ export async function validateSlackUser(slackId: string, teamId: string) {
             return { error: 'User not found' };
         }
 
+        // Track user validation
+        trackEvent(slackId, EVENTS.ONBOARDING_USER_VALIDATED, {
+            user_name: user.name,
+            workspace_id: user.workspaceId,
+            subscription_tier: user.subscription?.tier || 'FREE',
+            has_completed_onboarding: user.hasCompletedOnboarding || false,
+        });
+
         return {
             success: true,
             user: {
@@ -257,6 +267,19 @@ export async function saveBotChannels(
             
             await botChannelsCollection.insertMany(channelsWithTimestamp);
             console.log(`Saved ${savedChannels.length} channels for workspace ${userWorkspaceId}`);
+
+            // Track channels saved
+            const user = await slackUserCollection.findOne({ workspaceId: userWorkspaceId });
+            if (user) {
+                trackEvent(user.slackId, EVENTS.ONBOARDING_CHANNELS_SAVED, {
+                    user_name: user.name,
+                    workspace_id: userWorkspaceId,
+                    channels_joined: savedChannels.length,
+                    channels_requested: selectedChannels.length,
+                    success_rate: (savedChannels.length / selectedChannels.length) * 100,
+                    channel_names: savedChannels.map(c => c.channelName),
+                });
+            }
         }
         
         return {
@@ -340,6 +363,19 @@ export async function completeSlackOnboarding(
         }
 
         console.log(`Onboarding completed for user ${slackId} with frequency ${analysisFrequency}`);
+
+        // Track onboarding completion
+        const user = await slackUserCollection.findOne({ slackId, workspaceId: userWorkspaceId });
+        if (user) {
+            trackEvent(slackId, EVENTS.ONBOARDING_COMPLETED, {
+                user_name: user.name,
+                workspace_id: userWorkspaceId,
+                analysis_frequency: analysisFrequency,
+                channels_selected: selectedChannels?.length || 0,
+                invitations_sent: invitationEmails?.length || 0,
+                subscription_tier: user.subscription?.tier || 'FREE',
+            });
+        }
 
         return {
             success: true,

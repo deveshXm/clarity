@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPortalSession } from '@/lib/stripe';
 import { slackUserCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
-import { trackError } from '@/lib/posthog';
+import { trackEvent, trackError } from '@/lib/posthog';
+import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
 import { SlackUser } from '@/types';
 
@@ -35,6 +36,15 @@ export async function GET(request: NextRequest) {
       `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?tab=subscription`
     );
     
+    // Track portal access
+    trackEvent(user.slackId, EVENTS.API_SUBSCRIPTION_PORTAL_ACCESSED, {
+      user_name: user.name,
+      workspace_id: user.workspaceId,
+      customer_id: user.subscription.stripeCustomerId,
+      subscription_tier: user.subscription.tier,
+      subscription_status: user.subscription.status,
+    });
+
     logInfo('Stripe portal session created (GET)', { 
       user_id: userId,
       customer_id: user.subscription.stripeCustomerId,
@@ -53,7 +63,8 @@ export async function GET(request: NextRequest) {
     });
     trackError(userId || 'anonymous', errorObj, { 
       endpoint: '/api/stripe/portal',
-      operation: 'create_portal_session_get'
+      operation: 'create_portal_session_get',
+      category: ERROR_CATEGORIES.SERVER
     });
     return NextResponse.json({ 
       error: 'Failed to create portal session' 

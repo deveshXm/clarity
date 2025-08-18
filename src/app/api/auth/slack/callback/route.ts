@@ -167,9 +167,11 @@ export async function GET(request: NextRequest) {
                 }
             );
             
-            // Identify returning user
+            // Identify returning user - simplified identification
             identifyUser(authed_user.id, {
+                name: actualUserName,
                 slack_user_id: authed_user.id,
+                mongodb_id: existingUser._id.toString(),
                 workspace_id: workspaceObjectId.toString(),
                 workspace_name: team.name,
                 is_returning_user: true,
@@ -190,7 +192,7 @@ export async function GET(request: NextRequest) {
                 id: new ObjectId().toString(),
                 slackId: authed_user.id,
                 workspaceId: workspaceObjectId.toString(),
-                email: authed_user.id, // Using Slack ID as identifier
+                email: `${authed_user.id}@slack.local`, // Slack ID as email placeholder
                 name: actualUserName,
                 displayName: actualDisplayName,
                 image: userImage,
@@ -208,14 +210,15 @@ export async function GET(request: NextRequest) {
 
             await slackUserCollection.insertOne(newUserData);
             
-            // Identify new user
+            // Identify new user - simplified identification
             identifyUser(authed_user.id, {
+                name: actualUserName,
                 slack_user_id: authed_user.id,
+                mongodb_id: newUserData._id.toString(),
                 workspace_id: workspaceObjectId.toString(),
                 workspace_name: team.name,
                 is_new_user: true,
                 subscription_tier: 'FREE',
-                signup_method: 'slack_oauth',
             });
         }
 

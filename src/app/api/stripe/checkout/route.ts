@@ -4,7 +4,7 @@ import { slackUserCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackUser, STRIPE_PRICE_IDS } from '@/types';
 import { trackEvent, trackError } from '@/lib/posthog';
-import { EVENTS } from '@/lib/analytics/events';
+import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -31,12 +31,7 @@ export async function GET(request: NextRequest) {
       }, { status: 404 });
     }
     
-    // Track upgrade attempt (server-side for reliability)
-    trackEvent(user.slackId, EVENTS.SUBSCRIPTION_UPGRADE_CLICKED, {
-      source: 'direct_link',
-      current_tier: user.subscription?.tier || 'FREE',
-      workspace_id: user.workspaceId,
-    });
+    // Note: Upgrade tracking handled by checkout session creation event
     
     // Check if user already has Pro subscription
     if (user.subscription?.tier === 'PRO' && user.subscription?.status === 'active') {
@@ -60,10 +55,13 @@ export async function GET(request: NextRequest) {
     );
     
     // Track checkout session creation
-    trackEvent(user.slackId, EVENTS.SUBSCRIPTION_CHECKOUT_STARTED, {
+    trackEvent(user.slackId, EVENTS.API_SUBSCRIPTION_CHECKOUT_CREATED, {
+      user_name: user.name,
+      workspace_id: user.workspaceId,
       session_id: session.id,
       price_id: STRIPE_PRICE_IDS.PRO_MONTHLY,
-      workspace_id: user.workspaceId,
+      amount: 1000, // $10.00 in cents
+      subscription_tier: user.subscription?.tier || 'FREE',
     });
     
     logInfo('Stripe checkout session created', { 
@@ -87,6 +85,7 @@ export async function GET(request: NextRequest) {
     
     trackError(userId || 'anonymous', error instanceof Error ? error : new Error(String(error)), {
       endpoint: '/api/stripe/checkout',
+      category: ERROR_CATEGORIES.SERVER,
     });
     
     return NextResponse.json({ 

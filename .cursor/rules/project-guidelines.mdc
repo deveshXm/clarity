@@ -424,7 +424,6 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
 
 ### API Routes
 - **Auth**: [src/app/api/auth/[...all]/route.ts](mdc:src/app/api/auth/[...all]/route.ts) - Better-auth handler
-- **User**: [src/app/api/user/route.ts](mdc:src/app/api/user/route.ts) - User data endpoint for middleware
 
 ### UI Component Folders
 - **UI wrappers**: [src/components/ui/](mdc:src/components/ui) - Comprehensive UI component library

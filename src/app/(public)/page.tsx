@@ -1,14 +1,13 @@
 'use client';
 
-import { useMemo, useState, useRef, useLayoutEffect, useEffect } from 'react';
+import { useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { motion } from 'framer-motion';
 import LiteYouTubeEmbed from 'react-lite-youtube-embed';
 import 'react-lite-youtube-embed/dist/LiteYouTubeEmbed.css';
 
 import { Card, Container, Image, Link, Stack, Text, Title } from '@/components/ui';
 import { SUBSCRIPTION_TIERS } from '@/types';
-import { usePostHog } from '@/hooks/useAnalytics';
-import { EVENTS } from '@/lib/analytics/events';
+// PostHog autocapture handles all frontend tracking automatically
 import BackgroundMesh from './components/BackgroundMesh';
 import FeatureScroller from './components/FeatureScroller';
 import CTAButton from './components/CTAButton';
@@ -17,25 +16,14 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const freeCardRef = useRef<HTMLDivElement | null>(null);
   const proCardRef = useRef<HTMLDivElement | null>(null);
-  const { track } = usePostHog();
+  // PostHog autocapture handles all tracking automatically
 
   const demoVideoId = useMemo(() => process.env.NEXT_PUBLIC_DEMO_VIDEO_ID, []);
 
-  // Track landing page view (client-side for UI interactions)
-  useEffect(() => {
-    track(EVENTS.MARKETING_LANDING_PAGE_VIEWED, {
-      referrer: document.referrer || 'direct',
-      utm_source: new URLSearchParams(window.location.search).get('utm_source'),
-      utm_medium: new URLSearchParams(window.location.search).get('utm_medium'),
-    });
-  }, [track]);
+  // Note: Page views automatically tracked by PostHog autocapture
 
   const handleInstallSlack = async () => {
-    // Track install button click (client-side UI interaction)
-    track(EVENTS.MARKETING_INSTALL_SLACK_CLICKED, {
-      button_location: 'hero',
-      page_section: 'main_cta',
-    });
+    // Note: Button clicks automatically tracked by PostHog autocapture
     
     setIsLoading(true);
     try {
@@ -43,12 +31,7 @@ export default function LandingPage() {
       const slackOAuthUrl = await getSlackOAuthUrl();
       window.location.href = slackOAuthUrl;
     } catch (error) {
-      // Track error
-      track(EVENTS.ERROR_API_ERROR, {
-        error_message: error instanceof Error ? error.message : 'Unknown error',
-        context: 'slack_oauth_url_generation',
-        source: 'landing_page',
-      });
+      // PostHog autocapture will track errors automatically
       console.error('Failed to get OAuth URL:', error);
       setIsLoading(false);
     }

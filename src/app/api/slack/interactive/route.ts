@@ -3,7 +3,8 @@ import { verifySlackSignature } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
-import { trackError } from '@/lib/posthog';
+import { trackEvent, trackError } from '@/lib/posthog';
+import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
 // Define types inline for now
 interface SlackInteractivePayload {
@@ -74,6 +75,13 @@ export async function POST(request: NextRequest) {
             user_id: payload.user?.id,
             endpoint: '/api/slack/interactive'
         });
+
+        // Track interactive component received
+        trackEvent(payload.user?.id || 'anonymous', EVENTS.API_SLACK_INTERACTIVE_RECEIVED, {
+            interaction_type: payload.type,
+            action_id: payload.actions?.[0]?.action_id,
+            user_name: payload.user?.name || 'Unknown',
+        });
         
         // Handle different types of interactions
         if (payload.type === 'block_actions') {
@@ -104,7 +112,8 @@ export async function POST(request: NextRequest) {
         });
         trackError('anonymous', errorObj, { 
             endpoint: '/api/slack/interactive',
-            operation: 'interactive_component_processing'
+            operation: 'interactive_component_processing',
+            category: ERROR_CATEGORIES.SERVER
         });
         return NextResponse.json({ 
             text: 'Sorry, there was an error processing your action. Please try again.' 
@@ -163,6 +172,17 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         }
         
         console.log('✅ Message update successful');
+        
+        // Track successful message replacement
+        const userDoc = await slackUserCollection.findOne({ slackId: user });
+        trackEvent(user, EVENTS.API_MESSAGE_REPLACED, {
+            user_name: userDoc?.name || 'Unknown',
+            workspace_id: userDoc?.workspaceId || 'Unknown',
+            channel_id: channel,
+            original_length: original_text.length,
+            improved_length: improved_text.length,
+            subscription_tier: userDoc?.subscription?.tier || 'FREE',
+        });
         
         // Update the ephemeral message to show success
         return NextResponse.json({
@@ -398,7 +418,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         // Update user's preferences in the database
         after(async () => {
             try {
-                await slackUserCollection.updateOne(
+                const userDoc = await slackUserCollection.findOneAndUpdate(
                     { slackId: userId },
                     {
                         $set: {
@@ -407,7 +427,19 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                             updatedAt: new Date(),
                         },
                     },
+                    { returnDocument: 'after' }
                 );
+
+                // Track settings update
+                if (userDoc) {
+                    trackEvent(userId, EVENTS.FEATURE_SETTINGS_UPDATED, {
+                        user_name: userDoc.name || 'Unknown',
+                        workspace_id: userDoc.workspaceId,
+                        analysis_frequency: selectedValue,
+                        auto_rephrase_enabled: autoRephraseEnabled,
+                        subscription_tier: userDoc.subscription?.tier || 'FREE',
+                    });
+                }
             } catch (err) {
                 const errorObj = err instanceof Error ? err : new Error(String(err));
                 logError('DB update error in settings submission', errorObj, { 

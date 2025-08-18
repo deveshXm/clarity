@@ -6,7 +6,6 @@ import { Title, Button, Stack, Row, Center, Container, Text, Checkbox, Segmented
 import { validateSlackUser, completeSlackOnboarding, getWorkspaceChannels } from '@/lib/server-actions';
 import { SlackChannel, SUBSCRIPTION_TIERS } from '@/types';
 import { usePostHog } from '@/hooks/useAnalytics';
-import { EVENTS, ONBOARDING_STEPS } from '@/lib/analytics/events';
 import { gsap } from 'gsap';
 
 type OnboardingStep = 'frequency' | 'channels' | 'payment';
@@ -34,7 +33,7 @@ export default function OnboardingForm() {
   const [isLoadingChannels, setIsLoadingChannels] = useState(false);
   const [isCompletingSetup, startCompletingSetup] = useTransition();
   const [isValidating, setIsValidating] = useState(true);
-  const { track, identify } = usePostHog();
+  const { identify } = usePostHog();
   // Transition state (GSAP)
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [outgoingStep, setOutgoingStep] = useState<OnboardingStep | null>(null);
@@ -89,15 +88,11 @@ export default function OnboardingForm() {
         setAnalysisFrequency(result.user.analysisFrequency || 'weekly');
         setIsValidating(false);
 
-        // Track onboarding start and identify user
+        // Track onboarding start and identify user - simplified identification
         identify(result.user.slackId, {
+          name: result.user.name,
           slack_user_id: result.user.slackId,
-          workspace_id: result.user.workspaceId,
-          subscription_tier: result.user.subscription?.tier || 'FREE',
-          display_name: result.user.name,
-        });
-
-        track(EVENTS.ONBOARDING_STARTED, {
+          mongodb_id: result.user._id,
           workspace_id: result.user.workspaceId,
           subscription_tier: result.user.subscription?.tier || 'FREE',
         });
@@ -109,18 +104,14 @@ export default function OnboardingForm() {
     }
 
     validateUser();
-  }, [searchParams, router, identify, track]);
+  }, [searchParams, router, identify]);
 
   async function handleFrequencyNext(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setIsLoadingChannels(true);
     
-    // Track frequency step completion
-    track(EVENTS.ONBOARDING_STEP_COMPLETED, {
-      step: ONBOARDING_STEPS.FREQUENCY,
-      analysis_frequency: analysisFrequency,
-    });
+    // PostHog autocapture will track form interactions automatically
     
     try {
       // Fetch workspace channels with team ID
@@ -150,12 +141,7 @@ export default function OnboardingForm() {
     e.preventDefault();
     setError(null);
     
-    // Track channels step completion
-    track(EVENTS.ONBOARDING_STEP_COMPLETED, {
-      step: ONBOARDING_STEPS.CHANNELS,
-      channels_selected: selectedChannels.length,
-      channel_names: selectedChannels.map(c => c.name),
-    });
+    // PostHog autocapture will track form interactions automatically
     
     // Check if user already has PRO subscription - skip payment step
     const hasProSubscription = user?.subscription?.tier === 'PRO' && user?.subscription?.status === 'active';
@@ -187,14 +173,7 @@ export default function OnboardingForm() {
           throw new Error(result.error);
         }
 
-        // Track onboarding completion
-        track(EVENTS.ONBOARDING_COMPLETED, {
-          workspace_id: user.workspaceId,
-          analysis_frequency: analysisFrequency,
-          channels_selected: selectedChannels.length,
-          subscription_tier: user.subscription?.tier || 'FREE',
-          completion_path: user.subscription?.tier === 'PRO' ? 'pro_skip_payment' : 'free_complete',
-        });
+        // PostHog server-side tracking handles onboarding completion
 
         console.log('Onboarding completed successfully');
         
@@ -208,11 +187,7 @@ export default function OnboardingForm() {
   }
 
   function handleContinueWithFree() {
-    // Track payment step completion with free choice
-    track(EVENTS.ONBOARDING_STEP_COMPLETED, {
-      step: ONBOARDING_STEPS.PAYMENT,
-      choice: 'free',
-    });
+    // PostHog autocapture will track form interactions automatically
     
     // Complete onboarding with free plan
     completeOnboarding();
@@ -221,12 +196,7 @@ export default function OnboardingForm() {
   async function handleUpgradeToPro() {
     if (!user) return;
     
-    // Track upgrade click from onboarding
-    track(EVENTS.SUBSCRIPTION_UPGRADE_CLICKED, {
-      source: 'onboarding',
-      step: 'payment',
-      subscription_tier: user.subscription?.tier || 'FREE',
-    });
+    // PostHog autocapture will track button clicks automatically
     
     try {
       // Create checkout session using the existing API endpoint
