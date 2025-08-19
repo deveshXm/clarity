@@ -2,13 +2,13 @@
 
 import { useState, useTransition, useEffect, useRef, useLayoutEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Title, Button, Stack, Row, Center, Container, Text, Checkbox, SegmentedControl, Card, Skeleton } from '@/components/ui';
+import { Title, Button, Stack, Row, Center, Container, Text, Checkbox, SegmentedControl, Card, Skeleton, TextInput } from '@/components/ui';
 import { validateSlackUser, completeSlackOnboarding, getWorkspaceChannels } from '@/lib/server-actions';
 import { SlackChannel, SUBSCRIPTION_TIERS } from '@/types';
 import { usePostHog } from '@/hooks/useAnalytics';
 import { gsap } from 'gsap';
 
-type OnboardingStep = 'frequency' | 'channels' | 'payment';
+type OnboardingStep = 'frequency' | 'channels' | 'email' | 'payment';
 
 interface SlackUser {
   _id: string;
@@ -28,6 +28,7 @@ export default function OnboardingForm() {
   const [analysisFrequency, setAnalysisFrequency] = useState<'weekly' | 'monthly'>('weekly');
   const [availableChannels, setAvailableChannels] = useState<SlackChannel[]>([]);
   const [selectedChannels, setSelectedChannels] = useState<Array<{ id: string; name: string }>>([]);
+  const [userEmail, setUserEmail] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<SlackUser | null>(null);
   const [isLoadingChannels, setIsLoadingChannels] = useState(false);
@@ -146,6 +147,28 @@ export default function OnboardingForm() {
     
     // PostHog autocapture will track form interactions automatically
     
+    // Always go to email step next
+    startStepTransition('email');
+  }
+
+  function handleEmailNext(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!userEmail.trim()) {
+      setError('Email address is required.');
+      return;
+    }
+    
+    if (!emailRegex.test(userEmail.trim())) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    
+    // PostHog autocapture will track form interactions automatically
+    
     // Check if user already has PRO subscription - skip payment step
     const hasProSubscription = user?.subscription?.tier === 'PRO' && user?.subscription?.status === 'active';
     
@@ -169,7 +192,8 @@ export default function OnboardingForm() {
             user.workspaceId,
             analysisFrequency,
             selectedChannels.length > 0 ? selectedChannels : undefined,
-            undefined
+            undefined, // invitationEmails
+            userEmail.trim() // user email
           );
 
         if (result.error) {
@@ -316,6 +340,25 @@ export default function OnboardingForm() {
   }
 
   // Remove the FrequencySelector wrapper completely
+
+  const renderEmailStep = () => (
+    <Stack gap="md" w="100%">
+      <TextInput
+        placeholder="your@email.com"
+        value={userEmail}
+        onChange={(e) => setUserEmail(e.currentTarget.value)}
+        required
+        type="email"
+        size="md"
+        style={{
+          fontSize: 16,
+        }}
+      />
+      <Text size="sm" c="dimmed" style={{ marginTop: 8 }}>
+        Don&apos;t worry, we won&apos;t spam you. We&apos;ll use this to send your communication reports and important product updates.
+      </Text>
+    </Stack>
+  );
 
   const renderFrequencyStep = () => (
     <Center>
@@ -560,13 +603,15 @@ export default function OnboardingForm() {
   const stepMeta: Record<OnboardingStep, { title: string; subtitle?: string }> = {
     frequency: { title: 'Report frequency', subtitle: 'How often should we DM your report?' },
     channels: { title: 'Channels', subtitle: 'Choose channels to enable AI coaching' },
+    email: { title: 'Email address', subtitle: 'Where should we send your reports?' },
     payment: { title: 'Choose your plan', subtitle: 'Select the plan that works best for you' },
   };
 
   const goBack = () => {
     setError(null);
     if (currentStep === 'channels') startStepTransition('frequency');
-    if (currentStep === 'payment') startStepTransition('channels');
+    if (currentStep === 'email') startStepTransition('channels');
+    if (currentStep === 'payment') startStepTransition('email');
   };
 
   const goNext = (e?: React.MouseEvent<HTMLButtonElement>) => {
@@ -577,6 +622,8 @@ export default function OnboardingForm() {
       void handleFrequencyNext(new Event('submit') as unknown as React.FormEvent);
     } else if (currentStep === 'channels') {
       void handleChannelsNext(new Event('submit') as unknown as React.FormEvent);
+    } else if (currentStep === 'email') {
+      void handleEmailNext(new Event('submit') as unknown as React.FormEvent);
     }
     // Payment step doesn't have a "Next" button - it has specific plan buttons
   };
@@ -586,7 +633,7 @@ export default function OnboardingForm() {
   // Helper to perform smooth right-to-left slide transition between steps
   function startStepTransition(nextStep: OnboardingStep) {
     if (nextStep === currentStep || isTransitioning) return;
-    const order: Record<OnboardingStep, number> = { frequency: 0, channels: 1, payment: 2 };
+    const order: Record<OnboardingStep, number> = { frequency: 0, channels: 1, email: 2, payment: 3 };
     setDirection(order[nextStep] > order[currentStep] ? 'forward' : 'back');
     setOutgoingStep(currentStep);
     setIncomingStep(nextStep);
@@ -598,12 +645,14 @@ export default function OnboardingForm() {
   function renderPanel(step: OnboardingStep, disableButtons: boolean) {
     // Check if user has PRO subscription to determine button label
     const hasProSubscription = user?.subscription?.tier === 'PRO' && user?.subscription?.status === 'active';
-    const label = step === 'channels' && hasProSubscription ? 'Complete Setup' : 'Next';
+    const label = step === 'email' && hasProSubscription ? 'Complete Setup' : 'Next';
     const loading = disableButtons
       ? false
       : step === 'frequency'
         ? isLoadingChannels
-        : isCompletingSetup;
+        : step === 'email'
+          ? isCompletingSetup
+          : false;
 
     return (
       <Card
@@ -624,6 +673,7 @@ export default function OnboardingForm() {
         <Stack mt={12}>
           {step === 'frequency' && renderFrequencyStep()}
           {step === 'channels' && renderChannelsStep()}
+          {step === 'email' && renderEmailStep()}
           {step === 'payment' && renderPaymentStep()}
         </Stack>
 
@@ -650,7 +700,7 @@ export default function OnboardingForm() {
         {/* Payment step back button - positioned differently */}
         {step === 'payment' && (
           <Center mt={24}>
-            <Button variant="subtle" size="sm" disabled={disableButtons} onClick={disableButtons ? undefined : goBack}>← Back to channels</Button>
+            <Button variant="subtle" size="sm" disabled={disableButtons} onClick={disableButtons ? undefined : goBack}>← Back to email</Button>
           </Center>
         )}
       </Card>

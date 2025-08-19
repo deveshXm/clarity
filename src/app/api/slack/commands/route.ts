@@ -122,6 +122,9 @@ export async function POST(request: NextRequest) {
             case '/clarity-settings':
                 response = await handleSettings(text, userId, appUser as unknown as SlackUser, triggerId!); // Pass triggerId
                 break;
+            case '/clarity-status':
+                response = await handleClarityStatus(userId, channelId, appUser as unknown as SlackUser);
+                break;
             case '/clarity-help':
                 response = await handleClarityHelp();
                 break;
@@ -769,6 +772,60 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
     }
 }
 
+async function handleClarityStatus(userId: string, channelId: string, user: SlackUser) {
+    try {
+        // Check if command was invoked in a channel (C for public, G for private) vs DM (D)
+        if (!channelId.startsWith('C') && !channelId.startsWith('G')) {
+            return {
+                text: 'Please use this command in a channel to check Clarity\'s status.',
+                response_type: 'ephemeral'
+            };
+        }
+
+        // Check if bot is installed in this channel
+        const isChannelActive = await isChannelAccessible(channelId, user.workspaceId);
+        
+        if (!isChannelActive) {
+            return {
+                text: '🔴 Clarity is not installed in this channel.',
+                response_type: 'ephemeral'
+            };
+        }
+
+        // Check if auto coaching is disabled for this channel
+        const isAutoCoachingDisabled = user.autoCoachingDisabledChannels.includes(channelId);
+        
+        if (isAutoCoachingDisabled) {
+            return {
+                text: '🟡 Clarity is installed but auto coaching is disabled in this channel.',
+                response_type: 'ephemeral'
+            };
+        }
+
+        // Bot is installed and auto coaching is enabled
+        return {
+            text: '🟢 Clarity is installed and monitoring this channel for auto coaching.',
+            response_type: 'ephemeral'
+        };
+
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error in status command', errorObj, { 
+            user_id: userId,
+            channel_id: channelId,
+            operation: 'status_command'
+        });
+        trackError(userId, errorObj, { 
+            operation: 'status_command',
+            context: 'command_processing'
+        });
+        return {
+            text: 'Sorry, I couldn\'t check the status. Please try again later.',
+            response_type: 'ephemeral'
+        };
+    }
+}
+
 async function handleClarityHelp() {
     return {
         text: 'Clarity Help',
@@ -803,7 +860,20 @@ async function handleClarityHelp() {
                     },
                     {
                         type: 'mrkdwn',
+                        text: '_Check Clarity\'s status in current channel_\n\n`/status`'
+                    }
+                ]
+            },
+            {
+                type: 'section',
+                fields: [
+                    {
+                        type: 'mrkdwn',
                         text: '_Configure your AI coach preferences_\n\n`/settings`'
+                    },
+                    {
+                        type: 'mrkdwn',
+                        text: ''
                     }
                 ]
             },

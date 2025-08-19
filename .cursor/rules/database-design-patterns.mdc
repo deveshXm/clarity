@@ -26,6 +26,7 @@ globs: src/lib/**/*.ts,src/types/**/*.ts,src/app/api/**/*.ts
 - Avoid over-normalization; prefer simple documents with clear ownership and indexing.
 - Use explicit TypeScript types inferred from Zod schemas; never use `any`.
 - When adding fields, prefer additive, backward-compatible changes; write guards for optional legacy fields.
+- **Email Field**: User email is nullable in schema, defaults to `null` for new users, collected during onboarding
 
 ## User Lifecycle Management ✅ ENHANCED
 
@@ -57,6 +58,7 @@ globs: src/lib/**/*.ts,src/types/**/*.ts,src/app/api/**/*.ts
         $set: { 
           // Overwrite ALL fields except usage
           isActive: true,
+          email: null, // Reset email - user must provide during onboarding
           analysisFrequency: 'weekly', // Reset to default
           autoCoachingDisabledChannels: [], // Reset channel preferences  
           hasCompletedOnboarding: false, // Reset onboarding
@@ -318,6 +320,9 @@ switch (command) {
   case '/clarity-settings':  // ✅ Updated with clarity- prefix
     response = await handleSettings(text, userId, appUser as unknown as SlackUser, triggerId!);
     break;
+  case '/clarity-status':  // ✅ NEW: Channel status checking
+    response = await handleClarityStatus(userId, channelId, appUser as unknown as SlackUser);
+    break;
 }
 ```
 
@@ -361,6 +366,52 @@ async function handleClarityHelp() {
   };
 }
 ```
+
+**Status Command Pattern ✅ NEW:**
+```typescript
+// /clarity-status - Channel status checking with visual indicators
+async function handleClarityStatus(userId: string, channelId: string, user: SlackUser) {
+  // 1. Channel type detection using ID prefixes
+  if (!channelId.startsWith('C') && !channelId.startsWith('G')) {
+    return {
+      text: 'Please use this command in a channel to check Clarity\'s status.',
+      response_type: 'ephemeral'
+    };
+  }
+
+  // 2. Check bot installation using existing isChannelAccessible function
+  const isChannelActive = await isChannelAccessible(channelId, user.workspaceId);
+  
+  if (!isChannelActive) {
+    return {
+      text: '🔴 Clarity is not installed in this channel.',
+      response_type: 'ephemeral'
+    };
+  }
+
+  // 3. Check per-channel auto-coaching settings
+  const isAutoCoachingDisabled = user.autoCoachingDisabledChannels.includes(channelId);
+  
+  if (isAutoCoachingDisabled) {
+    return {
+      text: '🟡 Clarity is installed but auto coaching is disabled in this channel.',
+      response_type: 'ephemeral'
+    };
+  }
+
+  // 4. Fully active status
+  return {
+    text: '🟢 Clarity is installed and monitoring this channel for auto coaching.',
+    response_type: 'ephemeral'
+  };
+}
+```
+
+**Status Detection Logic:**
+- **Channel Types**: `C` (public), `G` (private), `D` (DM) - only work in channels
+- **Bot Installation**: Uses `isChannelAccessible()` to check `botChannelsCollection`
+- **Auto-Coaching Status**: Checks `user.autoCoachingDisabledChannels` array
+- **Visual Indicators**: 🔴 (not installed), 🟡 (disabled), 🟢 (active)
 
 ## Query Patterns
 

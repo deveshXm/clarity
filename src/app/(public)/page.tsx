@@ -71,13 +71,13 @@ export default function LandingPage() {
         <div className="mx-auto max-w-3xl px-2 pt-16 text-center md:pt-24">
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <Title order={1} size="h1" fw={900} style={{ color: '#0F172A', lineHeight: 1.05, fontSize: '44px' }}>
-              <span className="brand-marker">Clarity</span> for Slack
+              <span className="brand-marker">Clarity AI</span> for Slack
             </Title>
             <Text size="xl" mt="md" style={{ color: '#334155', fontSize: '20px' }}>
-              Write clearer messages, faster. Private coaching that fits your team&apos;s tone.
+              Your AI-powered communication coach for Slack. Get real-time feedback, personalized reports, and actionable suggestions to improve your messaging.
             </Text>
             <Stack gap="sm" mt="xl" align="center">
-              <CTAButton onClick={handleInstallSlack} loading={isLoading}>Install Clarity</CTAButton>
+              <CTAButton onClick={handleInstallSlack} loading={isLoading}>Install Clarity AI</CTAButton>
               <Text size="sm" style={{ color: '#475569' }}>
                 Privacy-first. Feedback is ephemeral and visible only to you.
               </Text>
@@ -120,13 +120,13 @@ export default function LandingPage() {
               fw={900}
               style={{ color: '#0F172A', fontSize: '36px', lineHeight: 1.1 }}
             >
-              Ready to ship messages with clarity?
+              Write clearer messages in seconds
             </Title>
             <Text size="lg" mt="sm" style={{ color: '#475569', fontSize: '20px' }}>
-              Add Clarity to Slack and level up your team&apos;s tone and focus in minutes.
+              Add Clarity AI to Slack for private, real-time coaching that fits your team&apos;s tone.
             </Text>
             <Stack gap="sm" mt="xl" align="center">
-              <CTAButton onClick={handleInstallSlack} loading={isLoading}>Add to Slack — It&apos;s free</CTAButton>
+              <CTAButton onClick={handleInstallSlack} loading={isLoading}>Install Clarity AI — It&apos;s free</CTAButton>
               <Text size="sm" style={{ color: '#64748B' }}>
                 No setup hassle. Private, ephemeral feedback by default.
               </Text>

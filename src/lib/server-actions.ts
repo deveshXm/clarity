@@ -309,7 +309,8 @@ export async function completeSlackOnboarding(
     userWorkspaceId: string, 
     analysisFrequency: 'weekly' | 'monthly',
     selectedChannels?: Array<{ id: string; name: string }>,
-    invitationEmails?: string[]
+    invitationEmails?: string[],
+    userEmail?: string
 ) {
     try {
         if (!slackId || !userWorkspaceId) {
@@ -320,15 +321,25 @@ export async function completeSlackOnboarding(
         // With inverted logic: empty autoCoachingDisabledChannels = coaching enabled everywhere (default)
         // No need to set specific channels since default behavior is "enabled"
         
+        const updateData: {
+            analysisFrequency: 'weekly' | 'monthly';
+            hasCompletedOnboarding: boolean;
+            updatedAt: Date;
+            email?: string;
+        } = {
+            analysisFrequency: analysisFrequency || 'weekly',
+            hasCompletedOnboarding: true,
+            updatedAt: new Date()
+        };
+
+        // Add email if provided
+        if (userEmail && userEmail.trim()) {
+            updateData.email = userEmail.trim();
+        }
+        
         const updateResult = await slackUserCollection.updateOne(
             { slackId, workspaceId: userWorkspaceId },
-            {
-                $set: {
-                    analysisFrequency: analysisFrequency || 'weekly',
-                    hasCompletedOnboarding: true,
-                    updatedAt: new Date()
-                }
-            }
+            { $set: updateData }
         );
 
         if (updateResult.matchedCount === 0) {

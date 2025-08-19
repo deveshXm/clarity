@@ -16,7 +16,7 @@ export const MESSAGE_ANALYSIS_TYPES = {
 export const UserSchema = z.object({
     _id: z.string(),
     id: z.string(),
-    email: z.string().email(),
+    email: z.string().email().nullable(), // Allow null for users who haven't provided email
     name: z.string(),
     image: z.string().url().optional(),
     emailVerified: z.boolean(),

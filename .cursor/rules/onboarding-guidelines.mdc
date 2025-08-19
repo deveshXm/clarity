@@ -10,9 +10,10 @@ These rules capture the established patterns in the onboarding UI and related se
 - Use server actions directly (imports), not fetch calls:
   - `validateSlackUser(slackId, teamId)` for initial validation **with subscription data**
   - `getWorkspaceChannels(teamId)` to list channels (filters handled client-side)
-  - `completeSlackOnboarding(slackId, userWorkspaceId, analysisFrequency, selectedChannels?)` to persist and finish
+  - `completeSlackOnboarding(slackId, userWorkspaceId, analysisFrequency, selectedChannels?, invitationEmails?, userEmail?)` to persist and finish
 - **Enhanced User Validation**: `validateSlackUser` now returns subscription data for PRO user detection
 - **Subscription-Aware Interface**: SlackUser interface includes optional subscription field
+- **Email Collection**: Mandatory email collection during onboarding, saved to database with proper validation
 - Workspace-specific tokens only. Server-side looks up `workspace.botToken` by Slack team ID and never uses a global token.
 - When joining channels, use `joinBotToChannels()` - database persistence handled automatically via Slack events.
 
@@ -23,23 +24,25 @@ These rules capture the established patterns in the onboarding UI and related se
 - **Single Source of Truth**: Slack events drive ALL channel membership changes
 - **Channel Access**: Commands work in any channel where bot is present (onboarding or manual addition)
 
-## Steps & State ✅ UPDATED
-- **Dynamic Step Flow**: `frequency` → `channels` → `payment` (conditional)
+## Steps & State ✅ UPDATED WITH EMAIL STEP
+- **Dynamic Step Flow**: `frequency` → `channels` → `email` → `payment` (conditional)
 - **PRO User Logic**: Skip payment step if `user.subscription.tier === 'PRO'` and `status === 'active'`
 - **Step Flow Patterns**:
-  - **FREE Users**: `frequency` → `channels` → `payment` → complete
-  - **PRO Users**: `frequency` → `channels` → complete (skip payment)
-- **Button Labels**: "Complete Setup" for PRO users in channels step, "Next" for FREE users
+  - **FREE Users**: `frequency` → `channels` → `email` → `payment` → complete
+  - **PRO Users**: `frequency` → `channels` → `email` → complete (skip payment)
+- **Button Labels**: "Complete Setup" for PRO users in email step, "Next" for FREE users
 - **PRO Visual Indicator**: Show congratulations card in channels step for existing PRO subscribers
+- **Email Step**: Mandatory email collection with basic validation and reassuring copy
 - Channel selection stores compact items with `{ id, name }`. Only allow non-archived channels.
 - Initiate step change to `channels` immediately upon Next click, while channels load in the background. Disable appropriate buttons during fetch.
 
 ## UI & Components
-- Always import UI from `@/components/ui` (never from vendor libraries directly). Examples used: `Container`, `Stack`, `Row`, `Center`, `Card`, `Title`, `Text`, `Button`, `Skeleton`, `Checkbox`, `SegmentedControl`.
+- Always import UI from `@/components/ui` (never from vendor libraries directly). Examples used: `Container`, `Stack`, `Row`, `Center`, `Card`, `Title`, `Text`, `Button`, `Skeleton`, `Checkbox`, `SegmentedControl`, `TextInput`.
 - Use a fixed-height scroll container for the channel list:
   - Row height: 44px constant
   - Visible rows: 5 (container height = rows * rowHeight + 24 padding)
   - Ellipsize long labels; prefix private channels with `🔒` and public with `#`.
+- **Email Input**: Use `TextInput` without label (step title already shows "Email address"), include reassuring copy about no spam
 - Display lightweight loading states:
   - Page validating state shows centered text
   - Channel list shows skeleton rows equal to visible rows
@@ -63,12 +66,21 @@ These rules capture the established patterns in the onboarding UI and related se
 - Log server action errors to aid debugging but do not block UX on non-critical failures (e.g., partial channel-join failures are tolerated).
 
 ## Data Contracts
-- `validateSlackUser` returns a minimal user object containing `_id`, `slackId`, `workspaceId`, `name`, `analysisFrequency`, and `hasCompletedOnboarding`.
+- `validateSlackUser` returns a minimal user object containing `_id`, `slackId`, `workspaceId`, `name`, `analysisFrequency`, `hasCompletedOnboarding`, and optional `subscription`.
 - `getWorkspaceChannels(teamId)` returns `{ success, channels, error? }` where `channels` is an array of Slack channel metadata filtered client-side.
-- `completeSlackOnboarding` accepts optional `selectedChannels` and handles joining server-side (persistence via Slack events).
+- `completeSlackOnboarding` accepts optional `selectedChannels`, `invitationEmails`, and mandatory `userEmail` and handles joining server-side (persistence via Slack events).
 
 ## Content & Copy
 - Keep copy short, friendly, and specific to each step:
-  - Frequency title: “Report frequency” with subtitle “How often should we DM your report?”
-  - Channels title: “Channels” with subtitle “Choose channels to enable AI coaching”
+  - Frequency title: "Report frequency" with subtitle "How often should we DM your report?"
+  - Channels title: "Channels" with subtitle "Choose channels to enable AI coaching"
+  - Email title: "Email address" with subtitle "Where should we send your reports?"
+- **Email Reassurance**: Include copy "Don't worry, we won't spam you. We'll use this to send your communication reports and important product updates."
 - Use proper JSX entity escaping for special characters.
+
+## Email Validation & Handling
+- **Mandatory Field**: Email is required during onboarding, cannot be skipped
+- **Basic Validation**: Use regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` for client-side validation
+- **Database Storage**: Email saved as nullable field in SlackUser schema, defaults to `null` for new users
+- **OAuth Behavior**: Set `email: null` instead of placeholder during user creation/reinstallation
+- **Server Action**: `completeSlackOnboarding` accepts `userEmail` parameter and saves trimmed email to database

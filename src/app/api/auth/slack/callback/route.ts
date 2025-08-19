@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
                     $set: { 
                         // Overwrite ALL fields except usage
                         id: existingUser.id, // Keep existing ID
-                        email: `${authed_user.id}@slack.local`, // Reset email
+                        email: null, // Reset email to null - user will provide during onboarding
                         name: actualUserName,
                         displayName: actualDisplayName,
                         image: userImage,
@@ -225,7 +225,7 @@ export async function GET(request: NextRequest) {
                 id: new ObjectId().toString(),
                 slackId: authed_user.id,
                 workspaceId: workspaceObjectId.toString(),
-                email: `${authed_user.id}@slack.local`, // Slack ID as email placeholder
+                email: null, // User will provide email during onboarding
                 name: actualUserName,
                 displayName: actualDisplayName,
                 image: userImage,

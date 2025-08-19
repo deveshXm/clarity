@@ -35,6 +35,12 @@
                 "url": "https://d19f37638617.ngrok-free.app/api/slack/commands",
                 "description": "Configure your AI coach preferences",
                 "should_escape": false
+            },
+            {
+                "command": "/clarity-status",
+                "url": "https://d19f37638617.ngrok-free.app/api/slack/commands",
+                "description": "Check if Clarity is installed and monitoring current channel",
+                "should_escape": false
             }
         ]
     },

@@ -7,22 +7,22 @@ import { Image, Text, Title } from "@/components/ui";
 
 const FEATURE_ITEMS: { title: string; desc: string; img: string; tint: string }[] = [
   {
-    title: "Instant, private suggestions",
-    desc: "Clarity flags tone and clarity issues before you hit send—visible only to you.",
+    title: "Real-time private feedback",
+    desc: "Flags tone and clarity issues before you hit send — visible only to you.",
     img: "/landing/temp.png",
     tint:
       "linear-gradient(180deg, rgba(56,189,248,0.14) 0%, rgba(96,165,250,0.12) 100%)",
   },
   {
     title: "Context-aware rephrase",
-    desc: "When allowed, Clarity uses recent messages to suggest rewrites that fit the thread.",
+    desc: "When permitted, uses recent messages to suggest rewrites that fit the thread.",
     img: "/landing/temp.png",
     tint:
       "linear-gradient(180deg, rgba(99,102,241,0.14) 0%, rgba(34,211,238,0.12) 100%)",
   },
   {
-    title: "One‑tap message replace",
-    desc: "Swap your draft with a clearer version, keeping your voice intact.",
+    title: "One-tap message replace",
+    desc: "Swap your draft with a clearer version while keeping your voice.",
     img: "/landing/temp.png",
     tint:
       "linear-gradient(180deg, rgba(34,211,238,0.14) 0%, rgba(56,189,248,0.12) 100%)",
