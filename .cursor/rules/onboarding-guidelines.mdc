@@ -14,7 +14,14 @@ These rules capture the established patterns in the onboarding UI and related se
 - **Enhanced User Validation**: `validateSlackUser` now returns subscription data for PRO user detection
 - **Subscription-Aware Interface**: SlackUser interface includes optional subscription field
 - Workspace-specific tokens only. Server-side looks up `workspace.botToken` by Slack team ID and never uses a global token.
-- When saving channels, join with workspace token and persist to `botChannelsCollection` using `saveBotChannels()`.
+- When joining channels, use `joinBotToChannels()` - database persistence handled automatically via Slack events.
+
+## Event-Driven Channel Management ✅ NEW ARCHITECTURE
+- **No Direct Database Operations**: Onboarding only joins channels, never writes to `botChannelsCollection`
+- **Automatic Sync**: `member_joined_channel` events update database when bot joins during onboarding
+- **Manual Addition Support**: Users can add bot to new channels after onboarding - events handle database sync
+- **Single Source of Truth**: Slack events drive ALL channel membership changes
+- **Channel Access**: Commands work in any channel where bot is present (onboarding or manual addition)
 
 ## Steps & State ✅ UPDATED
 - **Dynamic Step Flow**: `frequency` → `channels` → `payment` (conditional)
@@ -58,7 +65,7 @@ These rules capture the established patterns in the onboarding UI and related se
 ## Data Contracts
 - `validateSlackUser` returns a minimal user object containing `_id`, `slackId`, `workspaceId`, `name`, `analysisFrequency`, and `hasCompletedOnboarding`.
 - `getWorkspaceChannels(teamId)` returns `{ success, channels, error? }` where `channels` is an array of Slack channel metadata filtered client-side.
-- `completeSlackOnboarding` accepts optional `selectedChannels` and handles joining + persistence server-side.
+- `completeSlackOnboarding` accepts optional `selectedChannels` and handles joining server-side (persistence via Slack events).
 
 ## Content & Copy
 - Keep copy short, friendly, and specific to each step:

@@ -62,7 +62,7 @@ export default function OnboardingForm() {
 
       if (!slackUserId || !teamId) {
         console.log('Missing user or team parameters');
-        router.replace('/app/help');
+        router.replace('/docs');
         return;
       }
 
@@ -72,14 +72,14 @@ export default function OnboardingForm() {
 
         if (result.error || !result.user) {
           console.log('User not found or invalid:', result.error);
-          router.replace('/app/help');
+          router.replace('/docs');
           return;
         }
 
         // Check if onboarding already completed
         if (result.user.hasCompletedOnboarding) {
           console.log('Onboarding already completed');
-          router.replace('/app/help');
+          router.replace('/docs');
           return;
         }
 
@@ -99,7 +99,7 @@ export default function OnboardingForm() {
 
       } catch (error) {
         console.error('Error validating user:', error);
-        router.replace('/app/help');
+        router.replace('/docs');
       }
     }
 
@@ -125,7 +125,10 @@ export default function OnboardingForm() {
 
       const result = await getWorkspaceChannels(teamId);
       if (result.success && result.channels) {
-        setAvailableChannels(result.channels.filter(channel => !channel.is_archived));
+        // Filter out archived AND private channels (bots can't join private channels via API)
+        setAvailableChannels(result.channels.filter(channel => 
+          !channel.is_archived && !channel.is_private
+        ));
       } else {
         setError(result.error || 'Failed to load channels. Please try again.');
       }
@@ -178,7 +181,7 @@ export default function OnboardingForm() {
         console.log('Onboarding completed successfully');
         
         // Redirect to help page
-        router.push('/app/help');
+        router.push('/docs');
       } catch (err) {
         setError('Failed to complete setup. Please try again.');
         console.error('Onboarding error:', err);

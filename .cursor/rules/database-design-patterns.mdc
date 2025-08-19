@@ -27,31 +27,57 @@ globs: src/lib/**/*.ts,src/types/**/*.ts,src/app/api/**/*.ts
 - Use explicit TypeScript types inferred from Zod schemas; never use `any`.
 - When adding fields, prefer additive, backward-compatible changes; write guards for optional legacy fields.
 
-## User Lifecycle Management ✅ IMPLEMENTED
+## User Lifecycle Management ✅ ENHANCED
 
 - **Never delete users or workspaces** - use `isActive: boolean` field for deactivation
-- **Install/Reinstall Flow**: Set `isActive: true` and preserve existing subscription/usage data
-- **Uninstall Flow**: Set `isActive: false` but preserve all user data (subscription, usage, preferences)
+- **Install/Reinstall Flow**: Set `isActive: true` and overwrite all values except usage data
+- **Uninstall Flow**: Set `isActive: false`, preserve all user data, and clean up botChannels collection
 - **Prevents Usage Abuse**: Users can't reset limits by uninstalling/reinstalling
+
+### Reinstallation Behavior ✅ UPDATED
+- **Fresh Start**: All preferences, settings, and onboarding status reset to defaults
+- **Usage Protection**: Monthly usage counters and subscription data preserved
+- **Complete Overwrite**: Profile, settings, channel preferences, onboarding status reset
 - **OAuth Callback Pattern**:
   ```typescript
   const existingUser = await slackUserCollection.findOne({ slackId, workspaceId });
   if (existingUser) {
-    // Reactivate existing user - preserve subscription and usage
+    // Preserve usage but overwrite everything else
+    const preservedUsage = existingUser.subscription?.monthlyUsage;
+    const updatedSubscription = {
+      ...defaultSubscription,
+      monthlyUsage: preservedUsage, // Keep usage data
+      tier: existingUser.subscription?.tier || 'FREE', // Keep subscription tier
+      stripeCustomerId: existingUser.subscription?.stripeCustomerId, // Keep Stripe data
+    };
+    
     await slackUserCollection.updateOne(
       { slackId, workspaceId },
-      { $set: { isActive: true, updatedAt: new Date() } }
+      { 
+        $set: { 
+          // Overwrite ALL fields except usage
+          isActive: true,
+          analysisFrequency: 'weekly', // Reset to default
+          autoCoachingDisabledChannels: [], // Reset channel preferences  
+          hasCompletedOnboarding: false, // Reset onboarding
+          subscription: updatedSubscription, // Preserve usage, reset other settings
+          // ... all other fields reset to defaults
+        }
+      }
     );
-  } else {
-    // Create new user with default FREE subscription
-    await slackUserCollection.insertOne(newUserData);
   }
   ```
+
+### Uninstallation Cleanup ✅ ENHANCED
 - **App Uninstall Handler**: Listen for `app_uninstalled` and `tokens_revoked` events in [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts)
+- **Complete Cleanup**: `handleAppUninstall(teamId)` function now:
+  - Deactivates all workspace users (`isActive: false`)
+  - Deactivates workspace (`isActive: false`) 
+  - **NEW**: Removes all entries from `botChannelsCollection` for the workspace
+  - **NEW**: Tracks uninstallation analytics with user/channel counts
+- **Channel Cleanup**: `botChannelsCollection.deleteMany({ workspaceId })` removes stale channel references
+- **Analytics Tracking**: `API_SLACK_APP_UNINSTALLED` event tracks deactivation metrics
 - **Manifest Events Required**: Add both `app_uninstalled` and `tokens_revoked` to bot_events in manifest files
-- **Uninstall Processing**: `handleAppUninstall(teamId)` function deactivates all workspace users and workspace
-- **Workspace Deactivation**: Both users and workspaces get `isActive: false` on uninstall
-- **Debug Logging**: Enhanced event logging to troubleshoot team_id extraction from Slack payloads
 
 ## Slack Tokens & Access
 
@@ -147,8 +173,9 @@ SlackUser {
   slackId: string,         // Slack user ID
   workspaceId: string,     // References workspace ObjectId
   analysisFrequency: 'weekly' | 'monthly',
-  autoRephraseEnabled: boolean,  // Auto coaching toggle (default: true)
+  autoCoachingDisabledChannels: string[],  // Channel IDs where auto-coaching is disabled (default: empty array)
   hasCompletedOnboarding: boolean,
+  subscription: SubscriptionSchema, // Includes usage tracking and tier info
   // ... other user fields
 }
 ```
@@ -177,7 +204,7 @@ SlackUser {
 
 ```typescript
 // Layer 1: Slack's membership filter (automatic)
-// Layer 2: Our database verification (explicit)
+// Layer 2: Our database verification (kept in sync via events)
 const isChannelActive = await botChannelsCollection.findOne({
   channelId: slackChannelId,
   workspaceId: userWorkspaceObjectId  // User's workspace reference
@@ -196,12 +223,15 @@ if (!isChannelActive) {
 // Step 1: Receive message event (only from member channels)
 if (event.type === 'message' && (event.channel_type === 'channel' || event.channel_type === 'group')) {
   
-  // Step 2: Validate user has app installed and auto rephrase enabled
+  // Step 2: Validate user has app installed and check per-channel auto-coaching
   const user = await slackUserCollection.findOne({ 
     slackId: event.user, 
     isActive: true 
   });
-  if (!user || user.autoRephraseEnabled === false) return;
+  if (!user) return;
+  
+  // Step 2.5: Check if auto-coaching is disabled for this specific channel
+  if (user.autoCoachingDisabledChannels.includes(event.channel)) return;
   
   // Step 3: Check bot is active in this specific channel
   const isChannelActive = await isChannelAccessible(event.channel, user.workspaceId);
@@ -274,18 +304,18 @@ if (!appUser) {
 **Available commands in [src/app/api/slack/commands/route.ts](mdc:src/app/api/slack/commands/route.ts):**
 
 ```typescript
-// Command routing in switch statement
+// Command routing in switch statement - ALL commands use clarity- prefix
 switch (command) {
   case '/clarity-help':
     response = await handleClarityHelp();
     break;
-  case '/personalfeedback':
+  case '/clarity-personal-feedback':  // ✅ Updated with clarity- prefix
     response = await handlePersonalFeedback(userId, channelId);
     break;
-  case '/rephrase':
+  case '/clarity-rephrase':  // ✅ Updated with clarity- prefix
     response = await handleRephrase(text, userId, channelId);
     break;
-  case '/settings':
+  case '/clarity-settings':  // ✅ Updated with clarity- prefix
     response = await handleSettings(text, userId, appUser as unknown as SlackUser, triggerId!);
     break;
 }
@@ -400,27 +430,50 @@ if (!isChannelActive) {
 }
 ```
 
-### 5. Bot Channel Management Pattern
-**During onboarding - joining and tracking channels:**
+### 5. Bot Channel Management Pattern ✅ EVENT-DRIVEN ARCHITECTURE
+**Event-driven channel membership tracking:**
 
 ```typescript
-// Join bot to selected channels and store in database
+// Onboarding: Only join channels (events handle database)
 for (const channel of selectedChannels) {
-  // Join channel with workspace-specific bot token
   const joinSuccess = await joinChannel(channel.id, workspace.botToken);
   
   if (joinSuccess) {
-    // Store in botChannelsCollection for access control
-    await botChannelsCollection.insertOne({
-      _id: new ObjectId(),
-      workspaceId: userWorkspaceId, // User's workspace ObjectId
-      channelId: channel.id,
-      channelName: channel.name,
-      addedAt: new Date()
-    });
+    // member_joined_channel event will update botChannelsCollection automatically
+    console.log(`✅ Bot joined channel: ${channel.name}`);
   }
 }
+
+// Event handlers in /api/slack/events/route.ts
+async function handleBotJoinedChannel(event) {
+  // Verify it's our bot joining
+  const botUserId = await slack.auth.test().user_id;
+  if (event.user !== botUserId) return;
+  
+  // Add to database
+  await botChannelsCollection.insertOne({
+    _id: new ObjectId(),
+    workspaceId: workspace._id.toString(),
+    channelId: event.channel,
+    channelName: channelInfo.name,
+    addedAt: new Date()
+  });
+}
+
+async function handleBotLeftChannel(event) {
+  // Remove from database when bot leaves
+  await botChannelsCollection.deleteOne({
+    channelId: event.channel,
+    workspaceId: workspace._id.toString()
+  });
+}
 ```
+
+**Key Benefits:**
+- **Single Source of Truth**: Slack events drive ALL channel membership changes
+- **Manual Addition Support**: Users can add bot to channels after onboarding
+- **Automatic Sync**: Database always reflects actual bot membership
+- **No Race Conditions**: Events ensure consistency between Slack and database
 
 ## Type System Integration
 
@@ -702,7 +755,10 @@ export async function handleMessageEvent(event: SlackMessageEvent): Promise<void
       isActive: true
     });
     
-    if (!user || user.autoRephraseEnabled === false) return;
+    if (!user) return;
+    
+    // Check if auto-coaching is disabled for this channel
+    if (user.autoCoachingDisabledChannels.includes(channelId)) return;
     
     // Check bot is active in this channel
     const isChannelActive = await isChannelAccessible(

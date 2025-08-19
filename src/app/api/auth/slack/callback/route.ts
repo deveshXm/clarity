@@ -146,23 +146,54 @@ export async function GET(request: NextRequest) {
         let isNewUser = false;
         
         if (existingUser) {
-            // User exists - just reactivate them and update basic info (preserve subscription and usage)
-            logInfo('Reactivating existing user', { 
+            // User exists - overwrite all values except subscription usage data
+            logInfo('Reactivating existing user and overwriting all values except usage', { 
                 slack_user_id: authed_user.id,
                 workspace_id: workspaceObjectId.toString()
             });
+            
+            // Preserve existing subscription usage data
+            const existingSubscription = (existingUser as Record<string, unknown>).subscription as Record<string, unknown> | undefined;
+            const preservedUsage = existingSubscription?.monthlyUsage || {
+                autoCoaching: 0,
+                manualRephrase: 0,
+                personalFeedback: 0,
+            };
+            
+            // Create updated subscription with preserved usage but fresh subscription data
+            const updatedSubscription = {
+                ...defaultSubscription,
+                // Preserve usage data
+                monthlyUsage: preservedUsage,
+                // Preserve subscription tier and status if they exist
+                tier: existingSubscription?.tier || 'FREE',
+                status: existingSubscription?.status || 'active',
+                stripeCustomerId: existingSubscription?.stripeCustomerId,
+                stripeSubscriptionId: existingSubscription?.stripeSubscriptionId,
+                // Update billing period dates
+                currentPeriodStart: existingSubscription?.currentPeriodStart || now,
+                currentPeriodEnd: existingSubscription?.currentPeriodEnd || nextMonth,
+            };
             
             await slackUserCollection.updateOne(
                 { slackId: authed_user.id, workspaceId: workspaceObjectId.toString() },
                 { 
                     $set: { 
-                        isActive: true, // Reactivate user
+                        // Overwrite ALL fields except usage
+                        id: existingUser.id, // Keep existing ID
+                        email: `${authed_user.id}@slack.local`, // Reset email
                         name: actualUserName,
                         displayName: actualDisplayName,
                         image: userImage,
+                        emailVerified: true,
+                        timezone: 'America/New_York', // Reset to default
+                        isActive: true, // Reactivate user
+                        analysisFrequency: 'weekly', // Reset to default
+                        autoCoachingDisabledChannels: [], // Reset channel preferences
+                        hasCompletedOnboarding: false, // Reset onboarding - user needs to go through it again
                         userToken: authed_user.access_token, // Update user token
+                        subscription: updatedSubscription, // Updated subscription with preserved usage
                         updatedAt: new Date()
-                        // Don't reset subscription, usage, or onboarding status
                     }
                 }
             );
@@ -175,7 +206,9 @@ export async function GET(request: NextRequest) {
                 workspace_id: workspaceObjectId.toString(),
                 workspace_name: team.name,
                 is_returning_user: true,
-                subscription_tier: ((existingUser as Record<string, unknown>)?.subscription as Record<string, unknown>)?.tier || 'FREE',
+                is_reinstall: true,
+                subscription_tier: updatedSubscription.tier,
+                usage_preserved: true,
             });
             
         } else {
@@ -200,7 +233,7 @@ export async function GET(request: NextRequest) {
                 timezone: 'America/New_York', // Default timezone
                 isActive: true,
                 analysisFrequency: 'weekly',
-                autoRephraseEnabled: true, // Default to enabled for new users
+                autoCoachingDisabledChannels: [], // Start with empty array - auto-coaching enabled by default in all channels
                 hasCompletedOnboarding: false,
                 userToken: authed_user.access_token,
                 subscription: defaultSubscription,
@@ -248,6 +281,7 @@ export async function GET(request: NextRequest) {
             workspace_name: team.name,
             is_new_user: isNewUser,
             is_new_workspace: !existingWorkspace,
+            is_reinstall: existingUser && !isNewUser, // Track if this is a reinstallation
         });
 
         // Simply redirect to onboarding with user context - no session needed

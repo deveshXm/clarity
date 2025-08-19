@@ -1,7 +1,7 @@
 import { WebClient } from '@slack/web-api';
 import * as crypto from 'crypto';
 import { botChannelsCollection } from './db';
-import { SlackChannel } from '@/types';
+import { SlackChannel, SlackUser, SUBSCRIPTION_TIERS } from '@/types';
 
 // OAuth configuration
 export const slackOAuthConfig = {
@@ -261,31 +261,8 @@ export const sendWelcomeMessage = async (
 ): Promise<boolean> => {
     try {
         const baseUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://clarity.rocktangle.com';
-        const onboardingUrl = `${baseUrl}/app/onboarding?user=${userId}&team=${teamId}`;
-        const helpUrl = `${baseUrl}/app/help`;
-        
-        const welcomeText = `*Hey there! I'm Clarity*
-
-Thanks for installing me as your Slack assistant for clearer, kinder communication. I help you write more effective messages by providing real-time suggestions and insights.
-
-*What I do:*
-• I analyze your messages and suggest improvements for clarity and tone
-• I help you rephrase messages to be more professional and effective
-• I provide weekly or monthly insights on your communication patterns
-• I identify areas like vagueness, pushiness, and passive-aggressive language
-
-*Getting started:*
-1. *Complete your setup* → <${onboardingUrl}|Finish Onboarding> (takes 2 minutes)
-2. *Try these commands:*
-   • \`/personalfeedback\` - Get insights on your recent messages
-   • \`/rephrase [your message]\` - Get a clearer version of any text
-   • \`/settings\` - Customize your preferences
-   • \`/clarity-help\` - View all available commands and features
-
-*How I work:*
-After you complete setup, I'll quietly monitor your selected channels and provide private suggestions when I identify opportunities to improve your communication. All my feedback is visible only to you.
-
-For detailed guides and examples, visit our <${helpUrl}|Documentation>.`;
+        const helpUrl = `${baseUrl}/docs`;
+        const contactUrl = `${baseUrl}/contact-us`;
 
         const blocks = [
             {
@@ -306,23 +283,14 @@ For detailed guides and examples, visit our <${helpUrl}|Documentation>.`;
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*Getting started:*\n1. *Complete your setup* → Takes just 2 minutes!\n2. *Try these commands:*\n   • `/personalfeedback` - Get insights on your recent messages\n   • `/rephrase [your message]` - Get a clearer version of any text\n   • `/settings` - Customize your preferences"
-                },
-                accessory: {
-                    type: "button",
-                    text: {
-                        type: "plain_text",
-                        text: "Complete Setup"
-                    },
-                    url: onboardingUrl,
-                    action_id: "complete_onboarding"
+                    text: "*Available commands:*\n• `/clarity-personal-feedback` - Get insights on your recent messages\n• `/clarity-rephrase [your message]` - Get a clearer version of any text\n• `/clarity-settings` - Customize your preferences and billing\n• `/clarity-help` - View all available commands and features"
                 }
             },
             {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*How I work:*\nAfter you complete setup, I'll quietly monitor your selected channels and provide private suggestions when I identify opportunities to improve your communication. All my feedback is visible only to you."
+                    text: "*How I work:*\nI quietly monitor your selected channels and provide private suggestions when I identify opportunities to improve your communication. All my feedback is visible only to you."
                 }
             },
             {
@@ -332,16 +300,25 @@ For detailed guides and examples, visit our <${helpUrl}|Documentation>.`;
                         type: "button",
                         text: {
                             type: "plain_text",
-                            text: "Help Center"
+                            text: "Documentation"
                         },
                         url: helpUrl,
-                        action_id: "help_center"
+                        action_id: "documentation"
+                    },
+                    {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            text: "Contact Us"
+                        },
+                        url: contactUrl,
+                        action_id: "contact_support"
                     }
                 ]
             }
         ];
 
-        return await sendDirectMessage(userId, welcomeText, botToken, blocks);
+        return await sendDirectMessage(userId,'', botToken, blocks);
     } catch (error) {
         console.error('Error sending welcome message:', error);
         return false;
@@ -456,6 +433,11 @@ export const joinChannel = async (channelId: string, botToken: string): Promise<
         });
         
         if (!result.ok) {
+            // Handle specific error for private channels gracefully
+            if (result.error === 'method_not_supported_for_channel_type') {
+                console.log(`⚠️ Cannot join private channel ${channelId} via API (user must manually invite bot)`);
+                return false;
+            }
             console.error('Failed to join channel:', channelId, result.error);
             return false;
         }
@@ -469,6 +451,7 @@ export const joinChannel = async (channelId: string, botToken: string): Promise<
 };
 
 // Check if channel is accessible to bot (exists in botChannelsCollection)
+// Database is kept in sync via member_joined_channel and member_left_channel events
 export const isChannelAccessible = async (channelId: string, workspaceId: string): Promise<boolean> => {
     try {
         const channel = await botChannelsCollection.findOne({
@@ -479,6 +462,133 @@ export const isChannelAccessible = async (channelId: string, workspaceId: string
         return !!channel;
     } catch (error) {
         console.error('Error checking channel accessibility:', error);
+        return false;
+    }
+};
+
+// Send Pro subscription welcome notification
+export const sendProSubscriptionNotification = async (
+    user: SlackUser,
+    botToken: string
+): Promise<boolean> => {
+    try {
+        const baseUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://clarity.rocktangle.com';
+        const docsUrl = `${baseUrl}/docs`;
+        const contactUrl = `${baseUrl}/contact-us`;
+        
+        // Get Pro tier data from types
+        const proTier = SUBSCRIPTION_TIERS.PRO;
+        const proFeatures = proTier.displayFeatures.filter(f => f.included);
+
+        const blocks = [
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `🎉 *Welcome to Clarity ${proTier.name}!*\n\nHey ${user.name}! You're now upgraded to ${proTier.name} and have access to enhanced features and higher limits.`
+                }
+            },
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `*What's new for you:*\n${proFeatures.map(feature => `• ${feature.name} - ${feature.limitLabel || 'Available'}`).join('\n')}`
+                }
+            },
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: "*Ready to level up your communication?*\nThanks for upgrading! I'm excited to help you communicate even more effectively. 🚀"
+                }
+            },
+            {
+                type: "actions",
+                elements: [
+                    {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            text: "Documentation"
+                        },
+                        url: docsUrl,
+                        action_id: "pro_documentation"
+                    },
+                    {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            text: "Contact Support"
+                        },
+                        url: contactUrl,
+                        action_id: "pro_contact_support"
+                    }
+                ]
+            }
+        ];
+
+        return await sendDirectMessage(user.slackId, '', botToken, blocks);
+    } catch (error) {
+        console.error('Error sending Pro subscription notification:', error);
+        return false;
+    }
+};
+
+// Send subscription cancellation notification
+export const sendSubscriptionCancellationNotification = async (
+    user: SlackUser,
+    botToken: string
+): Promise<boolean> => {
+    try {
+        const baseUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://clarity.rocktangle.com';
+        const contactUrl = `${baseUrl}/contact-us`;
+        
+        // Get tier data from types
+        const proTier = SUBSCRIPTION_TIERS.PRO;
+        const freeTier = SUBSCRIPTION_TIERS.FREE;
+        const freeAutoCoachingLimit = freeTier.displayFeatures.find(f => f.name === 'Auto coaching suggestions')?.limit || 50;
+
+        const blocks = [
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `👋 *Your Clarity ${proTier.name} subscription has been cancelled*\n\nHey ${user.name}, just confirming that your ${proTier.name} subscription has been cancelled successfully.`
+                }
+            },
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `*What happens next:*\n• You'll keep ${proTier.name} access until your billing period ends\n• After that, you'll automatically switch to our ${freeTier.name} plan\n• Your ${freeTier.name} plan includes ${freeAutoCoachingLimit} coaching suggestions per month`
+                }
+            },
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: "*Change your mind?*\nYou can reactivate your subscription anytime from your Slack settings using `/clarity-settings`.\n\nThanks for being part of the Clarity community! 💙"
+                }
+            },
+            {
+                type: "actions",
+                elements: [
+                    {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            text: "Contact Us"
+                        },
+                        url: contactUrl,
+                        action_id: "cancellation_contact_support"
+                    }
+                ]
+            }
+        ];
+
+        return await sendDirectMessage(user.slackId, '', botToken, blocks);
+    } catch (error) {
+        console.error('Error sending subscription cancellation notification:', error);
         return false;
     }
 }; 

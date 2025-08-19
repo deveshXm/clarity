@@ -27,7 +27,7 @@ export default function HelpPage(): React.ReactElement {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-        <Link href="/app/help/getting-started" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
+        <Link href="/docs/getting-started" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200/60 bg-neutral-50">
               <Rocket size={18} className="text-neutral-800" />
@@ -40,7 +40,7 @@ export default function HelpPage(): React.ReactElement {
           <p className="text-sm leading-loose text-neutral-600">Download, install, and start quickly.</p>
         </Link>
 
-        <Link href="/app/help/commands" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
+        <Link href="/docs/commands" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200/60 bg-neutral-50">
               <MessageSquare size={18} className="text-neutral-800" />
@@ -53,7 +53,7 @@ export default function HelpPage(): React.ReactElement {
           <p className="text-sm leading-loose text-neutral-600">Use quick actions in Slack.</p>
         </Link>
 
-        <Link href="/app/help/auto-coaching" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
+        <Link href="/docs/auto-coaching" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200/60 bg-neutral-50">
               <Zap size={18} className="text-neutral-800" />
@@ -66,7 +66,7 @@ export default function HelpPage(): React.ReactElement {
           <p className="text-sm leading-loose text-neutral-600">How suggestions appear and work.</p>
         </Link>
 
-        <Link href="/app/help/reports" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
+        <Link href="/docs/reports" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200/60 bg-neutral-50">
               <BarChart3 size={18} className="text-neutral-800" />
@@ -79,7 +79,7 @@ export default function HelpPage(): React.ReactElement {
           <p className="text-sm leading-loose text-neutral-600">Scheduled summaries and highlights.</p>
         </Link>
 
-        <Link href="/app/help/privacy" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
+        <Link href="/docs/privacy" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200/60 bg-neutral-50">
               <Shield size={18} className="text-neutral-800" />
@@ -92,7 +92,7 @@ export default function HelpPage(): React.ReactElement {
           <p className="text-sm leading-loose text-neutral-600">How we handle your data.</p>
         </Link>
 
-        <Link href="/app/help/troubleshooting" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
+        <Link href="/docs/troubleshooting" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200/60 bg-neutral-50">
               <Wrench size={18} className="text-neutral-800" />

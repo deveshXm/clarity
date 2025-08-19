@@ -54,7 +54,7 @@ export const BotChannelSchema = z.object({
     addedAt: z.coerce.date(),
 });
 
-export const CreateBotChannelSchema = BotChannelSchema.omit({ _id: true, addedAt: true });
+
 
 // Subscription Schema
 export const SubscriptionSchema = z.object({
@@ -91,7 +91,7 @@ export const SlackUserSchema = UserSchema.extend({
     userToken: z.string().optional(), // User's OAuth token for message updating
     isActive: z.boolean().default(true),
     analysisFrequency: z.enum(['weekly', 'monthly']).default('weekly'),
-    autoRephraseEnabled: z.boolean().default(true), // Auto coaching toggle
+    autoCoachingDisabledChannels: z.array(z.string()).default([]), // Channel IDs where user has disabled auto-coaching
     hasCompletedOnboarding: z.boolean().default(false),
     subscription: SubscriptionSchema.optional(), // Subscription data
 });
@@ -288,7 +288,7 @@ export type MessageAnalysisTypeInfo = typeof MESSAGE_ANALYSIS_TYPES[keyof typeof
 export type Workspace = z.infer<typeof WorkspaceSchema>;
 export type CreateWorkspaceInput = z.infer<typeof CreateWorkspaceSchema>;
 export type BotChannel = z.infer<typeof BotChannelSchema>;
-export type CreateBotChannelInput = z.infer<typeof CreateBotChannelSchema>;
+
 export type Subscription = z.infer<typeof SubscriptionSchema>;
 export type SlackUser = z.infer<typeof SlackUserSchema>;
 export type CreateSlackUserInput = z.infer<typeof CreateSlackUserSchema>;
@@ -381,7 +381,7 @@ export const SUBSCRIPTION_TIERS = {
   },
   PRO: {
     name: 'Pro', 
-    price: 10, // $10/month
+    price: 4.99, // $4.99/month
     description: 'Advanced, context-aware coaching.',
     priceLabel: '/ month',
     monthlyLimits: {

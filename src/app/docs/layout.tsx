@@ -93,7 +93,7 @@ export default function HelpLayout({ children }: { children: React.ReactNode }):
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-2 py-4 text-xs text-slate-500 sm:flex-row">
           <div>© {new Date().getFullYear()} Clarity. All rights reserved.</div>
           <div className="flex items-center gap-4">
-            <Link href="/app/help">Help</Link>
+            <Link href="/contact-us">Contact</Link>
             <Link href="/terms">Terms</Link>
             <Link href="/privacy">Privacy</Link>
           </div>

@@ -67,7 +67,7 @@ export function trackError(
   if (!shouldTrack()) return;
 
   try {
-    posthogClient.capture({
+    posthogClient.captureException({
       distinctId,
       event: 'error:server_error',
       properties: {

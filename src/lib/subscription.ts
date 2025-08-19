@@ -252,7 +252,7 @@ export function generateUpgradeMessage(feature: SubscriptionFeature, reason: str
   const featureName = featureNames[feature] || feature;
   const checkoutUrl = userMongoId 
     ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?user=${encodeURIComponent(userMongoId)}`
-    : `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?tab=pricing`;
+    : `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?tab=pricing`;
   
   const proConfig = getTierConfig('PRO');
   
@@ -310,7 +310,7 @@ export function generateLimitReachedMessage(
   
   const checkoutUrl = userMongoId 
     ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?user=${encodeURIComponent(userMongoId)}`
-    : `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?tab=pricing`;
+    : `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?tab=pricing`;
   
   return {
     text: `📊 *Monthly Limit Reached*`,

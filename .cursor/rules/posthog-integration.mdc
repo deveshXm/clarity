@@ -1,28 +1,106 @@
 ---
 description: apply when interacting with PostHog/analytics tasks
-globs: 
 alwaysApply: true
 ---
 
-Never hallucinate an API key. Instead, always use the API key populated in the .env file.
+# PostHog Analytics Implementation ✅ COMPLETED
 
-# Feature flags
+## Architecture Overview
+- **Frontend**: PostHog autocapture handles ALL user interactions automatically
+- **Backend**: Manual tracking with rich user metadata for business intelligence
+- **Configuration**: [instrumentation-client.ts](mdc:instrumentation-client.ts) - autocapture enabled
+- **Events**: [src/lib/analytics/events.ts](mdc:src/lib/analytics/events.ts) - backend events only
 
-A given feature flag should be used in as few places as possible. Do not increase the risk of undefined behavior by scattering the same feature flag across multiple areas of code. If the same feature flag needs to be introduced at multiple callsites, flag this for the developer to inspect carefully.
+## Frontend Tracking (Autocapture) ✅ IMPLEMENTED
+- **Autocapture enabled**: `autocapture: true`, `capture_pageview: true`, `capture_pageleave: true`
+- **NO manual tracking**: Never add `track()` calls in frontend components
+- **Automatic coverage**: Page views, clicks, form submissions, navigation, errors
+- **Clean codebase**: Frontend components focus on UI, not analytics
 
-If a job requires creating new feature flag names, make them as clear and descriptive as possible.
+## Backend Tracking (Manual with Rich Metadata) ✅ IMPLEMENTED
+All backend API routes include comprehensive tracking:
 
-If using TypeScript, use an enum to store flag names. If using JavaScript, store flag names as strings to an object declared as a constant, to simulate an enum. Use a consistent naming convention for this storage. enum/const object members should be written UPPERCASE_WITH_UNDERSCORE.
+### Required Imports
+```typescript
+import { trackEvent, trackError } from '@/lib/posthog';
+import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
+```
 
-Gate flag-dependent code on a check that verifies the flag's values are valid and expected.
+### Event Tracking Pattern
+```typescript
+trackEvent(userId, EVENTS.API_EVENT_NAME, {
+  user_name: user.name,
+  workspace_id: user.workspaceId,
+  subscription_tier: user.subscription?.tier || 'FREE',
+  // Additional context specific to the event
+});
+```
 
-# Custom properties
+### Error Tracking Pattern
+```typescript
+trackError(userId || 'anonymous', errorObj, {
+  endpoint: '/api/route/path',
+  operation: 'specific_operation',
+  category: ERROR_CATEGORIES.SERVER, // or SLACK_API, AI_FAILURE, STRIPE_WEBHOOK
+});
+```
 
-If a custom property for a person or event is at any point referenced in two or more files or two or more callsites in the same file, use an enum or const object, as above in feature flags.
+## User Identification ✅ SIMPLIFIED
+- **Only during onboarding**: `identifyUser()` called in OAuth callback only
+- **Simplified data**: `name`, `slack_user_id`, `mongodb_id`, `workspace_id`
+- **No email**: Email field removed as requested
+- **Cached by PostHog**: User properties persist across sessions
 
-# Naming
+## Event Categories ✅ STREAMLINED
+### API Events (Backend Operations)
+- `API_SLACK_COMMAND_RECEIVED` - Slack commands with user context
+- `API_SLACK_EVENT_PROCESSED` - Message events with skip reasons
+- `API_AI_ANALYSIS_COMPLETED` - AI analysis with performance metrics
+- `API_MESSAGE_REPLACED` - Successful message improvements
+- `API_SUBSCRIPTION_*` - Stripe checkout/portal access
 
-Before creating any new event or property names, consult with the developer for any existing naming convention. Consistency in naming is essential, and additional context may exist outside this project. Similarly, be careful about any changes to existing event and property names, as this may break reporting and distort data for the project.
+### Feature Usage (Business Intelligence)
+- `FEATURE_AUTO_COACHING_TRIGGERED` - Only when messages actually sent
+- `FEATURE_PERSONAL_FEEDBACK_GENERATED` - With scores and metrics
+- `FEATURE_SETTINGS_UPDATED` - With preference changes
+
+### Onboarding Flow
+- `ONBOARDING_USER_VALIDATED` - User validation with context
+- `ONBOARDING_CHANNELS_SAVED` - Channel selection with success rates
+- `ONBOARDING_COMPLETED` - Full completion with metadata
+
+### Error Categories
+- `ERROR_CATEGORIES.SERVER` - General server errors
+- `ERROR_CATEGORIES.SLACK_API` - Slack API failures
+- `ERROR_CATEGORIES.AI_FAILURE` - AI analysis errors
+- `ERROR_CATEGORIES.STRIPE_WEBHOOK` - Stripe webhook failures
+
+## Implementation Files ✅ UPDATED
+- **Client Config**: [instrumentation-client.ts](mdc:instrumentation-client.ts) - Autocapture enabled
+- **Events**: [src/lib/analytics/events.ts](mdc:src/lib/analytics/events.ts) - Backend events only
+- **OAuth**: [src/app/api/auth/slack/callback/route.ts](mdc:src/app/api/auth/slack/callback/route.ts) - User identification
+- **Commands**: [src/app/api/slack/commands/route.ts](mdc:src/app/api/slack/commands/route.ts) - Command tracking
+- **Events**: [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts) - Auto-coaching tracking
+- **Interactive**: [src/app/api/slack/interactive/route.ts](mdc:src/app/api/slack/interactive/route.ts) - Button interactions
+- **Stripe**: All Stripe routes with subscription context
+- **Server Actions**: [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts) - Onboarding tracking
+
+## Best Practices ✅ ENFORCED
+- **Frontend**: NEVER add manual tracking - autocapture handles everything
+- **Backend**: ALWAYS include user metadata (name, workspace, subscription tier)
+- **Errors**: ALWAYS categorize with ERROR_CATEGORIES
+- **Events**: Use existing events from EVENTS constant, don't create new ones
+- **User context**: Include subscription tier for business intelligence
+- **Consistency**: Same tracking pattern across all API routes
+
+## Analytics Coverage Achieved
+- **Complete user journeys**: Landing → OAuth → Onboarding → Feature usage
+- **Business intelligence**: Subscription tiers, feature adoption, usage patterns
+- **Performance metrics**: AI analysis timing, success rates, error patterns
+- **User segmentation**: By subscription tier, workspace, feature usage
+- **Error monitoring**: Categorized errors with full context
+
+Never hallucinate API keys - always use environment variables.
 
 
 

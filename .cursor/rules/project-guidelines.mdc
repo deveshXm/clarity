@@ -247,7 +247,7 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **Slack OAuth**: Direct Slack app installation without traditional web authentication
 - **Workspace-Specific Tokens**: Each workspace has its own bot token stored during OAuth installation
 - **Bot Token Storage**: Workspace-specific `botToken` field in workspaceCollection enables per-workspace API calls
-- **Channel Access Control**: Bot only operates in channels explicitly selected during onboarding
+- **Channel Access Control**: Bot operates in any channel where it's added (onboarding or manual addition)
 - **Authorization Strategy**: Simple database presence check - if user exists in database, they're authorized
 - **Authentication Flow**:
   1. **Website Install**: User clicks "Install to Slack" → OAuth → Database entry → Full access
@@ -263,16 +263,28 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **Event Types Required**: 
   - `message.channels` - Public channel messages (REQUIRED for auto coaching)  
   - `message.groups` - Private channel messages
+  - `member_joined_channel` - **NEW**: Bot added to channels (updates database)
+  - `member_left_channel` - **NEW**: Bot removed from channels (updates database)
   - `app_mention` - @bot mentions
 - **Channel Filtering**: Slack automatically filters events to only channels where bot is member
-- **Database Verification**: Additional check against `botChannelsCollection` for authorized channels
+- **Database Verification**: `botChannelsCollection` kept in sync via `member_joined_channel` and `member_left_channel` events
+
+### Event-Driven Channel Management ✅ NEW ARCHITECTURE
+- **Single Source of Truth**: Slack events drive ALL channel membership changes
+- **Automatic Sync**: Database updated whenever bot joins/leaves channels (onboarding or manual)
+- **No Manual Database Operations**: Onboarding only joins channels, events handle persistence
+- **Event Handlers**: 
+  - `handleBotJoinedChannel()` - Adds channel to `botChannelsCollection` when bot joins
+  - `handleBotLeftChannel()` - Removes channel from `botChannelsCollection` when bot leaves
+  - Both verify bot user ID to ignore other member changes
+- **Channel Access**: `isChannelAccessible()` checks database, always accurate due to event sync
 
 ### Auto Coaching Implementation ✅ WORKING
 - **Real-time Analysis**: Message events trigger AI analysis for communication improvement
 - **Ephemeral Feedback**: Private suggestions only visible to message sender
 - **Interactive Components**: "Replace Message" and "Keep Original" buttons
 - **Workspace-Specific Tokens**: Each workspace uses its own bot token for API calls
-- **Channel Access Control**: Double-layer verification (Slack + database) ensures privacy
+- **Channel Access Control**: Event-driven database sync ensures accurate channel membership tracking
 
 ### Message Event Processing Flow
 ```typescript
@@ -300,7 +312,7 @@ if (event.type === 'message' && (event.channel_type === 'channel' || event.chann
 - **Required Bot Scopes**: All Slack functionality depends on having correct bot token scopes configured
 - **Scope Configuration Files**:
   - Code: [src/lib/slack.ts](mdc:src/lib/slack.ts) - `slackOAuthConfig.botScopes` array  
-  - Manifest: [manifest.json](mdc:manifest.json) - `oauth_config.scopes.bot` array
+  - Manifest: [manifest-dev.json](mdc:manifest-dev.json) and [manifest-prod.json](mdc:manifest-prod.json) - `settings.event_subscriptions.bot_events` array
 - **Critical Scopes for Core Functionality**:
   - `chat:write` - Send messages to channels (REQUIRED)
   - `chat:write.customize` - Custom username/avatar for message replacement
@@ -315,7 +327,7 @@ if (event.type === 'message' && (event.channel_type === 'channel' || event.chann
   1. Check error logs for `missing_scope` messages
   2. Identify which API method is failing
   3. Look up required scopes in Slack API docs
-  4. Add missing scopes to both `src/lib/slack.ts` and `manifest.json`
+  4. Add missing scopes to both `src/lib/slack.ts` and manifest files (`manifest-dev.json`, `manifest-prod.json`)
   5. Update Slack app configuration in developer console
   6. Reinstall app to get new permissions
 - **Essential Bot Scopes List**:
@@ -395,7 +407,7 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
 
 2. **App Pages** — [src/app/app/](mdc:src/app/app) (no auth needed - Slack app)
    - Onboarding flow: [src/app/app/onboarding/page.tsx](mdc:src/app/app/onboarding/page.tsx)
-   - Help documentation: [src/app/app/help/page.tsx](mdc:src/app/app/help/page.tsx)  
+   - Help documentation: [src/app/app/docs/page.tsx](mdc:src/app/app/docs/page.tsx) (moved from /help to /docs)  
    - Team invitations: [src/app/app/invite/page.tsx](mdc:src/app/app/invite/page.tsx)
 
 3. **API Routes** — [src/app/api/](mdc:src/app/api) ✅ OPTIMIZED
@@ -462,25 +474,31 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
   await db.collection('configs').insertOne(validatedData);
   ```
 
-## Onboarding Flow Implementation ✅ UPDATED
+## Onboarding Flow Implementation ✅ UPDATED (Private Channel Filtering)
 - **Multi-step form**: [src/app/app/onboarding/OnboardingForm.tsx](mdc:src/app/app/onboarding/OnboardingForm.tsx) handles Slack user onboarding
 - **User Identification**: Query parameters (`?user={slackId}&team={teamId}`) for validation
 - **Step Flow**: `frequency` → `channels` → `payment` → complete
   - **Step 1**: Analysis frequency selection (weekly/monthly)
-  - **Step 2**: Channel selection - users choose which channels to enable AI coaching
+  - **Step 2**: Channel selection - users choose which channels to enable AI coaching ✅ **PRIVATE CHANNELS FILTERED OUT**
   - **Step 3**: Payment plan selection - Free vs Pro with dynamic pricing cards
+
+### Channel Selection Enhancement ✅ NEW
+- **Private Channel Filtering**: Only shows public channels in onboarding (bots can't join private channels via API)
+- **Filter Logic**: `!channel.is_archived && !channel.is_private` in channel selection
+- **User Experience**: Prevents confusion and API errors from attempting to join private channels
+- **Default Behavior**: Auto-coaching enabled by default in all selected (public) channels
 - **Payment Step Features**:
   - **Congratulations Message**: "🎉 You're all set up! Get even more features with our Pro plan."
   - **Side-by-Side Cards**: FREE and PRO plans using `SUBSCRIPTION_TIERS` data
   - **Dynamic Container Width**: Adjusts from 480px to 640px for payment step to accommodate horizontal cards
   - **Mantine Layout**: Uses `Row justify="center"` with proper flex properties for horizontal card display
   - **Button Actions**: 
-    - Free: "Continue with Free" → completes onboarding → `/app/help`
-    - Pro: "Upgrade to Pro" → Stripe checkout → `/app/help` after success
+    - Free: "Continue with Free" → completes onboarding → `/app/docs`
+    - Pro: "Upgrade to Pro" → Stripe checkout → `/app/docs` after success
 - **Server Actions**: 
   - `validateSlackUser()` - Validates user and checks onboarding status
   - `getWorkspaceChannels()` - Fetches available channels using workspace-specific bot token
-  - `saveBotChannels()` - Joins bot to selected channels and stores in database
+  - `joinBotToChannels()` - Joins bot to selected channels (database updates via events)
   - `completeSlackOnboarding()` - Saves preferences, channels, and marks onboarding complete
 - **Layout Patterns**:
   - **Container Responsive Width**: `maxWidth: currentStep === 'payment' ? 640 : 480`
@@ -493,7 +511,7 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
 ## Key Collections ✅ UPDATED
 - **workspaceCollection**: Slack workspace/team data (workspaceId, name, domain, **botToken**)
 - **slackUserCollection**: Slack user data with onboarding tracking and **subscription** field (slackId, analysisFrequency, hasCompletedOnboarding, **subscription**)
-- **botChannelsCollection**: Tracks which channels bot is active in (workspaceId, channelId, channelName, addedAt)
+- **botChannelsCollection**: Tracks which channels bot is active in (workspaceId, channelId, channelName, addedAt) - **Updated via Slack events**
 - **invitationCollection**: Email invitations sent by users during onboarding
 - **analysisInstanceCollection**: Future - will store message analysis results
 - **Legacy collections**: userCollection, accountConfigCollection (for reference only)
@@ -888,32 +906,36 @@ if (hasChannelAccess) {
 3. Background analysis completes (context-aware if bot in channel)
 4. Ephemeral result shows improved message with tone information
 
-## User Settings & Preferences ✅ IMPLEMENTED
+## User Settings & Preferences ✅ UPDATED (Per-Channel Controls)
 
 ### Settings Command Implementation
 - **Command**: `/settings` - Opens modal for user preference management
-- **Modal Interface**: Clean, unified settings modal with two main options
+- **Modal Interface**: Clean, unified settings modal with three main sections
 - **Settings Available**:
   - **Report Frequency**: Weekly or Monthly (radio buttons)
-  - **Auto Rephrase**: Enable/disable automatic coaching suggestions (checkbox)
+  - **Auto Coaching Channels**: Per-channel checkboxes for auto-coaching control
+  - **Billing & Subscription**: Upgrade/manage billing integration
 
-### Settings Modal Design
-- **No Current Settings Display**: Modal shows only the input controls
-- **Simplified Labels**: "Auto Rephrase" (not "Auto Rephrase Suggestions")
-- **Clean Interface**: No dividers or current status text
-- **Help Text**: Context about manual `/rephrase` command when auto is disabled
+### Settings Modal Design ✅ ENHANCED
+- **Channel List**: Shows all channels where bot is active with checkboxes
+- **Inverted Logic**: Unchecked channels = auto-coaching disabled for that channel
+- **Default Enabled**: All channels enabled by default (empty disabled array)
+- **Optional Field**: Checkboxes are not required - users can uncheck all channels
+- **Dynamic Content**: Channel list fetched from `botChannelsCollection`
 
-### Settings Persistence
-- **Database Field**: `autoRephraseEnabled: boolean` in SlackUser schema (default: true)
+### Settings Persistence ✅ UPDATED SCHEMA
+- **Database Field**: `autoCoachingDisabledChannels: string[]` in SlackUser schema (default: empty array)
+- **Inverted Logic**: Empty array = coaching enabled everywhere, populated array = specific channels disabled
 - **Immediate Update**: Settings saved in background using `after()` for fast response
 - **Success Feedback**: Modal updates to show "✅ Settings updated" message
 - **Modal Behavior**: Stays open after save, user closes manually
 
-### Auto Coaching Control
-- **Preference Check**: Auto coaching respects `autoRephraseEnabled` setting
-- **Event Processing**: Skip analysis if `user.autoRephraseEnabled === false`
-- **Manual Override**: `/rephrase` command always works regardless of auto setting
-- **Default Behavior**: New users get auto coaching enabled by default
+### Per-Channel Auto Coaching Control ✅ NEW ARCHITECTURE
+- **Granular Control**: Users can disable auto-coaching for specific channels while keeping it enabled in others
+- **Event Processing**: Skip analysis if `user.autoCoachingDisabledChannels.includes(channelId)`
+- **Default Behavior**: Auto-coaching enabled by default in ALL channels (empty disabled array)
+- **Manual Override**: `/rephrase` command always works regardless of auto settings
+- **Multi-User Support**: Each user controls their own per-channel preferences independently
 
 ### Implementation Files
 - **Settings Modal**: [src/app/api/slack/commands/route.ts](mdc:src/app/api/slack/commands/route.ts) - `/settings` command handler
@@ -941,15 +963,51 @@ const conversationHistory = await fetchConversationHistory(channelId, workspace.
 - Global tokens cause `invalid_auth` errors in multi-workspace environments  
 - Workspace-specific tokens ensure proper permissions and isolation
 
+### Slack Message Architecture ✅ UPDATED
+**All Slack messaging functions must be in [src/lib/slack.ts](mdc:src/lib/slack.ts) using Block Kit format:**
+
+```typescript
+// ✅ CORRECT - Slack functions in slack.ts with Block Kit
+export const sendProSubscriptionNotification = async (
+    user: SlackUser,
+    botToken: string
+): Promise<boolean> => {
+    const blocks = [
+        {
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: `🎉 *Welcome to Clarity ${proTier.name}!*`
+            }
+        }
+        // ... more blocks
+    ];
+    
+    return await sendDirectMessage(user.slackId, '', botToken, blocks);
+};
+
+// ❌ WRONG - Don't put Slack messaging logic in webhook handlers
+async function sendNotification(user) {
+    const message = `Welcome message...`;
+    await sendDirectMessage(user.slackId, message, botToken);
+}
+```
+
+**Rules:**
+- **Block Kit format**: Use structured blocks like `sendWelcomeMessage` example
+- **Dynamic content**: Always use data from [src/types/index.ts](mdc:src/types/index.ts) `SUBSCRIPTION_TIERS`
+- **No hardcoded content**: Features, pricing, limits must come from types
+- **Proper text rendering**: Use normal apostrophes `'` not HTML entities `&apos;`
+
 ### Slack Markdown Formatting ✅ CRITICAL
 **Use Slack's mrkdwn format, not standard Markdown:**
 
 ```typescript
-// ❌ WRONG - Standard Markdown (doesn't render in Slack)
-const message = `**Personal Communication Feedback**\n**Overall Score**: 8/10\n*Analysis based on recent messages.*`;
+// ❌ WRONG - HTML entities don't render properly in Slack
+const message = `You&apos;re now upgraded to Pro`;
 
-// ✅ CORRECT - Slack mrkdwn format
-const message = `*Personal Communication Feedback*\n*Overall Score*: 8/10\n_Analysis based on recent messages._`;
+// ✅ CORRECT - Use normal apostrophes and Slack mrkdwn format
+const message = `*Personal Communication Feedback*\n*Overall Score*: 8/10\n_You're now upgraded to Pro._`;
 ```
 
 **Slack formatting rules:**
@@ -958,6 +1016,7 @@ const message = `*Personal Communication Feedback*\n*Overall Score*: 8/10\n_Anal
 - **Code**: Use backticks `` `code` ``
 - **Channels**: Use `<#channelId>` for channel references
 - **Users**: Use `<@userId>` for user mentions
+- **Apostrophes**: Use normal `'` not HTML entities
 
 ### Human-Only Message Filtering ✅ IMPLEMENTED
 **Enhanced conversation history filtering to only include human messages:**
@@ -1064,7 +1123,7 @@ if (relationshipInsights.some(insight => insight.name && insight.name !== 'Unkno
 const responseText = `Communication Report\nOverall Score: 8/10\nAreas for Improvement:\n• Be more specific`;
 
 // ✅ COACHING - Friendly and supportive
-const responseText = `🤖 *Hey there! Here's your personal feedback*\n` +
+const responseText = `*Hey there! Here's your personal feedback*\n` +
   `*How you're doing: ${score}/10* ${score >= 8 ? '🟢 You\'re crushing it!' : '🔴 Let\'s level up together!'}\n` +
   `💪 *Let's work on these together:*\n• Be more specific in your requests`;
 ```
@@ -1131,7 +1190,7 @@ export const SUBSCRIPTION_TIERS = {
   },
   PRO: {
     name: 'Pro', 
-    price: 10, // $10/month
+    price: 10, // $4.99/month
     monthlyLimits: {
       autoCoaching: 1000,      // messages per month
       manualRephrase: 1000,    // messages per month  
@@ -1159,7 +1218,7 @@ const session = await createCheckoutSession(
   user._id.toString(), // Convert to string
   STRIPE_PRICE_IDS.PRO_MONTHLY,
   '', // Use Stripe default success page
-  `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help` // Back button redirect
+  `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/docs` // Back button redirect
 );
 
 // ✅ CORRECT - Convert string back to ObjectId for database queries
@@ -1173,12 +1232,12 @@ const user = await slackUserCollection.findOne({
 
 ```typescript
 // Success: Uses Stripe default success page (no custom redirect)
-// Cancel/Back: Redirects to /app/help for easy navigation
+// Cancel/Back: Redirects to /app/docs for easy navigation
 const session = await createCheckoutSession(
   userId,
   priceId,
   '', // Stripe default success page
-  `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help` // Back button
+  `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/docs` // Back button
 );
 ```
 
@@ -1198,7 +1257,7 @@ const session = await createCheckoutSession(
 │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
 ├─────────────────────────────┤
 │ Billing & Subscription      │
-│ Current Plan: Pro - $10/mo  │
+│ Current Plan: Pro - $4.99/mo  │
 │ (active)                    │
 │         [Manage Billing] ←──┤ Opens in new tab
 ├─────────────────────────────┤
@@ -1230,6 +1289,31 @@ if (!accessCheck.allowed) {
 - **Database Queries**: Always use `new ObjectId()` for MongoDB operations  
 - **Button Styling**: Use conditional styling (no `'default'` style, only `'primary'` or omit)
 - **Webhook Processing**: Handle MongoDB ObjectId strings from Stripe metadata
+
+### Subscription Notifications ✅ IMPLEMENTED
+**Prevent duplicate notifications and use dynamic content:**
+
+```typescript
+// ✅ Prevent duplicate notifications - only send for new upgrades
+const previousTier = user.subscription?.tier || 'FREE';
+if (tier === 'PRO' && previousTier === 'FREE') {
+  const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+  if (workspace?.botToken) {
+    await sendProSubscriptionNotification(user, workspace.botToken);
+  }
+}
+
+// ✅ Use dynamic content from SUBSCRIPTION_TIERS in types
+const proTier = SUBSCRIPTION_TIERS.PRO;
+const proFeatures = proTier.displayFeatures.filter(f => f.included);
+```
+
+**Notification Rules:**
+- **Block Kit format**: All notifications use structured blocks in [src/lib/slack.ts](mdc:src/lib/slack.ts)
+- **Dynamic content**: Never hardcode features, pricing, or limits - use `SUBSCRIPTION_TIERS`
+- **Duplicate prevention**: Check previous tier before sending upgrade notifications
+- **Proper text**: Use normal apostrophes `'` not HTML entities `&apos;`
+- **Workspace tokens**: Always use workspace-specific bot tokens
 
 ## Comprehensive Logging & Error Tracking ✅ IMPLEMENTED
 
@@ -1289,11 +1373,36 @@ logInfo('Operation completed successfully', {
 
 ### Required Imports for API Routes
 ```typescript
-// Standard logging imports for all API routes
+// Standard logging and analytics imports for all API routes
 import { logError, logInfo } from '@/lib/logger';
-import { trackError, trackEvent } from '@/lib/posthog';
-import { EVENTS } from '@/lib/analytics/events';
+import { trackEvent, trackError } from '@/lib/posthog';
+import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 ```
+
+## PostHog Analytics Integration ✅ IMPLEMENTED
+
+### Frontend Analytics (Autocapture)
+- **Configuration**: [instrumentation-client.ts](mdc:instrumentation-client.ts) - Full autocapture enabled
+- **Coverage**: Automatic tracking of page views, clicks, form submissions, navigation, errors
+- **Implementation**: NO manual tracking in frontend components - autocapture handles everything
+- **Clean Code**: Frontend components focus purely on UI without analytics clutter
+
+### Backend Analytics (Manual with Rich Metadata)
+- **Event Tracking**: All API routes include `trackEvent()` with user context
+- **Error Tracking**: Comprehensive error categorization with `ERROR_CATEGORIES`
+- **User Metadata**: Every event includes `user_name`, `workspace_id`, `subscription_tier`
+- **Business Intelligence**: Feature usage, conversion funnel, performance metrics
+
+### User Identification Strategy
+- **Simplified Identification**: Only `name`, `slack_user_id`, `mongodb_id` during OAuth
+- **Single Point**: User identification only in OAuth callback, not on help pages
+- **PostHog Caching**: User properties persist across sessions automatically
+
+### Analytics Coverage Achieved
+- **Complete User Journey**: Landing → OAuth → Onboarding → Feature Usage
+- **Feature Adoption**: Auto-coaching, manual commands, settings, subscriptions
+- **Performance Metrics**: AI analysis timing, success rates, error patterns
+- **Business Intelligence**: Subscription conversion, usage patterns, user segmentation
 
 ---
 _Use this snapshot alongside the guidelines above to maintain consistency and avoid duplicating functionality._

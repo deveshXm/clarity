@@ -7,6 +7,7 @@ export const EVENTS = {
   API_SLACK_COMMAND_RECEIVED: 'api:slack_command_received',
   API_SLACK_EVENT_PROCESSED: 'api:slack_event_processed',
   API_SLACK_INTERACTIVE_RECEIVED: 'api:slack_interactive_received',
+  API_SLACK_APP_UNINSTALLED: 'api:slack_app_uninstalled',
   API_AI_ANALYSIS_COMPLETED: 'api:ai_analysis_completed',
   API_MESSAGE_REPLACED: 'api:message_replaced',
   API_SUBSCRIPTION_CHECKOUT_CREATED: 'api:subscription_checkout_created',

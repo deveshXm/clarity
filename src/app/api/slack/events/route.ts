@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible } from '@/lib/slack';
-import { workspaceCollection, slackUserCollection } from '@/lib/db';
+import { workspaceCollection, slackUserCollection, botChannelsCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackEventSchema } from '@/types';
 import { comprehensiveMessageAnalysis } from '@/lib/ai';
@@ -86,6 +86,34 @@ export async function POST(request: NextRequest) {
                         console.log('✅ Token revocation processing completed');
                     } catch (error) {
                         console.error('❌ Token revocation processing error:', error);
+                    }
+                });
+            }
+            
+            // Handle bot being added to channels
+            if (event.type === 'member_joined_channel') {
+                console.log('🤖 Bot joined channel event received');
+                
+                after(async () => {
+                    try {
+                        await handleBotJoinedChannel(event);
+                        console.log('✅ Bot joined channel processing completed');
+                    } catch (error) {
+                        console.error('❌ Bot joined channel processing error:', error);
+                    }
+                });
+            }
+            
+            // Handle bot being removed from channels
+            if (event.type === 'member_left_channel') {
+                console.log('🤖 Bot left channel event received');
+                
+                after(async () => {
+                    try {
+                        await handleBotLeftChannel(event);
+                        console.log('✅ Bot left channel processing completed');
+                    } catch (error) {
+                        console.error('❌ Bot left channel processing error:', error);
                     }
                 });
             }
@@ -180,13 +208,14 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         console.log('🤖 Bot is active in channel, checking user preferences...');
         
-        // Check if user has auto rephrase enabled
-        if (user.autoRephraseEnabled === false) {
-            console.log('⏭️ Auto rephrase disabled for user, skipping analysis');
+        // Check if user has auto-coaching disabled for this specific channel
+        // Default behavior: enabled (empty array = coaching enabled in all channels)
+        if (user.autoCoachingDisabledChannels.includes(validatedEvent.channel)) {
+            console.log('⏭️ Auto-coaching disabled for this channel, skipping analysis');
             return;
         }
         
-        console.log('✅ Auto rephrase enabled, proceeding with analysis');
+        console.log('✅ Auto-coaching enabled for this channel, proceeding with analysis');
         
         // Get workspace bot token for API calls
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
@@ -324,7 +353,7 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         const success = await sendEphemeralMessage(
             validatedEvent.channel,
             validatedEvent.user,
-            "🤖 AI Communication Coach", // Fallback text
+            "Clarity", // Fallback text
             workspace.botToken, // Workspace-specific bot token
             [], // Legacy attachments (empty)
             blocks // Block Kit blocks
@@ -401,7 +430,14 @@ async function handleAppUninstall(teamId: string) {
         
         console.log(`🔄 Deactivated ${result.modifiedCount} users from workspace ${teamId}`);
         
-        // Optionally deactivate the workspace as well (but keep the record)
+        // Clean up botChannels collection - remove all channels for this workspace
+        const channelResult = await botChannelsCollection.deleteMany({
+            workspaceId: workspace._id.toString()
+        });
+        
+        console.log(`🔄 Removed ${channelResult.deletedCount} channels from botChannels collection for workspace ${teamId}`);
+        
+        // Deactivate the workspace as well (but keep the record)
         await workspaceCollection.updateOne(
             { workspaceId: teamId },
             { 
@@ -414,7 +450,145 @@ async function handleAppUninstall(teamId: string) {
         
         console.log(`✅ Successfully processed app uninstall for workspace ${teamId}`);
         
+        // Track app uninstallation event
+        trackEvent('anonymous', EVENTS.API_SLACK_APP_UNINSTALLED, {
+            workspace_id: workspace._id.toString(),
+            workspace_name: workspace.name,
+            users_deactivated: result.modifiedCount,
+            channels_removed: channelResult.deletedCount,
+        });
+        
     } catch (error) {
         console.error('Error processing app uninstall:', error);
+        trackError('anonymous', error instanceof Error ? error : new Error(String(error)), {
+            endpoint: '/api/slack/events',
+            operation: 'app_uninstall',
+            team_id: teamId,
+            category: ERROR_CATEGORIES.SLACK_API
+        });
+    }
+}
+
+async function handleBotJoinedChannel(event: Record<string, unknown>) {
+    try {
+        console.log('🔄 Processing bot joined channel event:', JSON.stringify(event, null, 2));
+        
+        const channelId = event.channel as string;
+        const userId = event.user as string;
+        const teamId = event.team as string;
+        
+        if (!channelId || !userId || !teamId) {
+            console.error('❌ Missing required fields in bot joined channel event');
+            return;
+        }
+        
+        // Find the workspace by Slack team ID
+        const workspace = await workspaceCollection.findOne({ workspaceId: teamId });
+        
+        if (!workspace) {
+            console.log('⚠️ Workspace not found for team:', teamId);
+            return;
+        }
+        
+        // Get bot user ID from workspace token to verify this is our bot
+        const { WebClient } = await import('@slack/web-api');
+        const slack = new WebClient(workspace.botToken);
+        
+        try {
+            const authTest = await slack.auth.test();
+            const botUserId = authTest.user_id;
+            
+            // Only process if the user who joined is our bot
+            if (userId !== botUserId) {
+                console.log('👤 Member joined channel but it\'s not our bot, skipping');
+                return;
+            }
+            
+            // Get channel info to get the channel name
+            const channelInfo = await slack.conversations.info({ channel: channelId });
+            const channelName = channelInfo.channel?.name || 'Unknown';
+            
+            // Add channel to database
+            const existingChannel = await botChannelsCollection.findOne({
+                channelId,
+                workspaceId: workspace._id.toString()
+            });
+            
+            if (!existingChannel) {
+                await botChannelsCollection.insertOne({
+                    _id: new ObjectId(),
+                    workspaceId: workspace._id.toString(),
+                    channelId,
+                    channelName,
+                    addedAt: new Date()
+                });
+                
+                console.log(`✅ Added channel ${channelName} (${channelId}) to database for workspace ${teamId}`);
+            } else {
+                console.log(`📝 Channel ${channelName} (${channelId}) already exists in database`);
+            }
+            
+        } catch (apiError) {
+            console.error('❌ Error verifying bot user or getting channel info:', apiError);
+        }
+        
+    } catch (error) {
+        console.error('Error processing bot joined channel event:', error);
+    }
+}
+
+async function handleBotLeftChannel(event: Record<string, unknown>) {
+    try {
+        console.log('🔄 Processing bot left channel event:', JSON.stringify(event, null, 2));
+        
+        const channelId = event.channel as string;
+        const userId = event.user as string;
+        const teamId = event.team as string;
+        
+        if (!channelId || !userId || !teamId) {
+            console.error('❌ Missing required fields in bot left channel event');
+            return;
+        }
+        
+        // Find the workspace by Slack team ID
+        const workspace = await workspaceCollection.findOne({ workspaceId: teamId });
+        
+        if (!workspace) {
+            console.log('⚠️ Workspace not found for team:', teamId);
+            return;
+        }
+        
+        // Get bot user ID from workspace token to verify this is our bot
+        const { WebClient } = await import('@slack/web-api');
+        const slack = new WebClient(workspace.botToken);
+        
+        try {
+            const authTest = await slack.auth.test();
+            const botUserId = authTest.user_id;
+            
+            // Only process if the user who left is our bot
+            if (userId !== botUserId) {
+                console.log('👤 Member left channel but it\'s not our bot, skipping');
+                return;
+            }
+            
+            // Remove channel from database
+            const result = await botChannelsCollection.deleteOne({
+                channelId,
+                workspaceId: workspace._id.toString()
+            });
+            
+            if (result.deletedCount > 0) {
+                console.log(`✅ Removed channel ${channelId} from database for workspace ${teamId}`);
+            } else {
+                console.log(`📝 Channel ${channelId} was not in database (already removed or never added)`);
+            }
+            
+        } catch (apiError) {
+            console.error('❌ Error verifying bot user:', apiError);
+        }
+        
+    } catch (error) {
+        console.error('Error processing bot left channel event:', error);
     }
 } 

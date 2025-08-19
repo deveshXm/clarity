@@ -41,10 +41,10 @@ export async function createCheckoutSession(
   };
 
   // Stripe requires success_url - use provided URL or default to help page
-  sessionConfig.success_url = successUrl || `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?payment=success`;
+  sessionConfig.success_url = successUrl || `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success`;
 
   // Always set cancel_url for back button functionality
-  sessionConfig.cancel_url = cancelUrl || `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?payment=cancelled`;
+  sessionConfig.cancel_url = cancelUrl || `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=cancelled`;
 
   return await stripe.checkout.sessions.create(sessionConfig);
 }

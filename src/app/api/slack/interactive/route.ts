@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature } from '@/lib/slack';
-import { slackUserCollection, workspaceCollection } from '@/lib/db';
+import { slackUserCollection, workspaceCollection, botChannelsCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
 import { trackEvent, trackError } from '@/lib/posthog';
@@ -383,14 +383,49 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         // Extract selected frequency from the modal form
         const selectedValue = view.state?.values?.frequency_selection?.frequency_radio?.selected_option?.value;
         
-        // Extract auto rephrase setting from checkbox
-        const autoRephraseElement = view.state?.values?.auto_rephrase_selection?.auto_rephrase_checkbox;
-        console.log('🔍 Auto rephrase element:', JSON.stringify(autoRephraseElement, null, 2));
+        // Extract selected channels from checkboxes (now using accessory instead of input)
+        const channelsElement = view.state?.values?.auto_coaching_channels_section?.channel_checkboxes;
+        console.log('🔍 Channel checkboxes element:', JSON.stringify(channelsElement, null, 2));
         
-        // Handle checkbox state - Slack sends selected_options array when checked, undefined/empty when unchecked
-        const autoRephraseEnabled = autoRephraseElement?.selected_options && 
-            Array.isArray(autoRephraseElement.selected_options) && 
-            autoRephraseElement.selected_options.length > 0;
+        // Handle checkbox state - Slack sends selected_options array with channel IDs
+        // With inverted logic: selected = enabled, unselected = disabled
+        const enabledChannelIds = channelsElement?.selected_options?.map((option: { value: string }) => option.value) || [];
+        
+        // Get user first to access their workspace
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) {
+            console.error('User not found:', userId);
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'settings_modal',
+                    title: { type: 'plain_text', text: 'Settings' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ User not found' } }]
+                }
+            });
+        }
+        
+        // Get all available channels for this user's workspace
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        if (!workspace) {
+            console.error('Workspace not found for user:', userId);
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'settings_modal',
+                    title: { type: 'plain_text', text: 'Settings' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Workspace not found' } }]
+                }
+            });
+        }
+        
+        const botChannels = await botChannelsCollection.find({ workspaceId: user.workspaceId }).toArray();
+        const allChannelIds = botChannels.map(channel => channel.channelId);
+        
+        // Calculate disabled channels: all channels minus enabled channels
+        const disabledChannelIds = allChannelIds.filter(channelId => !enabledChannelIds.includes(channelId));
         
         if (!selectedValue || !['weekly', 'monthly'].includes(selectedValue)) {
             return NextResponse.json({
@@ -423,7 +458,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                     {
                         $set: {
                             analysisFrequency: selectedValue,
-                            autoRephraseEnabled: autoRephraseEnabled,
+                            autoCoachingDisabledChannels: disabledChannelIds,
                             updatedAt: new Date(),
                         },
                     },
@@ -436,7 +471,8 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                         user_name: userDoc.name || 'Unknown',
                         workspace_id: userDoc.workspaceId,
                         analysis_frequency: selectedValue,
-                        auto_rephrase_enabled: autoRephraseEnabled,
+                        auto_coaching_enabled_channels_count: enabledChannelIds.length,
+                        auto_coaching_disabled_channels_count: disabledChannelIds.length,
                         subscription_tier: userDoc.subscription?.tier || 'FREE',
                     });
                 }

@@ -13,7 +13,7 @@ import {
     invitationCollection,
     botChannelsCollection
 } from '@/lib/db';
-import { AccountConfigFormData, AccountConfigFormDataSchema, ServerActionResult, CreateBotChannelInput } from '@/types';
+import { AccountConfigFormData, AccountConfigFormDataSchema, ServerActionResult } from '@/types';
 import { nowTimestamp } from './utils';
 import { trackEvent } from './posthog';
 import { EVENTS } from './analytics/events';
@@ -217,8 +217,8 @@ export async function getWorkspaceChannels(teamId: string) {
     }
 }
 
-// Save bot channels and join them
-export async function saveBotChannels(
+// Join bot to selected channels (database updates handled by Slack events)
+export async function joinBotToChannels(
     userWorkspaceId: string,
     teamId: string,
     selectedChannels: Array<{ id: string; name: string }>
@@ -239,60 +239,66 @@ export async function saveBotChannels(
         
         const { joinChannel } = await import('./slack');
         
-        // Join each selected channel and save to database
-        const savedChannels: CreateBotChannelInput[] = [];
+        // Join each selected channel (events will handle database updates)
+        const joinedChannels: string[] = [];
         
         for (const channel of selectedChannels) {
             // Try to join the channel with workspace-specific bot token
             const joinSuccess = await joinChannel(channel.id, workspace.botToken);
             
             if (joinSuccess) {
-                savedChannels.push({
-                    workspaceId: userWorkspaceId, // Use user's workspaceId (ObjectId) for database consistency
+                joinedChannels.push(channel.name);
+                console.log(`✅ Bot joined channel: ${channel.name} (${channel.id})`);
+                
+                // Handle "already_in_channel" case - manually add to database if not exists
+                // This ensures channels are tracked even if no member_joined_channel event fires
+                const existingChannel = await botChannelsCollection.findOne({
                     channelId: channel.id,
-                    channelName: channel.name
+                    workspaceId: workspace._id.toString()
                 });
+                
+                if (!existingChannel) {
+                    await botChannelsCollection.insertOne({
+                        _id: new ObjectId(),
+                        workspaceId: workspace._id.toString(),
+                        channelId: channel.id,
+                        channelName: channel.name,
+                        addedAt: new Date()
+                    });
+                    
+                    console.log(`✅ Manually added channel ${channel.name} to database (already_in_channel case)`);
+                }
             } else {
-                console.warn(`Failed to join channel: ${channel.name} (${channel.id})`);
+                console.warn(`❌ Failed to join channel: ${channel.name} (${channel.id})`);
             }
         }
         
-        // Save successfully joined channels to database
-        if (savedChannels.length > 0) {
-            const channelsWithTimestamp = savedChannels.map(channel => ({
-                ...channel,
-                _id: new ObjectId(),
-                addedAt: new Date()
-            }));
-            
-            await botChannelsCollection.insertMany(channelsWithTimestamp);
-            console.log(`Saved ${savedChannels.length} channels for workspace ${userWorkspaceId}`);
-
-            // Track channels saved
+        // Track channels joined (events will handle database persistence)
+        if (joinedChannels.length > 0) {
             const user = await slackUserCollection.findOne({ workspaceId: userWorkspaceId });
             if (user) {
                 trackEvent(user.slackId, EVENTS.ONBOARDING_CHANNELS_SAVED, {
                     user_name: user.name,
                     workspace_id: userWorkspaceId,
-                    channels_joined: savedChannels.length,
+                    channels_joined: joinedChannels.length,
                     channels_requested: selectedChannels.length,
-                    success_rate: (savedChannels.length / selectedChannels.length) * 100,
-                    channel_names: savedChannels.map(c => c.channelName),
+                    success_rate: (joinedChannels.length / selectedChannels.length) * 100,
+                    channel_names: joinedChannels,
                 });
             }
         }
         
         return {
             success: true,
-            joinedCount: savedChannels.length,
+            joinedCount: joinedChannels.length,
             totalCount: selectedChannels.length
         };
         
     } catch (error) {
-        console.error('Error saving bot channels:', error);
+        console.error('Error joining bot to channels:', error);
         return {
             success: false,
-            error: 'Failed to join and save channels'
+            error: 'Failed to join channels'
         };
     }
 }
@@ -311,6 +317,9 @@ export async function completeSlackOnboarding(
         }
 
         // Update user preferences and mark onboarding complete
+        // With inverted logic: empty autoCoachingDisabledChannels = coaching enabled everywhere (default)
+        // No need to set specific channels since default behavior is "enabled"
+        
         const updateResult = await slackUserCollection.updateOne(
             { slackId, workspaceId: userWorkspaceId },
             {
@@ -338,7 +347,7 @@ export async function completeSlackOnboarding(
                 return { error: 'Workspace not found' };
             }
             
-            const channelResult = await saveBotChannels(userWorkspaceId, workspace.workspaceId, selectedChannels);
+            const channelResult = await joinBotToChannels(userWorkspaceId, workspace.workspaceId, selectedChannels);
             if (!channelResult.success) {
                 console.warn('Failed to save some channels, but continuing with onboarding');
             }
@@ -385,6 +394,44 @@ export async function completeSlackOnboarding(
     } catch (error) {
         console.error('Complete onboarding error:', error);
         return { error: 'Internal server error' };
+    }
+}
+
+// Get channels where bot is active for a specific user (for settings modal)
+export async function getUserActiveChannels(slackId: string, teamId: string) {
+    try {
+        // Find workspace by team ID
+        const workspace = await workspaceCollection.findOne({ workspaceId: teamId });
+        if (!workspace || !workspace.botToken) {
+            return {
+                success: false,
+                error: 'Workspace not found or missing bot token',
+                channels: []
+            };
+        }
+
+        // Get channels where bot is active
+        const botChannels = await botChannelsCollection.find({
+            workspaceId: workspace._id.toString()
+        }).toArray();
+
+        // Format channels for settings modal
+        const channels = botChannels.map(channel => ({
+            id: channel.channelId,
+            name: channel.channelName
+        }));
+
+        return {
+            success: true,
+            channels
+        };
+    } catch (error) {
+        console.error('Error fetching user active channels:', error);
+        return {
+            success: false,
+            error: 'Failed to fetch active channels',
+            channels: []
+        };
     }
 }
 

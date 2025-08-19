@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     // Create portal session
     const session = await createPortalSession(
       user.subscription.stripeCustomerId,
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?tab=subscription`
+      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?tab=subscription`
     );
     
     // Track portal access
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     // Create portal session
     const session = await createPortalSession(
       user.subscription.stripeCustomerId,
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?tab=subscription`
+      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?tab=subscription`
     );
     
     logInfo('Stripe portal session created (POST)', { 

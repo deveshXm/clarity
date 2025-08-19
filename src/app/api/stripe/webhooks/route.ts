@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { updateSubscription, resetMonthlyUsage, needsBillingReset } from '@/lib/subscription';
-import { slackUserCollection } from '@/lib/db';
+import { slackUserCollection, workspaceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackUser } from '@/types';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
+import { sendProSubscriptionNotification, sendSubscriptionCancellationNotification } from '@/lib/slack';
 import Stripe from 'stripe';
 
 export async function POST(request: NextRequest) {
@@ -187,6 +188,22 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
   if (subscription.status === 'active') {
     await resetMonthlyUsage(user.slackId);
     console.log('🔄 Reset usage counters for new billing period');
+    
+    // Send Pro subscription welcome message only for new subscriptions
+    // Check if this is a new subscription by verifying previous tier was FREE
+    const previousTier = user.subscription?.tier || 'FREE';
+    if (tier === 'PRO' && previousTier === 'FREE') {
+      const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+      if (workspace?.botToken) {
+        await sendProSubscriptionNotification(user, workspace.botToken);
+        
+        logInfo('Pro subscription notification sent', { 
+          user_id: user.slackId,
+          workspace_id: user.workspaceId,
+          operation: 'pro_subscription_notification'
+        });
+      }
+    }
   }
   
   console.log(`✅ Updated user ${user.slackId} to ${tier} tier`);
@@ -213,6 +230,18 @@ async function handleSubscriptionCancellation(subscription: Stripe.Subscription)
     status: 'cancelled',
     updatedAt: new Date(),
   });
+  
+  // Send subscription cancellation message
+  const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+  if (workspace?.botToken) {
+    await sendSubscriptionCancellationNotification(user, workspace.botToken);
+    
+    logInfo('Subscription cancellation notification sent', { 
+      user_id: user.slackId,
+      workspace_id: user.workspaceId,
+      operation: 'subscription_cancellation_notification'
+    });
+  }
   
   console.log(`✅ Downgraded user ${user.slackId} to FREE tier`);
 }
@@ -337,3 +366,5 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
   
   console.log(`⚠️ Marked user ${user.slackId} subscription as past_due`);
 }
+
+

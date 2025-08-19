@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       });
       
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?message=already_subscribed`
+        `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?message=already_subscribed`
       );
     }
     
@@ -50,8 +50,8 @@ export async function GET(request: NextRequest) {
     const session = await createCheckoutSession(
       user._id.toString(),
       STRIPE_PRICE_IDS.PRO_MONTHLY,
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?payment=success&upgraded=true`,
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?payment=cancelled`
+      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success&upgraded=true`,
+      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=cancelled`
     );
     
     // Track checkout session creation
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       workspace_id: user.workspaceId,
       session_id: session.id,
       price_id: STRIPE_PRICE_IDS.PRO_MONTHLY,
-      amount: 1000, // $10.00 in cents
+      amount: 499, // $4.99.00 in cents
       subscription_tier: user.subscription?.tier || 'FREE',
     });
     
@@ -123,8 +123,8 @@ export async function POST(request: NextRequest) {
     const session = await createCheckoutSession(
       user._id.toString(),
       selectedPriceId,
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?payment=success&upgraded=true`,
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help?payment=cancelled`
+      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success&upgraded=true`,
+      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=cancelled`
     );
     
     return NextResponse.json({ 

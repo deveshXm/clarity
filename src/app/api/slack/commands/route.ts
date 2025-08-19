@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, sendDirectMessage, isChannelAccessible, getSlackOAuthUrl } from '@/lib/slack';
-import { slackUserCollection, workspaceCollection } from '@/lib/db';
+import { slackUserCollection, workspaceCollection, botChannelsCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
 import { generatePersonalFeedback, generateImprovedMessage, analyzeMessageForFlags, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
@@ -113,13 +113,13 @@ export async function POST(request: NextRequest) {
         // Route to appropriate command handler
         let response;
         switch (command) {
-            case '/personalfeedback':
+            case '/clarity-personal-feedback':
                 response = await handlePersonalFeedback(userId, channelId);
                 break;
-            case '/rephrase':
+            case '/clarity-rephrase':
                 response = await handleRephrase(text, userId, channelId);
                 break;
-            case '/settings':
+            case '/clarity-settings':
                 response = await handleSettings(text, userId, appUser as unknown as SlackUser, triggerId!); // Pass triggerId
                 break;
             case '/clarity-help':
@@ -204,7 +204,7 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
         
         if (!hasChannelAccess) {
             return {
-                text: '⚠️ *I need to be added to this channel*\n\nPlease add me to this channel so I can analyze your communication patterns. You can add me by mentioning @Personal AI Coach or by inviting me to the channel.',
+                text: '⚠️ *I need to be added to this channel*\n\nPlease add me to this channel so I can analyze your communication patterns. You can add me by mentioning @Clarity or by inviting me to the channel. If the app is already present, try re-inviting me to the channel.',
                 response_type: 'ephemeral'
             };
         }
@@ -287,7 +287,7 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
                 
                 // Format response for DM with friendly coaching tone
                 const scoreEmoji = feedback.overallScore >= 8 ? '🟢 You\'re crushing it!' : feedback.overallScore >= 6 ? '🟡 Looking good!' : '🔴 Let\'s level up together!';
-                const responseText = `🤖 *Hey there! Here\'s your personal feedback*\n\n` +
+                const responseText = `*Hey there! Here\'s your personal feedback*\n\n` +
                     `*How you\'re doing: ${feedback.overallScore}/10* ${scoreEmoji}\n\n` +
                     `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
                     
@@ -587,6 +587,11 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
             };
         }
 
+        // Get channels where bot is active for this workspace
+        const botChannels = await botChannelsCollection.find({
+            workspaceId: user.workspaceId
+        }).toArray();
+
         // Create workspace-specific WebClient
         const workspaceSlack = new WebClient(workspace.botToken);
 
@@ -664,34 +669,35 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                 },
                 {
                     type: 'section',
-                    block_id: 'auto_rephrase_selection',
+                    block_id: 'auto_coaching_channels_section',
                     text: {
                         type: 'mrkdwn',
-                        text: '*Auto Rephrase*\nGet automatic coaching suggestions as you type'
+                        text: '*Auto Coaching Channels*\nUncheck channels where you want to disable automatic coaching:'
                     },
                     accessory: {
                         type: 'checkboxes',
-                        action_id: 'auto_rephrase_checkbox',
-                        ...(user.autoRephraseEnabled ? {
-                            initial_options: [
-                                {
+                        action_id: 'channel_checkboxes',
+                        ...((() => {
+                            const enabledChannels = botChannels
+                                .filter(channel => !user.autoCoachingDisabledChannels.includes(channel.channelId))
+                                .map(channel => ({
                                     text: {
                                         type: 'plain_text',
-                                        text: 'Enable automatic rephrase'
+                                        text: `#${channel.channelName}`
                                     },
-                                    value: 'enabled'
-                                }
-                            ]
-                        } : {}),
-                        options: [
-                            {
-                                text: {
-                                    type: 'plain_text',
-                                    text: 'Enable automatic rephrase'
-                                },
-                                value: 'enabled'
-                            }
-                        ]
+                                    value: channel.channelId
+                                }));
+                            
+                            // Only include initial_options if there are enabled channels
+                            return enabledChannels.length > 0 ? { initial_options: enabledChannels } : {};
+                        })()),
+                        options: botChannels.map(channel => ({
+                            text: {
+                                type: 'plain_text',
+                                text: `#${channel.channelName}`
+                            },
+                            value: channel.channelId
+                        }))
                     }
                 },
                 {
@@ -699,7 +705,7 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                     elements: [
                         {
                             type: 'mrkdwn',
-                            text: 'When disabled, you can still use `/rephrase [your message]` to get suggestions manually.'
+                            text: 'You can still use `/rephrase [your message]` manually in any channel.'
                         }
                     ]
                 },
@@ -815,7 +821,7 @@ async function handleClarityHelp() {
                             emoji: true
                         },
                         style: 'primary',
-                        url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/app/help`,
+                        url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs`,
                         action_id: 'view_help_guide'
                     }
                 ]
