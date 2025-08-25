@@ -675,14 +675,14 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                     block_id: 'auto_coaching_channels_section',
                     text: {
                         type: 'mrkdwn',
-                        text: '*Auto Coaching Channels*\nUncheck channels where you want to disable automatic coaching:'
+                        text: '*Auto Coaching Channels*\nCheck channels where you want to enable automatic coaching:'
                     },
                     accessory: {
                         type: 'checkboxes',
                         action_id: 'channel_checkboxes',
                         ...((() => {
                             const enabledChannels = botChannels
-                                .filter(channel => !user.autoCoachingDisabledChannels.includes(channel.channelId))
+                                .filter(channel => user.autoCoachingEnabledChannels.includes(channel.channelId))
                                 .map(channel => ({
                                     text: {
                                         type: 'plain_text',
@@ -792,12 +792,12 @@ async function handleClarityStatus(userId: string, channelId: string, user: Slac
             };
         }
 
-        // Check if auto coaching is disabled for this channel
-        const isAutoCoachingDisabled = user.autoCoachingDisabledChannels.includes(channelId);
+        // Check if auto coaching is enabled for this channel
+        const isAutoCoachingEnabled = user.autoCoachingEnabledChannels.includes(channelId);
         
-        if (isAutoCoachingDisabled) {
+        if (!isAutoCoachingEnabled) {
             return {
-                text: '🟡 Clarity is installed but auto coaching is disabled in this channel.',
+                text: '🟡 Clarity is installed but auto coaching is not enabled in this channel.',
                 response_type: 'ephemeral'
             };
         }

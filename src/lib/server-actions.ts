@@ -5,20 +5,23 @@ import { auth } from '@/lib/auth';
 import { ObjectId } from 'mongodb';
 import { headers } from 'next/headers';
 
-import { 
-    userCollection, 
-    accountConfigCollection, 
-    slackUserCollection, 
-    workspaceCollection, 
+import {
+    userCollection,
+    accountConfigCollection,
+    slackUserCollection,
+    workspaceCollection,
     invitationCollection,
     botChannelsCollection
 } from '@/lib/db';
-import { AccountConfigFormData, AccountConfigFormDataSchema, ServerActionResult } from '@/types';
+import { AccountConfigFormData, AccountConfigFormDataSchema, ServerActionResult, SlackUser } from '@/types';
 import { nowTimestamp } from './utils';
 import { trackEvent } from './posthog';
 import { EVENTS } from './analytics/events';
-import { 
-    sendOnboardingReminderMessage
+import {
+    joinChannel,
+    sendOnboardingReminderMessage,
+    getWorkspaceChannels as getWorkspaceChannelsFromSlack,
+    sendChannelMonitoringNotification,
 } from './slack';
 
 // Helper function to get current user
@@ -52,7 +55,7 @@ export async function getUserById(userId: string) {
 export async function upsertAccountConfig(rawData: AccountConfigFormData): Promise<ServerActionResult> {
     try {
         const user = await getCurrentUser();
-        
+
         const validatedData = AccountConfigFormDataSchema.parse(rawData);
 
         await accountConfigCollection.replaceOne(
@@ -75,17 +78,17 @@ export async function upsertAccountConfig(rawData: AccountConfigFormData): Promi
         return { success: true };
     } catch (error) {
         console.error('Error upserting account config:', error);
-        
+
         if (error instanceof z.ZodError) {
             const flattenedErrors = error.flatten().fieldErrors;
             const filteredErrors: Record<string, string[]> = {};
-            
+
             for (const [key, value] of Object.entries(flattenedErrors)) {
                 if (value) {
                     filteredErrors[key] = value;
                 }
             }
-            
+
             return {
                 success: false,
                 error: 'Validation failed',
@@ -103,7 +106,7 @@ export async function upsertAccountConfig(rawData: AccountConfigFormData): Promi
 export async function getAccountConfig(): Promise<ServerActionResult<AccountConfigFormData | null>> {
     try {
         const user = await getCurrentUser();
-        
+
         const accountConfig = await accountConfigCollection.findOne({
             userId: user.id
         });
@@ -129,8 +132,8 @@ export async function getAccountConfig(): Promise<ServerActionResult<AccountConf
 
 // Slack OAuth URL Generation
 export async function getSlackOAuthUrl(state?: string) {
-    const { getSlackOAuthUrl } = await import('./slack');
-    return getSlackOAuthUrl(state);
+    const { getSlackOAuthUrl: getSlackOAuthUrlFromLib } = await import('@/lib/slack');
+    return getSlackOAuthUrlFromLib(state);
 }
 
 // Slack User Validation
@@ -187,10 +190,10 @@ export async function validateSlackUser(slackId: string, teamId: string) {
 export async function getWorkspaceChannels(teamId: string) {
     try {
         // Get workspace bot token from database using Slack team ID
-        const workspace = await workspaceCollection.findOne({ 
-            workspaceId: teamId 
+        const workspace = await workspaceCollection.findOne({
+            workspaceId: teamId
         });
-        
+
         if (!workspace || !workspace.botToken) {
             console.error('Workspace not found or missing bot token:', teamId);
             return {
@@ -199,10 +202,9 @@ export async function getWorkspaceChannels(teamId: string) {
                 channels: []
             };
         }
-        
-        const { getWorkspaceChannels } = await import('./slack');
-        const channels = await getWorkspaceChannels(workspace.botToken);
-        
+
+        const channels = await getWorkspaceChannelsFromSlack(workspace.botToken);
+
         return {
             success: true,
             channels
@@ -225,10 +227,10 @@ export async function joinBotToChannels(
 ) {
     try {
         // Get workspace bot token from database using Slack team ID
-        const workspace = await workspaceCollection.findOne({ 
-            workspaceId: teamId 
+        const workspace = await workspaceCollection.findOne({
+            workspaceId: teamId
         });
-        
+
         if (!workspace || !workspace.botToken) {
             console.error('Workspace not found or missing bot token:', teamId);
             return {
@@ -236,27 +238,26 @@ export async function joinBotToChannels(
                 error: 'Workspace not found or missing bot token'
             };
         }
-        
-        const { joinChannel } = await import('./slack');
-        
+
+
         // Join each selected channel (events will handle database updates)
         const joinedChannels: string[] = [];
-        
+
         for (const channel of selectedChannels) {
             // Try to join the channel with workspace-specific bot token
             const joinSuccess = await joinChannel(channel.id, workspace.botToken);
-            
+
             if (joinSuccess) {
                 joinedChannels.push(channel.name);
                 console.log(`✅ Bot joined channel: ${channel.name} (${channel.id})`);
-                
+
                 // Handle "already_in_channel" case - manually add to database if not exists
                 // This ensures channels are tracked even if no member_joined_channel event fires
                 const existingChannel = await botChannelsCollection.findOne({
                     channelId: channel.id,
                     workspaceId: workspace._id.toString()
                 });
-                
+
                 if (!existingChannel) {
                     await botChannelsCollection.insertOne({
                         _id: new ObjectId(),
@@ -265,14 +266,14 @@ export async function joinBotToChannels(
                         channelName: channel.name,
                         addedAt: new Date()
                     });
-                    
+
                     console.log(`✅ Manually added channel ${channel.name} to database (already_in_channel case)`);
                 }
             } else {
                 console.warn(`❌ Failed to join channel: ${channel.name} (${channel.id})`);
             }
         }
-        
+
         // Track channels joined (events will handle database persistence)
         if (joinedChannels.length > 0) {
             const user = await slackUserCollection.findOne({ workspaceId: userWorkspaceId });
@@ -287,13 +288,13 @@ export async function joinBotToChannels(
                 });
             }
         }
-        
+
         return {
             success: true,
             joinedCount: joinedChannels.length,
             totalCount: selectedChannels.length
         };
-        
+
     } catch (error) {
         console.error('Error joining bot to channels:', error);
         return {
@@ -305,8 +306,8 @@ export async function joinBotToChannels(
 
 // Complete Slack User Onboarding
 export async function completeSlackOnboarding(
-    slackId: string, 
-    userWorkspaceId: string, 
+    slackId: string,
+    userWorkspaceId: string,
     analysisFrequency: 'weekly' | 'monthly',
     selectedChannels?: Array<{ id: string; name: string }>,
     invitationEmails?: string[],
@@ -318,17 +319,19 @@ export async function completeSlackOnboarding(
         }
 
         // Update user preferences and mark onboarding complete
-        // With inverted logic: empty autoCoachingDisabledChannels = coaching enabled everywhere (default)
-        // No need to set specific channels since default behavior is "enabled"
-        
+        // Populate autoCoachingEnabledChannels with selected channels from onboarding
+        const enabledChannelIds = selectedChannels ? selectedChannels.map(ch => ch.id) : [];
+
         const updateData: {
             analysisFrequency: 'weekly' | 'monthly';
             hasCompletedOnboarding: boolean;
+            autoCoachingEnabledChannels: string[];
             updatedAt: Date;
             email?: string;
         } = {
             analysisFrequency: analysisFrequency || 'weekly',
             hasCompletedOnboarding: true,
+            autoCoachingEnabledChannels: enabledChannelIds,
             updatedAt: new Date()
         };
 
@@ -336,7 +339,7 @@ export async function completeSlackOnboarding(
         if (userEmail && userEmail.trim()) {
             updateData.email = userEmail.trim();
         }
-        
+
         const updateResult = await slackUserCollection.updateOne(
             { slackId, workspaceId: userWorkspaceId },
             { $set: updateData }
@@ -349,15 +352,15 @@ export async function completeSlackOnboarding(
         // Save bot channels if any were selected
         if (selectedChannels && selectedChannels.length > 0) {
             // Get the actual Slack team ID for workspace lookup
-            const workspace = await workspaceCollection.findOne({ 
-                _id: new ObjectId(userWorkspaceId) 
+            const workspace = await workspaceCollection.findOne({
+                _id: new ObjectId(userWorkspaceId)
             });
-            
+
             if (!workspace) {
                 console.error('Workspace not found for user workspace ID:', userWorkspaceId);
                 return { error: 'Workspace not found' };
             }
-            
+
             const channelResult = await joinBotToChannels(userWorkspaceId, workspace.workspaceId, selectedChannels);
             if (!channelResult.success) {
                 console.warn('Failed to save some channels, but continuing with onboarding');
@@ -367,7 +370,7 @@ export async function completeSlackOnboarding(
         // Store invitation emails if any were provided
         if (invitationEmails && invitationEmails.length > 0) {
             const user = await slackUserCollection.findOne({ slackId, workspaceId: userWorkspaceId });
-            
+
             if (user) {
                 const invitations = invitationEmails.map((email: string) => ({
                     _id: new ObjectId(),
@@ -395,6 +398,18 @@ export async function completeSlackOnboarding(
                 invitations_sent: invitationEmails?.length || 0,
                 subscription_tier: user.subscription?.tier || 'FREE',
             });
+
+            // Send channel monitoring notification if channels were enabled
+            if (selectedChannels && selectedChannels.length > 0) {
+                const workspace = await workspaceCollection.findOne({
+                    _id: new ObjectId(userWorkspaceId)
+                });
+
+                if (workspace?.botToken) {
+                    await sendChannelMonitoringNotification(user as unknown as SlackUser, workspace.botToken, selectedChannels);
+                    console.log(`✅ Sent channel monitoring notification to user ${slackId}`);
+                }
+            }
         }
 
         return {
@@ -451,7 +466,7 @@ export async function sendOnboardingReminders(): Promise<{ sent: number; errors:
     try {
         // Find users who haven't completed onboarding and were created more than 24 hours ago
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        
+
         const incompleteUsers = await slackUserCollection.find({
             hasCompletedOnboarding: false,
             createdAt: { $lt: twentyFourHoursAgo }
@@ -463,8 +478,8 @@ export async function sendOnboardingReminders(): Promise<{ sent: number; errors:
         for (const user of incompleteUsers) {
             try {
                 // Get workspace to get bot token
-                const workspace = await workspaceCollection.findOne({ 
-                    _id: new ObjectId(user.workspaceId) 
+                const workspace = await workspaceCollection.findOne({
+                    _id: new ObjectId(user.workspaceId)
                 });
 
                 if (!workspace) {

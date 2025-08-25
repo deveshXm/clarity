@@ -78,7 +78,8 @@
                 "app_mention",
                 "app_uninstalled",
                 "member_joined_channel",
-                "member_left_channel",
+                "channel_left",
+                "group_left",
                 "message.channels",
                 "message.groups",
                 "tokens_revoked"

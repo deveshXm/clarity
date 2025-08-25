@@ -60,7 +60,7 @@ globs: src/lib/**/*.ts,src/types/**/*.ts,src/app/api/**/*.ts
           isActive: true,
           email: null, // Reset email - user must provide during onboarding
           analysisFrequency: 'weekly', // Reset to default
-          autoCoachingDisabledChannels: [], // Reset channel preferences  
+          autoCoachingEnabledChannels: [], // Reset channel preferences (disabled by default)  
           hasCompletedOnboarding: false, // Reset onboarding
           subscription: updatedSubscription, // Preserve usage, reset other settings
           // ... all other fields reset to defaults
@@ -175,7 +175,7 @@ SlackUser {
   slackId: string,         // Slack user ID
   workspaceId: string,     // References workspace ObjectId
   analysisFrequency: 'weekly' | 'monthly',
-  autoCoachingDisabledChannels: string[],  // Channel IDs where auto-coaching is disabled (default: empty array)
+  autoCoachingEnabledChannels: string[],   // Channel IDs where auto-coaching is enabled (default: empty array = disabled everywhere)
   hasCompletedOnboarding: boolean,
   subscription: SubscriptionSchema, // Includes usage tracking and tier info
   // ... other user fields
@@ -233,7 +233,7 @@ if (event.type === 'message' && (event.channel_type === 'channel' || event.chann
   if (!user) return;
   
   // Step 2.5: Check if auto-coaching is disabled for this specific channel
-  if (user.autoCoachingDisabledChannels.includes(event.channel)) return;
+  if (!user.autoCoachingEnabledChannels.includes(event.channel)) return;
   
   // Step 3: Check bot is active in this specific channel
   const isChannelActive = await isChannelAccessible(event.channel, user.workspaceId);
@@ -390,11 +390,11 @@ async function handleClarityStatus(userId: string, channelId: string, user: Slac
   }
 
   // 3. Check per-channel auto-coaching settings
-  const isAutoCoachingDisabled = user.autoCoachingDisabledChannels.includes(channelId);
+  const isAutoCoachingEnabled = user.autoCoachingEnabledChannels.includes(channelId);
   
-  if (isAutoCoachingDisabled) {
+  if (!isAutoCoachingEnabled) {
     return {
-      text: '🟡 Clarity is installed but auto coaching is disabled in this channel.',
+      text: '🟡 Clarity is installed but auto coaching is not enabled in this channel.',
       response_type: 'ephemeral'
     };
   }
@@ -410,8 +410,8 @@ async function handleClarityStatus(userId: string, channelId: string, user: Slac
 **Status Detection Logic:**
 - **Channel Types**: `C` (public), `G` (private), `D` (DM) - only work in channels
 - **Bot Installation**: Uses `isChannelAccessible()` to check `botChannelsCollection`
-- **Auto-Coaching Status**: Checks `user.autoCoachingDisabledChannels` array
-- **Visual Indicators**: 🔴 (not installed), 🟡 (disabled), 🟢 (active)
+- **Auto-Coaching Status**: Checks `user.autoCoachingEnabledChannels` array
+- **Visual Indicators**: 🔴 (not installed), 🟡 (not enabled), 🟢 (active)
 
 ## Query Patterns
 
@@ -808,8 +808,8 @@ export async function handleMessageEvent(event: SlackMessageEvent): Promise<void
     
     if (!user) return;
     
-    // Check if auto-coaching is disabled for this channel
-    if (user.autoCoachingDisabledChannels.includes(channelId)) return;
+    // Check if auto-coaching is enabled for this channel
+    if (!user.autoCoachingEnabledChannels.includes(channelId)) return;
     
     // Check bot is active in this channel
     const isChannelActive = await isChannelAccessible(

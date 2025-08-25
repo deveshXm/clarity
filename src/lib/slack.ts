@@ -591,4 +591,56 @@ export const sendSubscriptionCancellationNotification = async (
         console.error('Error sending subscription cancellation notification:', error);
         return false;
     }
-}; 
+};
+
+// Send DM notification when bot is added to channels during onboarding
+export const sendChannelMonitoringNotification = async (
+    user: SlackUser,
+    botToken: string,
+    enabledChannels: Array<{ id: string; name: string }>
+): Promise<boolean> => {
+    try {
+        if (!enabledChannels.length) {
+            console.log('No channels enabled for monitoring, skipping notification');
+            return true;
+        }
+
+        const channelList = enabledChannels
+            .map(channel => `• *#${channel.name}*`)
+            .join('\n');
+
+        const blocks = [
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `*Clarity is now monitoring your communication in :*\n\n${channelList}`    
+                }
+            },
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `💡 *How it works:*\n• I'll analyze your messages and suggest improvements privately\n• Only you can see my suggestions (ephemeral messages)\n• Use */clarity-settings* to enable/disable channels anytime`
+                }
+            },
+            {
+                type: "divider"
+            },
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `🚀 *Ready to get started?* Just start chatting in the enabled channels!`
+                }
+            }
+        ];
+
+        return await sendDirectMessage(user.slackId, '', botToken, blocks);
+    } catch (error) {
+        console.error('Error sending channel monitoring notification:', error);
+        return false;
+    }
+};
+
+ 

@@ -2,12 +2,14 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible } from '@/lib/slack';
 import { workspaceCollection, slackUserCollection, botChannelsCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
-import { SlackEventSchema } from '@/types';
+import { SlackEventSchema, Workspace, SlackUser } from '@/types';
 import { comprehensiveMessageAnalysis } from '@/lib/ai';
 import { validateUserAccess, incrementUsage } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logSlackEvent } from '@/lib/logger';
+import { WebClient } from '@slack/web-api';
+
 
 export async function POST(request: NextRequest) {
     try {
@@ -105,12 +107,12 @@ export async function POST(request: NextRequest) {
             }
             
             // Handle bot being removed from channels
-            if (event.type === 'member_left_channel') {
-                console.log('🤖 Bot left channel event received');
+            if (event.type === 'channel_left' || event.type === 'group_left') {
+                console.log(`🤖 Bot left ${event.type === 'channel_left' ? 'public channel' : 'private channel'} event received`);
                 
                 after(async () => {
                     try {
-                        await handleBotLeftChannel(event);
+                        await handleBotLeftChannel(event, eventData.team_id);
                         console.log('✅ Bot left channel processing completed');
                     } catch (error) {
                         console.error('❌ Bot left channel processing error:', error);
@@ -208,10 +210,10 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         console.log('🤖 Bot is active in channel, checking user preferences...');
         
-        // Check if user has auto-coaching disabled for this specific channel
-        // Default behavior: enabled (empty array = coaching enabled in all channels)
-        if (user.autoCoachingDisabledChannels.includes(validatedEvent.channel)) {
-            console.log('⏭️ Auto-coaching disabled for this channel, skipping analysis');
+        // Check if user has auto-coaching enabled for this specific channel
+        // Default behavior: disabled (empty array = coaching disabled in all channels)
+        if (!user.autoCoachingEnabledChannels.includes(validatedEvent.channel)) {
+            console.log('⏭️ Auto-coaching not enabled for this channel, skipping analysis');
             return;
         }
         
@@ -491,7 +493,6 @@ async function handleBotJoinedChannel(event: Record<string, unknown>) {
         }
         
         // Get bot user ID from workspace token to verify this is our bot
-        const { WebClient } = await import('@slack/web-api');
         const slack = new WebClient(workspace.botToken);
         
         try {
@@ -524,6 +525,9 @@ async function handleBotJoinedChannel(event: Record<string, unknown>) {
                 });
                 
                 console.log(`✅ Added channel ${channelName} (${channelId}) to database for workspace ${teamId}`);
+                
+                // Send notification to workspace users about the new channel monitoring
+                await notifyUsersAboutNewChannelMonitoring(workspace as unknown as Workspace, channelId, channelName);
             } else {
                 console.log(`📝 Channel ${channelName} (${channelId}) already exists in database`);
             }
@@ -537,15 +541,13 @@ async function handleBotJoinedChannel(event: Record<string, unknown>) {
     }
 }
 
-async function handleBotLeftChannel(event: Record<string, unknown>) {
+async function handleBotLeftChannel(event: Record<string, unknown>, teamId: string) {
     try {
         console.log('🔄 Processing bot left channel event:', JSON.stringify(event, null, 2));
         
         const channelId = event.channel as string;
-        const userId = event.user as string;
-        const teamId = event.team as string;
         
-        if (!channelId || !userId || !teamId) {
+        if (!channelId || !teamId) {
             console.error('❌ Missing required fields in bot left channel event');
             return;
         }
@@ -558,37 +560,60 @@ async function handleBotLeftChannel(event: Record<string, unknown>) {
             return;
         }
         
-        // Get bot user ID from workspace token to verify this is our bot
-        const { WebClient } = await import('@slack/web-api');
-        const slack = new WebClient(workspace.botToken);
+        // Remove channel from database (no need to verify bot user since channel_left/group_left events are only sent to the bot itself)
+        const result = await botChannelsCollection.deleteOne({
+            channelId,
+            workspaceId: workspace._id.toString()
+        });
         
-        try {
-            const authTest = await slack.auth.test();
-            const botUserId = authTest.user_id;
-            
-            // Only process if the user who left is our bot
-            if (userId !== botUserId) {
-                console.log('👤 Member left channel but it\'s not our bot, skipping');
-                return;
-            }
-            
-            // Remove channel from database
-            const result = await botChannelsCollection.deleteOne({
-                channelId,
-                workspaceId: workspace._id.toString()
-            });
-            
-            if (result.deletedCount > 0) {
-                console.log(`✅ Removed channel ${channelId} from database for workspace ${teamId}`);
-            } else {
-                console.log(`📝 Channel ${channelId} was not in database (already removed or never added)`);
-            }
-            
-        } catch (apiError) {
-            console.error('❌ Error verifying bot user:', apiError);
+        if (result.deletedCount > 0) {
+            console.log(`✅ Removed channel ${channelId} from database for workspace ${teamId}`);
+        } else {
+            console.log(`📝 Channel ${channelId} was not in database (already removed or never added)`);
         }
         
     } catch (error) {
         console.error('Error processing bot left channel event:', error);
+    }
+}
+
+async function notifyUsersAboutNewChannelMonitoring(workspace: Workspace, channelId: string, channelName: string) {
+    try {
+        // Find all active users in this workspace who have completed onboarding
+        const workspaceUsers = await slackUserCollection.find({
+            workspaceId: workspace._id.toString(),
+            isActive: true,
+            hasCompletedOnboarding: true
+        }).toArray();
+
+        if (workspaceUsers.length === 0) {
+            console.log(`No active users found for workspace ${workspace.workspaceId}`);
+            return;
+        }
+
+        // Import the notification function
+        const { sendChannelMonitoringNotification } = await import('@/lib/slack');
+
+        // Send notification to each user about the new channel
+        for (const user of workspaceUsers) {
+            try {
+                const channelData = [{ id: channelId, name: channelName }];
+                const notificationSent = await sendChannelMonitoringNotification(
+                    user as unknown as SlackUser, 
+                    workspace.botToken, 
+                    channelData
+                );
+
+                if (notificationSent) {
+                    console.log(`✅ Sent new channel notification to user ${user.slackId} for channel #${channelName}`);
+                } else {
+                    console.log(`❌ Failed to send new channel notification to user ${user.slackId} for channel #${channelName}`);
+                }
+            } catch (userError) {
+                console.error(`Error sending new channel notification to user ${user.slackId}:`, userError);
+            }
+        }
+    } catch (error) {
+        console.error('Error notifying users about new channel monitoring:', error);
     }
 } 

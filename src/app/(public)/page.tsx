@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import LiteYouTubeEmbed from 'react-lite-youtube-embed';
 import 'react-lite-youtube-embed/dist/LiteYouTubeEmbed.css';
 
+import { getSlackOAuthUrl } from '@/lib/server-actions';
 import { Card, Container, Image, Link, Stack, Text, Title } from '@/components/ui';
 import { SUBSCRIPTION_TIERS } from '@/types';
 // PostHog autocapture handles all frontend tracking automatically
@@ -27,7 +28,6 @@ export default function LandingPage() {
     
     setIsLoading(true);
     try {
-      const { getSlackOAuthUrl } = await import('@/lib/server-actions');
       const slackOAuthUrl = await getSlackOAuthUrl();
       window.location.href = slackOAuthUrl;
     } catch (error) {

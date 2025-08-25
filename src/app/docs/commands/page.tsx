@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CodeBlock } from '..//_components/CodeBlock';
+import { CodeBlock } from '../_components/CodeBlock';
 import { Image } from '@/components/ui';
 
 export default function CommandsPage(): React.ReactElement {

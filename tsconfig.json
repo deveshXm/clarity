@@ -28,6 +28,6 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "trigger.config.ts"
-  ],
+, "src/app/posthog.js"  ],
   "exclude": ["node_modules"]
 }

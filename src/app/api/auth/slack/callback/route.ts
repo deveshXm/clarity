@@ -233,7 +233,7 @@ export async function GET(request: NextRequest) {
                 timezone: 'America/New_York', // Default timezone
                 isActive: true,
                 analysisFrequency: 'weekly',
-                autoCoachingDisabledChannels: [], // Start with empty array - auto-coaching enabled by default in all channels
+                autoCoachingEnabledChannels: [], // Start with empty array - auto-coaching disabled by default until channels are explicitly enabled
                 hasCompletedOnboarding: false,
                 userToken: authed_user.access_token,
                 subscription: defaultSubscription,

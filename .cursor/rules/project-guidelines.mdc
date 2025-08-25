@@ -906,7 +906,7 @@ if (hasChannelAccess) {
 3. Background analysis completes (context-aware if bot in channel)
 4. Ephemeral result shows improved message with tone information
 
-## User Settings & Preferences ✅ UPDATED (Per-Channel Controls)
+## User Settings & Preferences ✅ UPDATED (Explicit Channel Enabling)
 
 ### Settings Command Implementation
 - **Command**: `/settings` - Opens modal for user preference management
@@ -916,24 +916,24 @@ if (hasChannelAccess) {
   - **Auto Coaching Channels**: Per-channel checkboxes for auto-coaching control
   - **Billing & Subscription**: Upgrade/manage billing integration
 
-### Settings Modal Design ✅ ENHANCED
+### Settings Modal Design ✅ SIMPLIFIED LOGIC
 - **Channel List**: Shows all channels where bot is active with checkboxes
-- **Inverted Logic**: Unchecked channels = auto-coaching disabled for that channel
-- **Default Enabled**: All channels enabled by default (empty disabled array)
-- **Optional Field**: Checkboxes are not required - users can uncheck all channels
+- **Direct Logic**: Checked channels = auto-coaching enabled for that channel
+- **Default Disabled**: No channels enabled by default (empty enabled array)
+- **Optional Field**: Checkboxes are not required - users can enable specific channels
 - **Dynamic Content**: Channel list fetched from `botChannelsCollection`
 
 ### Settings Persistence ✅ UPDATED SCHEMA
-- **Database Field**: `autoCoachingDisabledChannels: string[]` in SlackUser schema (default: empty array)
-- **Inverted Logic**: Empty array = coaching enabled everywhere, populated array = specific channels disabled
+- **Database Field**: `autoCoachingEnabledChannels: string[]` in SlackUser schema (default: empty array)
+- **Direct Logic**: Empty array = coaching disabled everywhere, populated array = specific channels enabled
 - **Immediate Update**: Settings saved in background using `after()` for fast response
 - **Success Feedback**: Modal updates to show "✅ Settings updated" message
 - **Modal Behavior**: Stays open after save, user closes manually
 
-### Per-Channel Auto Coaching Control ✅ NEW ARCHITECTURE
-- **Granular Control**: Users can disable auto-coaching for specific channels while keeping it enabled in others
-- **Event Processing**: Skip analysis if `user.autoCoachingDisabledChannels.includes(channelId)`
-- **Default Behavior**: Auto-coaching enabled by default in ALL channels (empty disabled array)
+### Per-Channel Auto Coaching Control ✅ EXPLICIT OPT-IN ARCHITECTURE
+- **Granular Control**: Users must explicitly enable auto-coaching for specific channels
+- **Event Processing**: Only analyze if `user.autoCoachingEnabledChannels.includes(channelId)`
+- **Default Behavior**: Auto-coaching disabled by default in ALL channels (safer default)
 - **Manual Override**: `/rephrase` command always works regardless of auto settings
 - **Multi-User Support**: Each user controls their own per-channel preferences independently
 
@@ -942,6 +942,42 @@ if (hasChannelAccess) {
 - **Settings Handler**: [src/app/api/slack/interactive/route.ts](mdc:src/app/api/slack/interactive/route.ts) - Modal submission processing
 - **Auto Coaching Check**: [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts) - Preference validation
 - **User Creation**: [src/app/api/auth/slack/callback/route.ts](mdc:src/app/api/auth/slack/callback/route.ts) - OAuth with default settings
+
+## Channel Monitoring Notifications ✅ NEW FEATURE
+
+### Notification System Implementation
+- **Trigger**: Sent after successful onboarding completion when channels are enabled
+- **Function**: `sendChannelMonitoringNotification()` in [src/lib/slack.ts](mdc:src/lib/slack.ts)
+- **Integration**: Called from `completeSlackOnboarding()` in [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts)
+- **Format**: Professional Block Kit DM with enabled channel list and usage instructions
+
+### Notification Content ✅ USER-FRIENDLY
+- **Header**: "🎉 Clarity is now monitoring your communication!"
+- **Channel List**: Bulleted list of enabled channels with `#channel-name` format
+- **Usage Instructions**: How auto-coaching works (ephemeral messages, privacy, settings)
+- **Call to Action**: Encouragement to start chatting in enabled channels
+- **Settings Reference**: Instructions to use `/settings` to modify channel preferences
+
+### Implementation Pattern
+```typescript
+// After successful onboarding and channel enabling
+if (selectedChannels && selectedChannels.length > 0) {
+    const workspace = await workspaceCollection.findOne({ 
+        _id: new ObjectId(userWorkspaceId) 
+    });
+    
+    if (workspace?.botToken) {
+        await sendChannelMonitoringNotification(user, workspace.botToken, selectedChannels);
+        console.log(`✅ Sent channel monitoring notification to user ${slackId}`);
+    }
+}
+```
+
+### Benefits
+- **User Awareness**: Users know exactly which channels are being monitored
+- **Privacy Transparency**: Clear explanation that suggestions are private (ephemeral)
+- **Settings Discovery**: Users learn about `/settings` command for future changes
+- **Onboarding Completion**: Confirms successful setup with actionable next steps
 
 ## Slack Integration Best Practices ✅ CRITICAL UPDATES
 

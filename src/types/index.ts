@@ -91,7 +91,7 @@ export const SlackUserSchema = UserSchema.extend({
     userToken: z.string().optional(), // User's OAuth token for message updating
     isActive: z.boolean().default(true),
     analysisFrequency: z.enum(['weekly', 'monthly']).default('weekly'),
-    autoCoachingDisabledChannels: z.array(z.string()).default([]), // Channel IDs where user has disabled auto-coaching
+    autoCoachingEnabledChannels: z.array(z.string()).default([]), // Channel IDs where user has enabled auto-coaching
     hasCompletedOnboarding: z.boolean().default(false),
     subscription: SubscriptionSchema.optional(), // Subscription data
 });

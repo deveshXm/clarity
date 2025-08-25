@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature } from '@/lib/slack';
-import { slackUserCollection, workspaceCollection, botChannelsCollection } from '@/lib/db';
+import { slackUserCollection, workspaceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
 import { trackEvent, trackError } from '@/lib/posthog';
@@ -388,7 +388,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         console.log('🔍 Channel checkboxes element:', JSON.stringify(channelsElement, null, 2));
         
         // Handle checkbox state - Slack sends selected_options array with channel IDs
-        // With inverted logic: selected = enabled, unselected = disabled
+        // Direct logic: selected = enabled, unselected = disabled
         const enabledChannelIds = channelsElement?.selected_options?.map((option: { value: string }) => option.value) || [];
         
         // Get user first to access their workspace
@@ -421,11 +421,12 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
             });
         }
         
-        const botChannels = await botChannelsCollection.find({ workspaceId: user.workspaceId }).toArray();
-        const allChannelIds = botChannels.map(channel => channel.channelId);
-        
-        // Calculate disabled channels: all channels minus enabled channels
-        const disabledChannelIds = allChannelIds.filter(channelId => !enabledChannelIds.includes(channelId));
+        // No need to calculate disabled channels - we directly use enabled channels
+        console.log('✅ Settings updated:', {
+            frequency: selectedValue,
+            enabledChannels: enabledChannelIds.length,
+            channelIds: enabledChannelIds
+        });
         
         if (!selectedValue || !['weekly', 'monthly'].includes(selectedValue)) {
             return NextResponse.json({
@@ -458,7 +459,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                     {
                         $set: {
                             analysisFrequency: selectedValue,
-                            autoCoachingDisabledChannels: disabledChannelIds,
+                            autoCoachingEnabledChannels: enabledChannelIds,
                             updatedAt: new Date(),
                         },
                     },
@@ -472,7 +473,6 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                         workspace_id: userDoc.workspaceId,
                         analysis_frequency: selectedValue,
                         auto_coaching_enabled_channels_count: enabledChannelIds.length,
-                        auto_coaching_disabled_channels_count: disabledChannelIds.length,
                         subscription_tier: userDoc.subscription?.tier || 'FREE',
                     });
                 }
