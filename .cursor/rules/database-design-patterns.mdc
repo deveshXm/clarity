@@ -195,9 +195,12 @@ SlackUser {
 
 // Manifest.json event subscriptions required:
 "bot_events": [
-  "message.channels",    // Public channel messages (REQUIRED for auto coaching)
-  "message.groups",      // Private channel messages  
-  "app_mention"          // @bot mentions
+  "message.channels",      // Public channel messages (REQUIRED for auto coaching)
+  "message.groups",        // Private channel messages
+  "member_joined_channel", // Bot joins channels (updates database + sends notifications)
+  "channel_left",          // Bot leaves public channels (updates database)
+  "group_left",           // Bot leaves private channels/groups (updates database)
+  "app_mention"           // @bot mentions
 ]
 ```
 
@@ -509,9 +512,13 @@ async function handleBotJoinedChannel(event) {
     channelName: channelInfo.name,
     addedAt: new Date()
   });
+  
+  // Send notification to workspace users about new channel monitoring
+  await notifyUsersAboutNewChannelMonitoring(workspace, event.channel, channelInfo.name);
 }
 
-async function handleBotLeftChannel(event) {
+async function handleBotLeftChannel(event, teamId) {
+  // No bot verification needed - channel_left/group_left events are bot-specific
   // Remove from database when bot leaves
   await botChannelsCollection.deleteOne({
     channelId: event.channel,

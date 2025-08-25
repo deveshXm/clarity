@@ -334,10 +334,10 @@ export const sendOnboardingReminderMessage = async (
     try {
         const baseUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://yourapp.com';
         const onboardingUrl = `${baseUrl}/app/onboarding?user=${userId}&team=${teamId}`;
-        
+
         const reminderText = `👋 *Hey there!*
 
-I noticed you haven't finished setting up your communication coaching yet. 
+I noticed you haven't finished setting up your communication coaching yet.
 
 It only takes 2 minutes to:
 ✅ Choose which channels I should help you in
@@ -383,6 +383,42 @@ Your future self will thank you! 💪`;
         return await sendDirectMessage(userId, reminderText, botToken, blocks);
     } catch (error) {
         console.error('Error sending onboarding reminder:', error);
+        return false;
+    }
+};
+
+// Send onboarding prompt message for users who haven't completed onboarding
+export const sendOnboardingPromptMessage = async (
+    userId: string,
+    teamId: string,
+    botToken: string
+): Promise<boolean> => {
+    try {
+        const baseUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://yourapp.com';
+        const onboardingUrl = `${baseUrl}/app/onboarding?user=${userId}&team=${teamId}`;
+
+        const blocks = [
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: "Please complete onboarding to access Clarity features."
+                },
+                accessory: {
+                    type: "button",
+                    text: {
+                        type: "plain_text",
+                        text: "Complete Onboarding"
+                    },
+                    url: onboardingUrl,
+                    action_id: "complete_onboarding_prompt"
+                }
+            }
+        ];
+
+        return await sendDirectMessage(userId, '', botToken, blocks);
+    } catch (error) {
+        console.error('Error sending onboarding prompt:', error);
         return false;
     }
 };

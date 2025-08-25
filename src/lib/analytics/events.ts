@@ -32,6 +32,7 @@ export const EVENTS = {
   LIMITS_USAGE_LIMIT_REACHED: 'limits:usage_limit_reached',
   LIMITS_UPGRADE_PROMPT_SHOWN: 'limits:upgrade_prompt_shown',
   LIMITS_FEATURE_ACCESS_DENIED: 'limits:feature_access_denied',
+  LIMITS_ONBOARDING_REQUIRED: 'limits:onboarding_required',
   
   // === ERRORS (Simplified) ===
   ERROR_SERVER: 'error:server_error',

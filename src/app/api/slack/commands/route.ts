@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, fetchConversationHistory, sendDirectMessage, isChannelAccessible, getSlackOAuthUrl } from '@/lib/slack';
+import { verifySlackSignature, fetchConversationHistory, sendDirectMessage, isChannelAccessible, getSlackOAuthUrl, sendOnboardingPromptMessage } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection, botChannelsCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
@@ -109,7 +109,59 @@ export async function POST(request: NextRequest) {
         }
 
         console.log('✅ Authenticated user for command:', command, 'User:', userId);
-        
+
+        // Check onboarding status for feature commands
+        const requiresOnboarding = ['/clarity-personal-feedback', '/clarity-rephrase', '/clarity-settings'].includes(command);
+        if (requiresOnboarding && !appUser.hasCompletedOnboarding) {
+            // Track onboarding required event
+            trackEvent(userId, EVENTS.LIMITS_ONBOARDING_REQUIRED, {
+                command: command,
+                channel_id: channelId,
+                user_name: appUser.name,
+                workspace_id: appUser.workspaceId,
+                subscription_tier: appUser.subscription?.tier || 'FREE',
+            });
+
+            // Get workspace bot token for onboarding prompt
+            const workspace = await workspaceCollection.findOne({ _id: new ObjectId(appUser.workspaceId) });
+
+            if (workspace && workspace.botToken) {
+                // Send onboarding prompt in background
+                after(async () => {
+                    try {
+                        await sendOnboardingPromptMessage(userId, workspace.workspaceId, workspace.botToken);
+                        console.log(`✅ Sent onboarding prompt to user ${userId}`);
+                    } catch (error) {
+                        console.error('❌ Failed to send onboarding prompt:', error);
+                    }
+                });
+
+                // Return immediate ephemeral response
+                return NextResponse.json({
+                    text: 'Please complete onboarding to access Clarity features.',
+                    response_type: 'ephemeral',
+                    blocks: [
+                        {
+                            type: 'section',
+                            text: {
+                                type: 'mrkdwn',
+                                text: 'Please complete onboarding to access Clarity features.'
+                            },
+                            accessory: {
+                                type: 'button',
+                                text: {
+                                    type: 'plain_text',
+                                    text: 'Complete Onboarding'
+                                },
+                                url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://yourapp.com'}/app/onboarding?user=${userId}&team=${workspace.workspaceId}`,
+                                action_id: 'complete_onboarding_prompt'
+                            }
+                        }
+                    ]
+                });
+            }
+        }
+
         // Route to appropriate command handler
         let response;
         switch (command) {

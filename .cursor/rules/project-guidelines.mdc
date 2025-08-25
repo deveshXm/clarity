@@ -263,21 +263,23 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **Event Types Required**: 
   - `message.channels` - Public channel messages (REQUIRED for auto coaching)  
   - `message.groups` - Private channel messages
-  - `member_joined_channel` - **NEW**: Bot added to channels (updates database)
-  - `member_left_channel` - **NEW**: Bot removed from channels (updates database)
+  - `member_joined_channel` - Bot added to channels (updates database)
+  - `channel_left` - **UPDATED**: Bot leaves public channels (replaces `member_left_channel`)
+  - `group_left` - **NEW**: Bot leaves private channels/groups
   - `app_mention` - @bot mentions
 - **Channel Filtering**: Slack automatically filters events to only channels where bot is member
-- **Database Verification**: `botChannelsCollection` kept in sync via `member_joined_channel` and `member_left_channel` events
+- **Database Verification**: `botChannelsCollection` kept in sync via join/leave events
 
-### Event-Driven Channel Management ✅ NEW ARCHITECTURE
+### Event-Driven Channel Management ✅ UPDATED ARCHITECTURE
 - **Single Source of Truth**: Slack events drive ALL channel membership changes
 - **Automatic Sync**: Database updated whenever bot joins/leaves channels (onboarding or manual)
 - **No Manual Database Operations**: Onboarding only joins channels, events handle persistence
 - **Event Handlers**: 
-  - `handleBotJoinedChannel()` - Adds channel to `botChannelsCollection` when bot joins
+  - `handleBotJoinedChannel()` - Adds channel to `botChannelsCollection` when bot joins + sends notifications
   - `handleBotLeftChannel()` - Removes channel from `botChannelsCollection` when bot leaves
-  - Both verify bot user ID to ignore other member changes
+  - Bot user ID verification only needed for `member_joined_channel` (other events are bot-specific)
 - **Channel Access**: `isChannelAccessible()` checks database, always accurate due to event sync
+- **Correct Bot Departure Events**: Uses `channel_left`/`group_left` instead of `member_left_channel`
 
 ### Auto Coaching Implementation ✅ WORKING
 - **Real-time Analysis**: Message events trigger AI analysis for communication improvement
@@ -943,22 +945,27 @@ if (hasChannelAccess) {
 - **Auto Coaching Check**: [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts) - Preference validation
 - **User Creation**: [src/app/api/auth/slack/callback/route.ts](mdc:src/app/api/auth/slack/callback/route.ts) - OAuth with default settings
 
-## Channel Monitoring Notifications ✅ NEW FEATURE
+## Channel Monitoring Notifications ✅ ENHANCED FEATURE
 
 ### Notification System Implementation
-- **Trigger**: Sent after successful onboarding completion when channels are enabled
+- **Onboarding Trigger**: Sent after successful onboarding completion when channels are enabled
+- **Manual Addition Trigger**: Sent when bot is manually added to channels via `member_joined_channel` event
 - **Function**: `sendChannelMonitoringNotification()` in [src/lib/slack.ts](mdc:src/lib/slack.ts)
-- **Integration**: Called from `completeSlackOnboarding()` in [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts)
+- **Integration**: 
+  - Called from `completeSlackOnboarding()` in [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts)
+  - Called from `handleBotJoinedChannel()` in [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts)
 - **Format**: Professional Block Kit DM with enabled channel list and usage instructions
 
 ### Notification Content ✅ USER-FRIENDLY
-- **Header**: "🎉 Clarity is now monitoring your communication!"
-- **Channel List**: Bulleted list of enabled channels with `#channel-name` format
+- **Header**: "Clarity is now monitoring your communication in:"
+- **Channel List**: Bulleted list of channels with `• #channel-name` format
 - **Usage Instructions**: How auto-coaching works (ephemeral messages, privacy, settings)
-- **Call to Action**: Encouragement to start chatting in enabled channels
-- **Settings Reference**: Instructions to use `/settings` to modify channel preferences
+- **Call to Action**: "Ready to get started? Just start chatting in the enabled channels!"
+- **Settings Reference**: Instructions to use `/clarity-settings` to modify channel preferences
 
-### Implementation Pattern
+### Implementation Patterns
+
+#### Onboarding Completion
 ```typescript
 // After successful onboarding and channel enabling
 if (selectedChannels && selectedChannels.length > 0) {
@@ -973,11 +980,35 @@ if (selectedChannels && selectedChannels.length > 0) {
 }
 ```
 
+#### Manual Channel Addition
+```typescript
+// In handleBotJoinedChannel event handler
+if (!existingChannel) {
+    await botChannelsCollection.insertOne({
+        _id: new ObjectId(),
+        workspaceId: workspace._id.toString(),
+        channelId,
+        channelName,
+        addedAt: new Date()
+    });
+    
+    // Send notification to workspace users about the new channel monitoring
+    await notifyUsersAboutNewChannelMonitoring(workspace, channelId, channelName);
+}
+```
+
+### Event-Driven Manual Addition ✅ NEW
+- **Trigger Event**: `member_joined_channel` when bot joins a channel
+- **User Scope**: Notifies all active workspace users who have completed onboarding
+- **Channel Data**: Single channel passed as array `[{ id: channelId, name: channelName }]`
+- **Reuses Function**: Same `sendChannelMonitoringNotification()` for consistency
+
 ### Benefits
+- **Complete Coverage**: Notifications for both onboarding and manual additions
 - **User Awareness**: Users know exactly which channels are being monitored
 - **Privacy Transparency**: Clear explanation that suggestions are private (ephemeral)
-- **Settings Discovery**: Users learn about `/settings` command for future changes
-- **Onboarding Completion**: Confirms successful setup with actionable next steps
+- **Settings Discovery**: Users learn about `/clarity-settings` command for future changes
+- **Consistent Experience**: Same notification format regardless of how bot was added
 
 ## Slack Integration Best Practices ✅ CRITICAL UPDATES
 

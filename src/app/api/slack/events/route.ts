@@ -197,10 +197,25 @@ async function handleMessageEvent(event: Record<string, unknown>) {
             return;
         }
         
-        const user = accessCheck.user!; // We know it exists from validation
-        
+                const user = accessCheck.user!; // We know it exists from validation
 
-        
+        // Check if user has completed onboarding
+        if (!user.hasCompletedOnboarding) {
+            console.log('⏭️ User has not completed onboarding, skipping auto coaching');
+
+            // Track onboarding required event for auto coaching
+            trackEvent(validatedEvent.user, EVENTS.LIMITS_ONBOARDING_REQUIRED, {
+                command: 'auto_coaching', // Special identifier for auto coaching
+                channel_id: validatedEvent.channel,
+                user_name: user.name,
+                workspace_id: user.workspaceId,
+                subscription_tier: user.subscription?.tier || 'FREE',
+                message_length: validatedEvent.text.length,
+            });
+
+            return;
+        }
+
         // Check if bot is active in this channel
         const isChannelActive = await isChannelAccessible(validatedEvent.channel, user.workspaceId);
         if (!isChannelActive) {
