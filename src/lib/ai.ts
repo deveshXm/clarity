@@ -29,11 +29,11 @@ export const exampleTask = async (payload: ExampleTaskInput) => {
 const openaiClient = new AzureOpenAI({
     endpoint: process.env.AZURE_API_ENDPOINT || '',
     apiKey: process.env.AZURE_API_KEY || '',
-    deployment: process.env.AZURE_DEPLOYMENT_NAME || 'gpt-5-nano',
+    deployment: process.env.AZURE_DEPLOYMENT_NAME || 'gpt-5-mini',
     apiVersion: process.env.AZURE_API_VERSION || '2024-12-01-preview',
 });
 
-const modelName = process.env.AZURE_MODEL_NAME || process.env.AZURE_DEPLOYMENT_NAME || 'gpt-5-nano';
+const modelName = process.env.AZURE_MODEL_NAME || process.env.AZURE_DEPLOYMENT_NAME || 'gpt-5-mini';
 
 async function chatCompletion(messages: ChatCompletionMessageParam[]): Promise<string> {
     const response = await openaiClient.chat.completions.create({
@@ -181,7 +181,7 @@ function parseComprehensiveAnalysis(raw: unknown): ComprehensiveAnalysisResult {
         return {
             needsCoaching: false,
             flags: [],
-            target: null,
+            targetIds: [],
             improvedMessage: null,
             reasoning: {
                 whyNeedsCoaching: 'Parse error occurred',
@@ -209,4 +209,119 @@ export const comprehensiveMessageAnalysis = async (
     ]);
     
     return parseComprehensiveAnalysis(raw);
+};
+
+// ------------------- AI-Generated Full Communication Report -------------------
+
+export interface AiReportInstanceInput {
+    index?: number; // enumerated index for referencing examples
+    messageTs: string;
+    channelId: string;
+    text: string;
+    flagIds: number[];
+    targetIds: string[];
+}
+
+export interface AiGeneratedReportData {
+    communicationScore: number; // 0–10
+    previousScore?: number;
+    scoreChange: number;
+    scoreTrend: 'improving' | 'declining' | 'stable';
+    currentPeriod: {
+        totalMessages: number;
+        flaggedMessages: number;
+        flaggedMessageIds: string[];
+        flagBreakdown: Array<{ flagId: number; count: number; percentage: number; messageIds: string[] }>;
+        partnerAnalysis: Array<{ partnerName: string; partnerSlackId: string; messagesExchanged: number; flagsWithPartner: number; topIssues: number[]; relationshipScore: number }>
+    };
+    chartMetadata: {
+        flagTrends: Array<{ flagId: number; currentCount: number; previousCount: number; trend: 'up' | 'down' | 'stable'; changePercent: number }>;
+        scoreHistory: Array<{ period: string; score: number }>;
+        partnerTrends: Array<{ partnerName: string; partnerSlackId: string; currentFlags: number; previousFlags: number; trend: 'improving' | 'declining' | 'stable' }>
+    };
+    messageExamples: Array<{ messageTs: string; channelId: string; flagIds: number[]; summary: string; targetName?: string; improvement?: string }>;
+    focusExampleIndexes?: number[];
+    recommendations: string[];
+    keyInsights: string[];
+    achievements: Array<{ type: string; description: string; icon: string }>;
+}
+
+export const generateAICommunicationReport = async (
+    instances: AiReportInstanceInput[],
+    period: 'weekly' | 'monthly',
+    options?: {
+        previousScore?: number;
+        periodLabel?: string;
+        coverage?: { messagesAnalyzed: number; channels: number };
+        partnerNames?: Record<string, string>; // map Slack userId -> display name
+        messageAnalysisTypes?: Record<number, { key: string; name: string; description: string }>; // id -> info
+        previousScores?: number[]; // last two scores, most recent first
+        previousFlagBreakdowns?: Array<Array<{ flagId: number; count: number }>>; // last two periods
+        severityWeights?: Record<number, number>; // flagId -> weight
+    }
+): Promise<AiGeneratedReportData> => {
+    const system = `You are an expert communication coach generating a ${period} report.
+Rules:
+- Use ONLY the provided instances and metadata. Do not fabricate content.
+- Compute totals and breakdowns from instances (counts, percentages, top flags).
+- If instances.length > 0 then:
+  • currentPeriod.totalMessages = instances.length
+  • currentPeriod.flaggedMessages = number of instances with flagIds length > 0
+  • currentPeriod.flaggedMessageIds = messageTs of those flagged
+  • currentPeriod.flagBreakdown = aggregate by flagId with count and percentage = round((count / flaggedMessages)*100)
+  • currentPeriod.partnerAnalysis = group by targetIds; use partnerNames map to label names; relationshipScore 0-100; include ONLY partners with messagesExchanged > 0; DO NOT create placeholders like "Unspecified" or "Group"
+- Scoring: communicationScore MUST be 0–10 (one decimal allowed), higher = better. Calibrate even if only flagged messages are present by considering severityWeights, previousScores & previousFlagBreakdowns (trend over last two reports), and partner concentration. If previousScore is null, set previousScore to 0 and derive scoreChange & scoreTrend from 0.
+- Always return ALL fields required by the schema. No undefined. Empty arrays when no data.
+- keyInsights must contain at least one helpful sentence when data exists.
+- recommendations must contain at least one actionable tip when data exists.
+ - For examples: Do NOT include original message text. Return up to 2 indices of the most concerning messages as focusExampleIndexes referencing the provided instance indices.
+Return STRICT JSON only.`;
+
+    const userPayload = {
+        period,
+        previousScore: options?.previousScore ?? null,
+        periodLabel: options?.periodLabel ?? null,
+        coverage: options?.coverage ?? null,
+        instances,
+        partnerNames: options?.partnerNames ?? {},
+        messageAnalysisTypes: options?.messageAnalysisTypes ?? {},
+        previousScores: options?.previousScores ?? [],
+        previousFlagBreakdowns: options?.previousFlagBreakdowns ?? [],
+        severityWeights: options?.severityWeights ?? {}
+    };
+
+    const raw = await chatCompletion([
+        { role: 'system', content: system },
+        { role: 'user', content: JSON.stringify(userPayload).slice(0, 12000) }
+    ]);
+
+    try {
+        const parsed = JSON.parse(raw) as AiGeneratedReportData;
+        return parsed;
+    } catch (e) {
+        console.error('Failed to parse AI report JSON:', e, raw);
+        // Safe fallback minimal structure
+        return {
+            communicationScore: 0,
+            previousScore: options?.previousScore,
+            scoreChange: 0,
+            scoreTrend: 'stable',
+            currentPeriod: {
+                totalMessages: instances.length,
+                flaggedMessages: instances.filter(i => i.flagIds.length > 0).length,
+                flaggedMessageIds: instances.filter(i => i.flagIds.length > 0).map(i => i.messageTs),
+                flagBreakdown: [],
+                partnerAnalysis: []
+            },
+            chartMetadata: {
+                flagTrends: [],
+                scoreHistory: [],
+                partnerTrends: []
+            },
+            messageExamples: [],
+            recommendations: [],
+            keyInsights: [],
+            achievements: []
+        };
+    }
 };

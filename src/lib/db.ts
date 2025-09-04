@@ -43,3 +43,4 @@ export const slackUserCollection = db.collection("slackUsers");
 export const analysisInstanceCollection = db.collection("analysisInstances");
 export const invitationCollection = db.collection("invitations");
 export const botChannelsCollection = db.collection("botChannels");
+export const reportCollection = db.collection("reports");

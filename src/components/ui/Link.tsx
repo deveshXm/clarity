@@ -1,7 +1,9 @@
 import NextLink, { LinkProps as NextLinkProps } from 'next/link';
-import { forwardRef, ReactNode } from 'react';
+import { forwardRef, ReactNode, AnchorHTMLAttributes } from 'react';
 
-export interface LinkProps extends Omit<NextLinkProps, 'prefetch'> {
+type AnchorExtras = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'children' | 'className' | 'ref'>;
+
+export interface LinkProps extends Omit<NextLinkProps, 'prefetch'>, AnchorExtras {
   children: ReactNode;
   className?: string;
 }

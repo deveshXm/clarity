@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible } from '@/lib/slack';
-import { workspaceCollection, slackUserCollection, botChannelsCollection } from '@/lib/db';
+import { workspaceCollection, slackUserCollection, botChannelsCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackEventSchema, Workspace, SlackUser } from '@/types';
 import { comprehensiveMessageAnalysis } from '@/lib/ai';
@@ -264,7 +264,8 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         console.log('Comprehensive analysis result:', {
             needsCoaching: analysis.needsCoaching,
             flagsFound: analysis.flags.length,
-            hasTarget: !!analysis.target,
+            hasTargets: analysis.targetIds && analysis.targetIds.length > 0,
+            targetCount: analysis.targetIds ? analysis.targetIds.length : 0,
             hasImprovement: !!analysis.improvedMessage,
             reasoning: analysis.reasoning.primaryIssue
         });
@@ -278,7 +279,8 @@ async function handleMessageEvent(event: Record<string, unknown>) {
             analysis_type: 'auto_coaching',
             flags_found: analysis.flags.length,
             needs_coaching: analysis.needsCoaching,
-            has_target: !!analysis.target,
+            has_targets: analysis.targetIds && analysis.targetIds.length > 0,
+            target_count: analysis.targetIds ? analysis.targetIds.length : 0,
             has_improvement: !!analysis.improvedMessage,
             context_messages: conversationHistory.length,
             primary_issue: analysis.reasoning.primaryIssue,
@@ -379,21 +381,40 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         if (success) {
             console.log('✅ Ephemeral feedback sent successfully');
             
-            // Track successful auto coaching trigger (only when message is actually sent)
-            trackEvent(user.slackId, EVENTS.FEATURE_AUTO_COACHING_TRIGGERED, {
-                user_name: user.name,
-                workspace_id: user.workspaceId,
-                channel_id: validatedEvent.channel,
-                flags_found: analysis.flags.map(f => f.type),
-                primary_issue: analysis.reasoning.primaryIssue,
-                has_target: !!analysis.target,
-                message_length: validatedEvent.text.length,
-                subscription_tier: user.subscription?.tier || 'FREE',
-                target_name: analysis.target?.name || null,
-            });
-            
-            // Track usage after successful auto-coaching
-            await incrementUsage(validatedEvent.user, 'autoCoaching');
+                    // 🆕 NEW: Save analysis instance with multiple flags and target IDs
+        await analysisInstanceCollection.insertOne({
+            _id: new ObjectId(),
+            userId: user._id, // Store as ObjectId directly
+            workspaceId: user.workspaceId,
+            channelId: validatedEvent.channel,
+            messageTs: validatedEvent.ts,
+            text: validatedEvent.text,
+            flagIds: analysis.flags.map(f => f.typeId), // 🎯 Multiple flags
+            targetIds: analysis.targetIds || [], // 🎯 Multiple target user IDs
+            createdAt: new Date(),
+            aiMetadata: {
+                primaryFlagId: primaryFlag.typeId,
+                confidence: primaryFlag.confidence,
+                reasoning: analysis.reasoning.whyNeedsCoaching,
+                suggestedTone: analysis.reasoning.primaryIssue,
+            },
+        });
+
+        // Track successful auto coaching trigger (only when message is actually sent)
+        trackEvent(user.slackId, EVENTS.FEATURE_AUTO_COACHING_TRIGGERED, {
+            user_name: user.name,
+            workspace_id: user.workspaceId,
+            channel_id: validatedEvent.channel,
+            flags_found: analysis.flags.map(f => f.type),
+            primary_issue: analysis.reasoning.primaryIssue,
+            has_targets: analysis.targetIds && analysis.targetIds.length > 0,
+            target_count: analysis.targetIds ? analysis.targetIds.length : 0,
+            message_length: validatedEvent.text.length,
+            subscription_tier: user.subscription?.tier || 'FREE',
+        });
+
+        // Track usage after successful auto-coaching
+        await incrementUsage(validatedEvent.user, 'autoCoaching');
             console.log('📊 Usage tracked for autoCoaching feature');
         } else {
             console.error('❌ Failed to send ephemeral feedback');

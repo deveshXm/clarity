@@ -67,7 +67,11 @@ ALWAYS use conversation history purely for context, not as content to analyze
 - Questions: any form of asking for information or clarification
 - Professional communication: clear, respectful workplace messages
 
-**Target Identification:** Determine who the message is directed to through @mentions, conversation context, or clear conversational flow.
+**Target Identification:** Extract Slack user IDs from the message and conversation context:
+- Look for @mentions in the format <@U123456> or <@U123456|username>
+- Identify implicit targets from conversation flow (replies, direct responses)
+- Extract multiple targets if message is directed to several people
+- Return only valid Slack user IDs starting with 'U' (e.g., U123456789)
 
 **Improvement Guidelines:**
 Match the author's exact tone and register - if they're casual, stay casual. If formal, stay formal.
@@ -79,7 +83,7 @@ Focus on clarity and politeness without sterilizing the author's voice
 {
   "needsCoaching": true/false,
   "flags": [{"typeId": 1, "type": "pushiness", "confidence": 0.8, "explanation": "specific reason"}] or [],
-  "target": {"name": "Full Name", "slackId": "U123456"} or null,
+  "targetIds": ["U123456789", "U987654321"] or [],
   "improvedMessage": {"originalMessage": "exact text", "improvedMessage": "better version", "improvements": ["specific change 1", "change 2"], "tone": "casual/professional/friendly"} or null,
   "reasoning": {"whyNeedsCoaching": "clear explanation", "primaryIssue": "main problem or none", "contextInfluence": "how history informed analysis"}
 }`;

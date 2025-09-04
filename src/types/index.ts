@@ -82,6 +82,18 @@ export const SubscriptionSchema = z.object({
     updatedAt: z.coerce.date(),
 });
 
+// Communication Scores Schema (stored on Slack user)
+export const CommunicationScoreEntrySchema = z.object({
+    score: z.number().min(0).max(100),
+    reportId: z.string().optional(),
+    updatedAt: z.coerce.date(),
+});
+
+export const CommunicationScoresSchema = z.object({
+    weekly: CommunicationScoreEntrySchema.optional(),
+    monthly: CommunicationScoreEntrySchema.optional(),
+}).optional();
+
 // Slack User Schema (extends base User)
 export const SlackUserSchema = UserSchema.extend({
     slackId: z.string(),
@@ -94,28 +106,139 @@ export const SlackUserSchema = UserSchema.extend({
     autoCoachingEnabledChannels: z.array(z.string()).default([]), // Channel IDs where user has enabled auto-coaching
     hasCompletedOnboarding: z.boolean().default(false),
     subscription: SubscriptionSchema.optional(), // Subscription data
+    communicationScores: CommunicationScoresSchema, // Latest weekly/monthly scores
 });
 
 export const CreateSlackUserSchema = SlackUserSchema.omit({ _id: true, id: true, createdAt: true, updatedAt: true });
 
-// Analysis Instance Schema
+// Analysis Instance Schema - Multiple flags per message
 export const AnalysisInstanceSchema = z.object({
     _id: z.string(),
-    userId: z.string(),
+    userId: z.string(), // MongoDB ObjectId as string
     workspaceId: z.string(),
     channelId: z.string(),
-    messageTs: z.string(), // Slack timestamp
+    messageTs: z.string(), // Slack timestamp for deep linking
     text: z.string(),
-    target: z.object({
-        name: z.string(),
-        slackId: z.string(),
-    }),
-    typeId: z.number().min(1).max(8),
-    type: z.enum(['pushiness', 'vagueness', 'nonObjective', 'circular', 'rudeness', 'passiveAggressive', 'fake', 'oneLiner']),
+    flagIds: z.array(z.number().min(1).max(8)), // 🎯 Multiple flags per message
+    targetIds: z.array(z.string()).default([]), // 🎯 Multiple target Slack user IDs
     createdAt: z.coerce.date(),
+    aiMetadata: z.object({
+        primaryFlagId: z.number().min(1).max(8),
+        confidence: z.number().min(0).max(1),
+        reasoning: z.string(),
+        suggestedTone: z.string().optional(),
+    }).optional(),
 });
 
 export const CreateAnalysisInstanceSchema = AnalysisInstanceSchema.omit({ _id: true, createdAt: true });
+
+// Report Storage Schema - Optimized with Pre-calculated Metadata
+export const ReportSchema = z.object({
+    _id: z.string(),
+    reportId: z.string(), // 🔐 Long unguessable ID
+    userId: z.string(),
+    period: z.enum(['weekly', 'monthly']),
+    periodStart: z.coerce.date(),
+    periodEnd: z.coerce.date(),
+
+    // 🎯 Communication scoring (0–10, AI-generated)
+    communicationScore: z.number().min(0).max(10),
+    previousScore: z.number().min(0).max(10).optional(),
+    scoreChange: z.number(),
+    scoreTrend: z.enum(['improving', 'declining', 'stable']),
+
+    // 📊 Current period analytics (this week/month only)
+    currentPeriod: z.object({
+        totalMessages: z.number(),
+        flaggedMessages: z.number(),
+        flaggedMessageIds: z.array(z.string()), // Store IDs for deep linking
+        
+        // 🏷️ Flag breakdown for current period
+        flagBreakdown: z.array(z.object({
+            flagId: z.number().min(1).max(8),
+            count: z.number(),
+            percentage: z.number(),
+            messageIds: z.array(z.string()), // Specific messages for examples
+        })),
+
+        // 🤝 Partner analysis for current period
+        partnerAnalysis: z.array(z.object({
+            partnerName: z.string(),
+            partnerSlackId: z.string(),
+            messagesExchanged: z.number(),
+            flagsWithPartner: z.number(),
+            topIssues: z.array(z.number()), // Flag IDs
+            relationshipScore: z.number().min(0).max(100),
+        })),
+    }),
+
+    // 📈 Pre-calculated chart data (no need to recalculate)
+    chartMetadata: z.object({
+        flagTrends: z.array(z.object({
+            flagId: z.number().min(1).max(8),
+            currentCount: z.number(),
+            previousCount: z.number(),
+            trend: z.enum(['up', 'down', 'stable']),
+            changePercent: z.number(),
+        })),
+        
+        scoreHistory: z.array(z.object({
+            period: z.string(), // "2025-W03", "2025-01" 
+            score: z.number(),
+        })),
+        
+        partnerTrends: z.array(z.object({
+            partnerName: z.string(),
+            partnerSlackId: z.string(),
+            currentFlags: z.number(),
+            previousFlags: z.number(),
+            trend: z.enum(['improving', 'declining', 'stable']),
+        })),
+    }),
+
+    // 💬 Message examples (privacy-compliant, limited to current period)
+    messageExamples: z.array(z.object({
+        messageTs: z.string(),
+        channelId: z.string(),
+        flagIds: z.array(z.number()),
+        summary: z.string(),
+        targetName: z.string().optional(),
+        improvement: z.string().optional(),
+    })),
+
+    // 💡 AI recommendations (based on current vs previous report comparison)
+    recommendations: z.array(z.string()),
+    keyInsights: z.array(z.string()),
+
+    // 🏆 Achievements and milestones
+    achievements: z.array(z.object({
+        type: z.string(),
+        description: z.string(),
+        icon: z.string(),
+    })),
+
+    createdAt: z.coerce.date(),
+    expiresAt: z.coerce.date(), // 🗑️ Auto-cleanup after 90 days
+});
+
+// Helper functions using MESSAGE_ANALYSIS_TYPES
+export function getFlagInfo(flagId: number) {
+    return MESSAGE_ANALYSIS_TYPES[flagId as keyof typeof MESSAGE_ANALYSIS_TYPES];
+}
+
+export function getFlagEmoji(flagId: number): string {
+    const emojiMap = {
+        1: '🚀', // pushiness - aggressive
+        2: '❓', // vagueness - unclear
+        3: '⚖️', // non-objective - biased
+        4: '🔄', // circular - repetitive
+        5: '😠', // rudeness - angry
+        6: '🎭', // passive-aggressive - masked
+        7: '🎪', // fake - artificial
+        8: '💬', // one-liner - brief
+    };
+    return emojiMap[flagId as keyof typeof emojiMap] || '🏷️';
+}
 
 // Invitation Schema
 export const InvitationSchema = z.object({
@@ -164,10 +287,7 @@ export const ComprehensiveAnalysisResultSchema = z.object({
         confidence: z.number().min(0).max(1),
         explanation: z.string(),
     })),
-    target: z.object({
-        name: z.string(),
-        slackId: z.string(),
-    }).nullable(),
+    targetIds: z.array(z.string()).default([]), // 🎯 Multiple target Slack user IDs
     improvedMessage: z.object({
         originalMessage: z.string(),
         improvedMessage: z.string(),
@@ -303,6 +423,9 @@ export type ImprovedMessageResult = z.infer<typeof ImprovedMessageResultSchema>;
 export type ComprehensiveAnalysisResult = z.infer<typeof ComprehensiveAnalysisResultSchema>;
 export type PersonalFeedbackResult = z.infer<typeof PersonalFeedbackResultSchema>;
 export type ReportResult = z.infer<typeof ReportResultSchema>;
+
+// Report Types
+export type Report = z.infer<typeof ReportSchema>;
 
 // Slack Channel Selection Types
 export const SlackChannelSchema = z.object({

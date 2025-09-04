@@ -102,6 +102,88 @@ export const getSlackUserInfo = async (accessToken: string) => {
     return userInfo;
 };
 
+// Resolve single Slack user ID to display name using workspace bot token
+export const resolveSlackUserName = async (
+    userId: string,
+    botToken: string
+): Promise<string> => {
+    try {
+        const workspaceSlack = new WebClient(botToken);
+        const userInfo = await workspaceSlack.users.info({ user: userId });
+        
+        if (!userInfo.ok || !userInfo.user) {
+            console.warn(`Failed to resolve user ${userId}:`, userInfo.error);
+            return `User ${userId}`;
+        }
+        
+        // Prefer display name, fall back to real name, then username
+        return userInfo.user.profile?.display_name || 
+               userInfo.user.real_name || 
+               userInfo.user.name || 
+               `User ${userId}`;
+    } catch (error) {
+        console.error(`Error resolving user ${userId}:`, error);
+        return `User ${userId}`;
+    }
+};
+
+// Resolve multiple Slack user IDs to display names with caching
+export const resolveSlackUserNames = async (
+    userIds: string[],
+    botToken: string
+): Promise<Record<string, string>> => {
+    const resolvedNames: Record<string, string> = {};
+    
+    if (userIds.length === 0) {
+        return resolvedNames;
+    }
+    
+    try {
+        const workspaceSlack = new WebClient(botToken);
+        
+        // Resolve users in parallel for better performance
+        const promises = userIds.map(async (userId) => {
+            try {
+                const userInfo = await workspaceSlack.users.info({ user: userId });
+                
+                if (userInfo.ok && userInfo.user) {
+                    return {
+                        userId,
+                        name: userInfo.user.profile?.display_name || 
+                              userInfo.user.real_name || 
+                              userInfo.user.name || 
+                              `User ${userId}`
+                    };
+                } else {
+                    console.warn(`Failed to resolve user ${userId}:`, userInfo.error);
+                    return { userId, name: `User ${userId}` };
+                }
+            } catch (error) {
+                console.error(`Error resolving user ${userId}:`, error);
+                return { userId, name: `User ${userId}` };
+            }
+        });
+        
+        const results = await Promise.all(promises);
+        
+        // Build the resolved names record
+        results.forEach(({ userId, name }) => {
+            resolvedNames[userId] = name;
+        });
+        
+        console.log(`✅ Resolved ${Object.keys(resolvedNames).length} user names`);
+        return resolvedNames;
+        
+    } catch (error) {
+        console.error('Error in bulk user resolution:', error);
+        // Return fallback names for all users
+        userIds.forEach(userId => {
+            resolvedNames[userId] = `User ${userId}`;
+        });
+        return resolvedNames;
+    }
+};
+
 // Fetch conversation history for context analysis
 export const fetchConversationHistory = async (
     channelId: string,
@@ -242,10 +324,15 @@ export const sendDirectMessage = async (
         // Send message
         const result = await workspaceSlack.chat.postMessage({
             channel: dmResult.channel.id!,
-            text,
+            text: text && text.trim().length > 0 ? text : 'Message contains rich content. Please view the blocks.',
             ...(blocks && { blocks })
         });
         
+        if (!result.ok) {
+            console.error('chat.postMessage failed:', (result as any).error);
+        } else {
+            console.log('DM sent', { channel: dmResult.channel.id, ts: (result as any).ts });
+        }
         return result.ok || false;
     } catch (error) {
         console.error('Error sending DM:', error);
@@ -679,4 +766,201 @@ export const sendChannelMonitoringNotification = async (
     }
 };
 
+// 🔔 NEW: Weekly report DM delivery
+export const sendWeeklyReportDM = async (
+    user: any,
+    report: any,
+    botToken: string
+): Promise<boolean> => {
+    const { getFlagInfo, getFlagEmoji } = await import('@/types');
+
+    const blocks = [
+        {
+            type: "header",
+            text: { type: "plain_text", text: "📊 Your Weekly Communication Report" }
+        },
+        {
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: `*Communication Score: ${report.communicationScore}/10* ${
+                    report.scoreChange > 0 ? '📈' :
+                    report.scoreChange < 0 ? '📉' : '➡️'
+                }\n*${Math.abs(report.scoreChange)} points ${
+                    report.scoreChange > 0 ? 'improvement' :
+                    report.scoreChange < 0 ? 'decline' : 'change'
+                } from last week*`
+            }
+        },
+        {
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: `*This week:* ${report.currentPeriod.flaggedMessages} improvements from ${report.currentPeriod.totalMessages} messages\n\n*Top areas to focus on:*\n${
+                    (report.currentPeriod.flagBreakdown || []).slice(0, 3).map((flag: any) => {
+                        const flagInfo = getFlagInfo(flag.flagId);
+                        return `• ${getFlagEmoji(flag.flagId)} ${flagInfo?.name || 'Unknown'} (${flag.count ?? 0} times)`;
+                    }).join('\n') || '• None'
+                }`
+            }
+        },
+        {
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: `*💡 Key Insight*\n${(report.keyInsights && report.keyInsights[0]) || 'Keep up the great work!'}\n\n*🤝 Communication Partners:*\n${
+                    (report.currentPeriod.partnerAnalysis || [])
+                        .filter((p: any) => (p.messagesExchanged ?? 0) > 0)
+                        .slice()
+                        .sort((a: any, b: any) => (b.messagesExchanged ?? 0) - (a.messagesExchanged ?? 0))
+                        .slice(0, 3)
+                        .map((partner: any) => `• ${partner.partnerName} (${partner.messagesExchanged} instances)`) 
+                        .join('\n') || '• None'
+                }`
+            }
+        }
+    ];
+
+    // Add achievements if any
+    if (report.achievements.length > 0) {
+        blocks.push({
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: `*🏆 Achievements:*\n${report.achievements.map((achievement: any) =>
+                    `${achievement.icon} ${achievement.description}`
+                ).join('\n')}`
+            }
+        });
+    }
+
+    // Top flagged messages (examples) as its own section before action buttons
+    if (Array.isArray(report.messageExamples) && report.messageExamples.length > 0) {
+        blocks.push({
+            type: "section",
+            text: { type: "mrkdwn", text: "*Top flagged messages*" }
+        });
+
+        const top = report.messageExamples.slice(0, 2);
+        top.forEach((ex: any, idx: number) => {
+            blocks.push({
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `• ${String(ex.summary || '').slice(0, 120)}`
+                },
+                accessory: {
+                    type: "button",
+                    text: { type: "plain_text", text: "Open" },
+                    url: getSlackMessageUrl(ex.channelId, ex.messageTs),
+                    action_id: `open_example_${idx}`
+                }
+            } as any);
+        });
+    }
+
+    // Action buttons
+    const actionBlock: any = {
+        type: "actions",
+        elements: [
+            {
+                type: "button",
+                text: { type: "plain_text", text: "📈 View Detailed Report" },
+                style: "primary",
+                url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://localhost:3000'}/reports/weekly/${report.reportId}`
+            }
+        ]
+    };
+
+    // (Examples now appear in a dedicated section above; no extra buttons here)
+
+    blocks.push(actionBlock);
+
+    return await sendDirectMessage(user.slackId, '', botToken, blocks);
+};
+
+// 🔔 NEW: Monthly report DM delivery
+export const sendMonthlyReportDM = async (
+    user: any,
+    report: any,
+    botToken: string
+): Promise<boolean> => {
+    const { getFlagInfo, getFlagEmoji } = await import('@/types');
+
+    const improvingFlags = report.chartMetadata.flagTrends.filter((f: any) => f.trend === 'down').slice(0, 2);
+    const concerningFlags = report.chartMetadata.flagTrends.filter((f: any) => f.trend === 'up').slice(0, 2);
+
+    const blocks = [
+        {
+            type: "header",
+            text: { type: "plain_text", text: "📈 Your Monthly Communication Report" }
+        },
+        {
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: `*Communication Score: ${report.communicationScore}/100* ${
+                    report.scoreChange > 0 ? '🚀' :
+                    report.scoreChange < 0 ? '⚠️' : '➡️'
+                }\n*${Math.abs(report.scoreChange)} points ${
+                    report.scoreChange > 0 ? 'improvement' :
+                    report.scoreChange < 0 ? 'change' : 'change'
+                } from last month*`
+            }
+        },
+        {
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: `*This month:* ${report.currentPeriod.flaggedMessages} improvements from ${report.currentPeriod.totalMessages} messages\n\n${
+                    improvingFlags.length > 0 ?
+                    `*🟢 Areas showing improvement:*\n${improvingFlags.map((flag: any) => {
+                        const flagInfo = getFlagInfo(flag.flagId);
+                        return `• ${getFlagEmoji(flag.flagId)} ${flagInfo?.name} (-${Math.abs(flag.changePercent)}%)`;
+                    }).join('\n')}\n\n` : ''
+                }${
+                    concerningFlags.length > 0 ?
+                    `*🔴 Areas needing attention:*\n${concerningFlags.map((flag: any) => {
+                        const flagInfo = getFlagInfo(flag.flagId);
+                        return `• ${getFlagEmoji(flag.flagId)} ${flagInfo?.name} (+${flag.changePercent}%)`;
+                    }).join('\n')}` : ''
+                }`
+            }
+        },
+        {
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: `*🤝 Communication Partners:*\n${
+                    (report.partnerAnalysis || [])
+                        .slice()
+                        .sort((a: any, b: any) => (b.messagesExchanged ?? 0) - (a.messagesExchanged ?? 0))
+                        .slice(0, 3)
+                        .map((partner: any) => `${partner.partnerName} (${partner.messagesExchanged ?? 0} instances)`) 
+                        .join(' • ') || 'None'
+                }\n\n*💡 Monthly Insight:* ${report.recommendations[0] || 'Keep practicing your improved communication habits!'}`
+            }
+        },
+        {
+            type: "actions",
+            elements: [
+                {
+                    type: "button",
+                    text: { type: "plain_text", text: "📊 View Full Analytics" },
+                    style: "primary",
+                    url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://localhost:3000'}/reports/monthly/${report.reportId}`
+                }
+            ]
+        }
+    ];
+
+    return await sendDirectMessage(user.slackId, '', botToken, blocks);
+};
+
+// 🔗 Helper function for Slack message URLs
+function getSlackMessageUrl(channelId: string, messageTs: string): string {
+    // Convert Slack timestamp to permalink format
+    const timestamp = messageTs.replace('.', '');
+    return `slack://channel?team=T123456&id=${channelId}&message=${timestamp}`;
+}
  

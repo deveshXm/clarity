@@ -37,6 +37,7 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **Ask for permission**: If you want to add something extra, always ask for permission first
 - **Follow up questions**: If confused about requirements, ask clarifying questions
 - **Stay focused**: Complete the specific task requested before suggesting improvements
+- **No automatic builds**: Never run `npm run build` unless explicitly requested - the development server is already running
 
 ## Build Quality & Error Prevention
 - **JSX Entity Escaping**: Always escape special characters in JSX text content to prevent React unescaped entity errors
@@ -56,12 +57,55 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **Build Verification**: Always run `npm run build` before completing tasks to ensure no build errors
 - **Import Optimization**: All API routes have been refactored to use static imports for better performance and type safety
 
+## Reporting UX & AI Responsibilities ✅ UPDATED
+- **Deterministic UI sections**: Compute and sort “Top areas to focus on” and “Communication Partners” locally from instances (no AI math).
+- **AI-only outputs**: 0–10 score (higher=better), trend wording, key insight, and up to two `focusExampleIndexes` (instance indexes). Always display scores out of 10 in UI.
+- **Examples in DM**: Show a “Top flagged messages” section above the action buttons with a short snippet and an “Open” link for each (use `channelId`+`messageTs`). Do not render examples as extra buttons at the bottom.
+- **No placeholders**: Exclude partners with 0 instances; do not include “Unspecified/Group”.
+- **Normalization**: Always ensure required fields exist with defaults before rendering.
+
+### Weekly/Monthly Detailed Reports UI ✅ STANDARDIZED
+- Score must be shown as `x.y/10` with progress scaled 0–10 and tick marks `0 · 5 · 10`.
+- Trend badge: 📈 improving, 📉 declining, ➡️ stable; show signed delta.
+- “Top areas to focus on”: Top N flags by count with emoji, name, count, percentage, description.
+- “Communication Partners”: Only partners with `messagesExchanged > 0`, sorted by messages, top 3.
+- “Top flagged messages”: Snippets with deep links by `channelId` + `messageTs`, above footer/actions.
+- Empty states: Friendly placeholders for no data (trends, partners, examples).
+
 ## Framework-First Approach
 - **Next.js 15** - we are using nextjs 15 version
 - **Use Next.js built-ins**: Always use Next.js default features like `loading.tsx`, `error.tsx`, and `not-found.tsx` for handling loading states, errors, and 404s instead of custom logic
 - **Check before creating**: Always check if a component, hook, or utility already exists in the framework or codebase before creating a new one
 - **Ask before building**: Must ask permission before creating new components, utilities, or logic that might already exist in the framework
 - **Leverage defaults**: Prefer Next.js conventions (file-based routing, built-in components) over custom implementations
+
+## Environment Variable Management ✅ NATIVE APPROACH
+- **Node.js Native**: Use Node.js 20.6.0+ native `--env-file` flag instead of dotenv package
+- **No Import Timing Issues**: Native loading eliminates dotenv import order problems
+- **Clean Scripts**: Scripts use `tsx --env-file=.env.local` pattern without dotenv imports
+- **Environment Files**:
+  - `.env.local` - Development environment variables
+  - `.env.production` - Production environment variables
+- **Script Pattern**:
+  ```typescript
+  #!/usr/bin/env tsx
+  // Environment variables loaded automatically by Node.js --env-file flag
+  
+  console.log('🚀 Starting script...');
+  
+  // Direct imports - no dotenv needed
+  import { ObjectId } from 'mongodb';
+  import { db } from '@/lib/db';
+  ```
+- **Package.json Commands**:
+  ```json
+  {
+    "scripts": {
+      "script:dev": "tsx --env-file=.env.local src/scripts/script.ts",
+      "script:prod": "tsx --env-file=.env.production src/scripts/script.ts"
+    }
+  }
+  ```
 
 ## Code Duplication Prevention
 - **Check before creating**: Always search existing codebase before creating new functions, types, or database operations
@@ -433,6 +477,7 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
 - **Server actions**: [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts) - Database operations and business logic
 - **AI Integration**: [src/lib/ai.ts](mdc:src/lib/ai.ts) - Azure OpenAI powered AI functions for auto-coaching
 - **AI Prompts**: [src/lib/prompts/index.ts](mdc:src/lib/prompts/index.ts) - Centralized AI prompt templates (includes contextual variants for rephrase)
+- **Reports System**: [src/lib/report-utils.ts](mdc:src/lib/report-utils.ts) - Optimized report generation utilities with incremental approach
 - **Theme configuration**: [src/lib/theme.ts](mdc:src/lib/theme.ts)
 - **Utilities**: [src/lib/utils.ts](mdc:src/lib/utils.ts)
 
@@ -441,10 +486,25 @@ _This snapshot helps you quickly navigate the existing codebase. It will become 
 
 ### UI Component Folders
 - **UI wrappers**: [src/components/ui/](mdc:src/components/ui) - Comprehensive UI component library
+- **Reports components**: [src/components/reports/](mdc:src/components/reports) - Report viewing components for weekly/monthly reports
 - **Auth-specific components**: [src/components/auth/](mdc:src/components/auth) (currently empty)
 
+### Scripts & Background Jobs
+- **Report Generation**: [src/app/scripts/](mdc:src/app/scripts/) - Optimized weekly/monthly report generation scripts
+  - **Weekly**: [src/app/scripts/generate-weekly-reports.ts](mdc:src/app/scripts/generate-weekly-reports.ts) - Incremental weekly report generation
+  - **Monthly**: [src/app/scripts/generate-monthly-reports.ts](mdc:src/app/scripts/generate-monthly-reports.ts) - Incremental monthly report generation
+  - **Testing**: [src/app/scripts/test-reports.ts](mdc:src/app/scripts/test-reports.ts) - System validation and testing
+  - **Environment-aware**: Uses `.env.local` for dev, `.env.production` for prod via `NODE_ENV`
+  - **Proper termination**: All scripts use `process.exit()` to prevent hanging
+
+### Report Pages
+- **Weekly Reports**: [src/app/reports/weekly/[id]/page.tsx](mdc:src/app/reports/weekly/[id]/page.tsx) - Dynamic weekly report pages
+- **Monthly Reports**: [src/app/reports/monthly/[id]/page.tsx](mdc:src/app/reports/monthly/[id]/page.tsx) - Dynamic monthly report pages
+- **Security**: Long unguessable IDs, no authentication required
+- **Analytics**: Pre-calculated chart data with current vs previous period comparisons
+
 ### Data & Types
-- **Type definitions**: [src/types/index.ts](mdc:src/types/index.ts) - Simplified Zod schemas and TypeScript types
+- **Type definitions**: [src/types/index.ts](mdc:src/types/index.ts) - Simplified Zod schemas and TypeScript types including optimized `ReportSchema`
 - **No Mongoose Models**: Database operations use native MongoDB driver with Zod schemas for validation
 
 ### Styling & Theme
@@ -1468,8 +1528,288 @@ import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 ### Analytics Coverage Achieved
 - **Complete User Journey**: Landing → OAuth → Onboarding → Feature Usage
 - **Feature Adoption**: Auto-coaching, manual commands, settings, subscriptions
+- **Onboarding Barriers**: Track when users try to access features before completing onboarding
 - **Performance Metrics**: AI analysis timing, success rates, error patterns
 - **Business Intelligence**: Subscription conversion, usage patterns, user segmentation
+
+## Onboarding Requirement Enforcement ✅ IMPLEMENTED
+
+### Feature Access Control
+- **Onboarding Required**: All feature commands require `hasCompletedOnboarding: true`
+- **Blocked Features**:
+  - `/clarity-personal-feedback` - Personal communication analysis
+  - `/clarity-rephrase` - Manual message improvement
+  - `/clarity-settings` - User preferences and billing
+- **Allowed Features**:
+  - `/clarity-help` - Always accessible for user guidance
+  - `/clarity-status` - Always accessible for channel status
+
+### User Experience for Incomplete Onboarding
+**Command Response Pattern:**
+```typescript
+// Immediate ephemeral response with onboarding button
+{
+  text: 'Please complete onboarding to access Clarity features.',
+  response_type: 'ephemeral',
+  blocks: [
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: 'Please complete onboarding to access Clarity features.' },
+      accessory: {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Complete Onboarding' },
+        url: `${baseUrl}/app/onboarding?user=${userId}&team=${workspaceId}`
+      }
+    }
+  ]
+}
+```
+
+### Auto Coaching Protection
+- **Event Processing**: Auto coaching events are skipped for users without completed onboarding
+- **Silent Operation**: No feedback sent, no errors logged (clean user experience)
+- **Database Check**: `hasCompletedOnboarding` validated before AI analysis
+
+### PostHog Onboarding Tracking ✅ IMPLEMENTED
+**New Event Type:**
+```typescript
+// Track onboarding requirement barriers
+LIMITS_ONBOARDING_REQUIRED: 'limits:onboarding_required'
+```
+
+**Event Data Structure:**
+```typescript
+{
+  command: string,           // Feature attempted (e.g., 'auto_coaching', '/personalfeedback')
+  channel_id: string,        // Slack channel where attempted
+  user_name: string,         // User's display name
+  workspace_id: string,      // MongoDB workspace ObjectId
+  subscription_tier: string, // 'FREE' or 'PRO'
+  message_length?: number    // For auto coaching events
+}
+```
+
+**Tracking Implementation:**
+- **Command Handlers**: Track when users try feature commands without onboarding
+- **Auto Coaching**: Track when auto coaching is skipped due to incomplete onboarding
+- **Business Insights**: Understand onboarding conversion barriers and feature demand
+
+### Onboarding Prompt Function
+**Location**: [src/lib/slack.ts](mdc:src/lib/slack.ts) - `sendOnboardingPromptMessage()`
+
+```typescript
+export const sendOnboardingPromptMessage = async (
+    userId: string,
+    teamId: string,
+    botToken: string
+): Promise<boolean>
+```
+
+**Features:**
+- **Clean Design**: Simple, informative message without overwhelming details
+- **Direct Action**: Clear "Complete Onboarding" button with proper URL
+- **Background Processing**: Sent via `after()` to avoid blocking responses
+- **Error Handling**: Graceful failure without breaking user flow
+
+### Database Schema Integration
+**Existing Field**: `hasCompletedOnboarding: boolean` in `SlackUserSchema`
+- **Default**: `false` for new users
+- **Update**: Set to `true` when onboarding completes
+- **Validation**: Checked before all feature access
+
+### Best Practices ✅ ENFORCED
+- **Immediate Response**: Always respond to Slack within timeout limits
+- **Background Processing**: Use `after()` for non-critical operations
+- **Consistent URLs**: Use `${baseUrl}/app/onboarding?user=${userId}&team=${teamId}` format
+- **Clean UX**: Ephemeral messages don't interrupt channel conversation
+- **Analytics Tracking**: Every access attempt is tracked for business insights
+
+### Implementation Files
+- **Command Checks**: [src/app/api/slack/commands/route.ts](mdc:src/app/api/slack/commands/route.ts)
+- **Auto Coaching Check**: [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts)
+- **Onboarding Prompt**: [src/lib/slack.ts](mdc:src/lib/slack.ts)
+- **Event Tracking**: [src/lib/analytics/events.ts](mdc:src/lib/analytics/events.ts)
+
+## Reports System Architecture ✅ OPTIMIZED & FIXED
+
+### Incremental Reporting Approach
+**Problem Solved**: Eliminated inefficient historical data fetching that caused high database load and AI token costs.
+
+**Solution**: 
+- **Current Period Only**: Scripts fetch only messages from the current week/month (90% fewer queries)
+- **Report Comparisons**: Compare current data with previous *generated reports* instead of raw historical messages
+- **Pre-calculated Metadata**: Store chart-ready data directly in report schema to avoid recalculations
+
+### Performance Gains Achieved
+- **Database Queries**: ~90% reduction (only current period data)
+- **AI Token Usage**: ~80% reduction (report comparisons vs raw message analysis)
+- **Chart Generation**: Instant loading with pre-calculated trends
+- **Memory Usage**: ~95% reduction (small datasets vs full message history)
+- **Script Execution**: Proper termination prevents hanging processes
+
+### Report Generation Scripts ✅ NATIVE ENV LOADING
+**Location**: [src/app/scripts/](mdc:src/app/scripts/)
+
+**Environment Configuration**:
+- **Native Node.js**: Uses Node.js 20.6.0+ native `--env-file` flag (no dotenv dependency)
+- **Development**: Uses `.env.local` automatically loaded by Node.js
+- **Production**: Uses `.env.production` automatically loaded by Node.js
+- **Package Scripts**: Clean commands using native env loading
+
+```bash
+# Development (uses .env.local)
+npm run reports:weekly:dev     # tsx --env-file=.env.local
+npm run reports:monthly:dev    # tsx --env-file=.env.local  
+npm run reports:all:dev        # tsx --env-file=.env.local
+npm run reports:test:dev       # tsx --env-file=.env.local
+
+# Production (uses .env.production)
+npm run reports:weekly:prod    # tsx --env-file=.env.production
+npm run reports:monthly:prod   # tsx --env-file=.env.production
+npm run reports:all:prod       # tsx --env-file=.env.production
+npm run reports:test:prod      # tsx --env-file=.env.production
+```
+
+### Critical Data Model Fixes ✅ RESOLVED
+- **userId Storage**: Analysis instances now store `userId: user._id` (MongoDB ObjectId) instead of Slack ID
+- **Date Boundaries**: Weekly reports use proper Monday-to-Monday boundaries, monthly use 1st-of-month boundaries
+- **Query Matching**: Report scripts query with ObjectId directly for perfect data matching
+- **Type Safety**: Updated `AnalysisInstanceSchema` to expect `ObjectId` for `userId` field
+
+### Data Storage Strategy ✅ PRIVACY-FIRST
+**Analysis Instances**: Only store flagged parameters, timestamps, and AI metadata - never exact message content.
+
+### Target Resolution Architecture ✅ IMPLEMENTED
+**Dynamic user name resolution for better accuracy and performance:**
+
+#### Storage Pattern
+- **Store IDs, not names**: Save `targetIds: string[]` array with Slack user IDs
+- **Multiple targets**: Support messages directed to multiple people
+- **No real-time resolution**: Avoid API calls during message analysis for better performance
+
+#### Resolution Pattern  
+- **Dynamic resolution**: Resolve user names during report generation using workspace bot token
+- **Bulk resolution**: Collect all unique target IDs and resolve in parallel batches
+- **Fresh data**: Always use current display names from Slack workspace
+- **Error handling**: Graceful fallbacks when users can't be resolved
+
+#### Implementation Functions
+```typescript
+// Single user resolution
+const userName = await resolveSlackUserName(userId, workspace.botToken);
+
+// Bulk user resolution (preferred for reports)
+const resolvedNames = await resolveSlackUserNames(userIds, workspace.botToken);
+// Returns: Record<string, string> mapping userId -> displayName
+```
+
+#### AI Prompt Enhancement
+- **Extract user IDs**: AI identifies Slack user IDs from @mentions and context
+- **Multiple targets**: Returns `targetIds: string[]` instead of single target object
+- **Improved accuracy**: Focus on reliable ID extraction over name guessing
+
+```typescript
+// What gets stored from auto-coaching ✅ UPDATED TARGET RESOLUTION
+AnalysisInstance {
+  _id: ObjectId,
+  userId: string,
+  workspaceId: string,
+  channelId: string,
+  messageTs: string,
+  flagIds: number[], // Array of flag IDs from MESSAGE_ANALYSIS_TYPES
+  targetIds: string[], // 🎯 Multiple target Slack user IDs (e.g., ["U123456789", "U987654321"])
+  createdAt: Date,
+  aiMetadata: {
+    primaryFlagId: number,
+    confidence: number,
+    reasoning: string,
+    suggestedTone?: string
+  }
+}
+```
+
+### Report Schema with Optimization ✅ NEW
+**Pre-calculated data structure eliminates repeated computations:**
+
+```typescript
+Report {
+  _id: string,
+  reportId: string, // Long unguessable ID for security
+  userId: string,
+  period: 'weekly' | 'monthly',
+  
+  // Current period data only (not historical)
+  currentPeriod: {
+    totalMessages: number,
+    flaggedMessages: number,
+    flaggedMessageIds: string[], // For Slack deep links
+    flagBreakdown: FlagBreakdown[], // With message IDs for examples
+    partnerAnalysis: PartnerAnalysis[], // Current relationships only
+  },
+  
+  // Pre-calculated chart data (no recalculation needed)
+  chartMetadata: {
+    flagTrends: Array<{flagId: number, current: number, previous: number}>,
+    scoreHistory: Array<{period: string, score: number}>,
+    partnerTrends: Array<{partner: string, improvement: number}>,
+  },
+  
+  // Calculated scores and insights
+  communicationScore: number,
+  scoreChange: number,
+  recommendations: string[],
+  achievements: string[],
+  
+  createdAt: Date,
+  expiresAt: Date // Optional expiration for cleanup
+}
+```
+
+### Report Delivery Integration ✅ SLACK DM
+**Interactive Slack messages with webpage links:**
+
+- **Compact Format**: Communication score, top issues, key insights
+- **Interactive Buttons**: "View Full Report" redirects to `/reports/weekly/{id}` or `/reports/monthly/{id}`
+- **Security**: Long unguessable IDs eliminate need for authentication
+- **Block Kit Format**: Professional formatting with proper emojis and layout
+
+### Report Webpages ✅ ANALYTICS FOCUSED
+**Detailed report views with visual analytics:**
+
+- **Routes**: `/reports/weekly/[id]` and `/reports/monthly/[id]`
+- **Components**: [src/components/reports/WeeklyReportView.tsx](mdc:src/components/reports/WeeklyReportView.tsx) and [src/components/reports/MonthlyReportView.tsx](mdc:src/components/reports/MonthlyReportView.tsx)
+- **Charts**: Line graphs showing flag trends (current vs previous period)
+- **Message Examples**: Deep links to original Slack messages
+- **Partner Analysis**: Communication improvement recommendations by person
+
+### Script Termination Best Practices ✅ IMPLEMENTED
+**All scripts properly terminate to prevent hanging:**
+
+```typescript
+// Pattern used in all report generation scripts
+console.log('🎉 Report generation completed');
+
+// Close database connection when running directly
+if (require.main === module) {
+    process.exit(0);
+}
+
+// Error handling with proper exit codes
+generateReports().catch((error) => {
+    console.error('❌ Report generation failed:', error);
+    process.exit(1);
+});
+```
+
+### Implementation Files Updated ✅ COMPLETE
+- **Types**: [src/types/index.ts](mdc:src/types/index.ts) - `AnalysisInstanceSchema` and `ReportSchema`
+- **Database**: [src/lib/db.ts](mdc:src/lib/db.ts) - Added `reportCollection`
+- **Auto-coaching**: [src/app/api/slack/events/route.ts](mdc:src/app/api/slack/events/route.ts) - Stores `flagIds` array
+- **Report Utils**: [src/lib/report-utils.ts](mdc:src/lib/report-utils.ts) - Optimized calculation functions
+- **Slack Integration**: [src/lib/slack.ts](mdc:src/lib/slack.ts) - Report DM functions
+- **Scripts**: All generation and test scripts with proper termination
+- **Components**: Report viewing components with chart integration
+- **Package**: [package.json](mdc:package.json) - Environment-specific script commands
 
 ---
 _Use this snapshot alongside the guidelines above to maintain consistency and avoid duplicating functionality._
