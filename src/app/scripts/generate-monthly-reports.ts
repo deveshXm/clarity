@@ -62,7 +62,7 @@ export async function generateMonthlyReports() {
             index: idx,
             messageTs: i.messageTs,
             channelId: i.channelId,
-            text: i.text,
+            issueDescription: i.issueDescription || 'Communication issue detected',
             flagIds: i.flagIds,
             targetIds: i.targetIds || []
         }));
@@ -128,8 +128,6 @@ export async function generateMonthlyReports() {
         // Build examples list using AI-selected indexes or fallback deterministic selection
         const focusIdx: number[] = Array.isArray((aiReport as any)?.focusExampleIndexes) ? (aiReport as any).focusExampleIndexes.slice(0, 10) : [];
         const severityWeights: Record<number, number> = { 5: 1.0, 6: 0.8, 1: 0.7, 2: 0.6, 3: 0.5, 4: 0.5, 7: 0.4, 8: 0.3 };
-        const safeTruncate = (s: string, n: number) => (s || '').slice(0, n) + ((s || '').length > n ? '…' : '');
-
         let exampleInstances = focusIdx
             .map((idx) => currentMonthInstances[idx])
             .filter((i) => !!i);
@@ -150,7 +148,7 @@ export async function generateMonthlyReports() {
             messageTs: inst.messageTs,
             channelId: inst.channelId,
             flagIds: inst.flagIds || [],
-            summary: safeTruncate(inst.text || '', 80)
+            summary: inst.issueDescription || 'Communication issue detected'
         }));
 
         if (examples.length > 0) {
@@ -165,7 +163,7 @@ export async function generateMonthlyReports() {
             _id: new ObjectId(),
             reportId,
             userId: user._id.toString(),
-            workspaceId: workspaceForNames?.workspaceId || user.workspaceId,
+            workspaceId: workspaceForNames?.workspaceId || 'unknown',
             period: 'monthly' as const,
             periodStart: firstOfMonth,
             periodEnd: new Date(),
@@ -217,10 +215,6 @@ export async function generateMonthlyReports() {
     }
 }
 
-async function calculateMonthlyAnalytics(user: any, currentInstances: any[], previousReport: any | null) {
-    // Deprecated: local analytics removed in favor of AI-generated reports
-    return {} as any;
-}
 
 function buildMonthlyInstancesTrend(instances: any[], firstOfMonth: Date) {
     const labels: string[] = [];

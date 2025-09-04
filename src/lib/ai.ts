@@ -182,6 +182,7 @@ function parseComprehensiveAnalysis(raw: unknown): ComprehensiveAnalysisResult {
             needsCoaching: false,
             flags: [],
             targetIds: [],
+            issueDescription: 'Unable to analyze message due to parsing error',
             improvedMessage: null,
             reasoning: {
                 whyNeedsCoaching: 'Parse error occurred',
@@ -217,7 +218,7 @@ export interface AiReportInstanceInput {
     index?: number; // enumerated index for referencing examples
     messageTs: string;
     channelId: string;
-    text: string;
+    issueDescription: string; // AI-extracted issue description (no confidential content)
     flagIds: number[];
     targetIds: string[];
 }

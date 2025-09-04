@@ -843,11 +843,15 @@ export const sendWeeklyReportDM = async (
 
         const top = report.messageExamples.slice(0, 2);
         top.forEach((ex: any, idx: number) => {
+            const summaryText = ex.summary && ex.summary.trim() 
+                ? ex.summary.slice(0, 120)
+                : 'Communication issue detected';
+                
             blocks.push({
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: `• ${String(ex.summary || '').slice(0, 120)}`
+                    text: `• ${summaryText}`
                 },
                 accessory: {
                     type: "button",

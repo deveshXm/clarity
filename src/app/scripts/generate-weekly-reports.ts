@@ -134,7 +134,6 @@ export async function generateWeeklyReports() {
         // Build examples list using AI-selected indexes or fallback deterministic selection
         const focusIdx: number[] = Array.isArray((aiReport as any)?.focusExampleIndexes) ? (aiReport as any).focusExampleIndexes.slice(0, 10) : [];
         const severityWeights: Record<number, number> = { 5: 1.0, 6: 0.8, 1: 0.7, 2: 0.6, 3: 0.5, 4: 0.5, 7: 0.4, 8: 0.3 };
-        const safeTruncate = (s: string, n: number) => (s || '').slice(0, n) + ((s || '').length > n ? '…' : '');
 
         let exampleInstances = focusIdx
             .map((idx) => currentWeekInstances[idx])
@@ -157,7 +156,7 @@ export async function generateWeeklyReports() {
             messageTs: inst.messageTs,
             channelId: inst.channelId,
             flagIds: inst.flagIds || [],
-            summary: safeTruncate(inst.text || '', 80)
+            summary: inst.issueDescription || 'Communication issue detected'
         }));
 
         if (examples.length > 0) {
@@ -172,7 +171,7 @@ export async function generateWeeklyReports() {
             _id: new ObjectId(),
             reportId,
             userId: user._id.toString(),
-            workspaceId: workspaceForNames?.workspaceId || user.workspaceId,
+            workspaceId: workspaceForNames?.workspaceId || 'unknown',
             period: 'weekly' as const,
             periodStart: lastMonday,
             periodEnd: new Date(),
@@ -225,10 +224,6 @@ export async function generateWeeklyReports() {
     }
 }
 
-async function calculateWeeklyAnalytics(user: any, currentInstances: any[], previousReport: any | null) {
-    // Deprecated: local analytics removed in favor of AI-generated reports
-    return {} as any;
-}
 
 function buildInstancesTrendSeries(instances: any[], periodStart: Date) {
     // 7-day range starting at Monday

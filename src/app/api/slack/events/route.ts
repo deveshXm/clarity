@@ -265,6 +265,7 @@ async function handleMessageEvent(event: Record<string, unknown>) {
             needsCoaching: analysis.needsCoaching,
             flagsFound: analysis.flags.length,
             hasTargets: analysis.targetIds && analysis.targetIds.length > 0,
+            issueDescription: analysis.issueDescription,
             targetCount: analysis.targetIds ? analysis.targetIds.length : 0,
             hasImprovement: !!analysis.improvedMessage,
             reasoning: analysis.reasoning.primaryIssue
@@ -381,16 +382,16 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         if (success) {
             console.log('✅ Ephemeral feedback sent successfully');
             
-                    // 🆕 NEW: Save analysis instance with multiple flags and target IDs
-        await analysisInstanceCollection.insertOne({
+                    // 🆕 NEW: Save analysis instance with multiple flags and target IDs (Privacy-First: No Message Text)
+        const instanceData = {
             _id: new ObjectId(),
             userId: user._id, // Store as ObjectId directly
             workspaceId: user.workspaceId,
             channelId: validatedEvent.channel,
             messageTs: validatedEvent.ts,
-            text: validatedEvent.text,
             flagIds: analysis.flags.map(f => f.typeId), // 🎯 Multiple flags
             targetIds: analysis.targetIds || [], // 🎯 Multiple target user IDs
+            issueDescription: analysis.issueDescription, // AI-extracted issue description (no confidential content)
             createdAt: new Date(),
             aiMetadata: {
                 primaryFlagId: primaryFlag.typeId,
@@ -398,7 +399,15 @@ async function handleMessageEvent(event: Record<string, unknown>) {
                 reasoning: analysis.reasoning.whyNeedsCoaching,
                 suggestedTone: analysis.reasoning.primaryIssue,
             },
+        };
+        
+        console.log('💾 Storing analysis instance:', {
+            issueDescription: instanceData.issueDescription,
+            flagIds: instanceData.flagIds,
+            targetIds: instanceData.targetIds
         });
+        
+        await analysisInstanceCollection.insertOne(instanceData);
 
         // Track successful auto coaching trigger (only when message is actually sent)
         trackEvent(user.slackId, EVENTS.FEATURE_AUTO_COACHING_TRIGGERED, {

@@ -84,6 +84,7 @@ Focus on clarity and politeness without sterilizing the author's voice
   "needsCoaching": true/false,
   "flags": [{"typeId": 1, "type": "pushiness", "confidence": 0.8, "explanation": "specific reason"}] or [],
   "targetIds": ["U123456789", "U987654321"] or [],
+  "issueDescription": "Brief description of communication issues found (no confidential content, just the problem pattern)",
   "improvedMessage": {"originalMessage": "exact text", "improvedMessage": "better version", "improvements": ["specific change 1", "change 2"], "tone": "casual/professional/friendly"} or null,
   "reasoning": {"whyNeedsCoaching": "clear explanation", "primaryIssue": "main problem or none", "contextInfluence": "how history informed analysis"}
 }`;

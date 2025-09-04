@@ -9,12 +9,8 @@
     "lint": "next lint",
     "reports:weekly:dev": "tsx --env-file=.env.local src/app/scripts/generate-weekly-reports.ts",
     "reports:monthly:dev": "tsx --env-file=.env.local src/app/scripts/generate-monthly-reports.ts",
-    "reports:all:dev": "tsx --env-file=.env.local src/app/scripts/run-reports.ts",
-    "reports:test:dev": "tsx --env-file=.env.local src/app/scripts/test-reports.ts",
     "reports:weekly:prod": "tsx --env-file=.env.production src/app/scripts/generate-weekly-reports.ts",
-    "reports:monthly:prod": "tsx --env-file=.env.production src/app/scripts/generate-monthly-reports.ts",
-    "reports:all:prod": "tsx --env-file=.env.production src/app/scripts/run-reports.ts",
-    "reports:test:prod": "tsx --env-file=.env.production src/app/scripts/test-reports.ts"
+    "reports:monthly:prod": "tsx --env-file=.env.production src/app/scripts/generate-monthly-reports.ts"
   },
   "dependencies": {
     "@azure/openai": "^2.0.0",

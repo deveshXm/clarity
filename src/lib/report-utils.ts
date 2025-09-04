@@ -154,7 +154,12 @@ export function getMessageExamples(
     instances: any[], 
     resolvedUserNames: Record<string, string>
 ): any[] {
-    return instances.slice(0, 3).map(instance => {
+    // Filter to only instances that have issue descriptions (new format)
+    const instancesWithDescriptions = instances.filter(instance => 
+        instance.issueDescription && instance.issueDescription.trim().length > 0
+    );
+    
+    return instancesWithDescriptions.slice(0, 3).map(instance => {
         // Handle both new targetIds array and legacy target object
         const targetIds = instance.targetIds || (instance.target ? [instance.target.slackId] : []);
         const targetNames = targetIds.map((id: string) => 
@@ -165,7 +170,7 @@ export function getMessageExamples(
             messageTs: instance.messageTs,
             channelId: instance.channelId,
             flagIds: instance.flagIds,
-            summary: `Message with ${instance.flagIds.length} flag(s)`,
+            summary: instance.issueDescription, // Use AI-extracted issue description only
             targetNames: targetNames.length > 0 ? targetNames : null,
             improvement: instance.aiMetadata?.suggestedTone,
         };
@@ -267,14 +272,3 @@ function calculateRelationshipScore(partner: any): number {
     return Math.max(0, Math.min(100, baseScore - flagPenalty + messageBonus));
 }
 
-function generateMessageSummary(instance: any): string {
-    const flagNames = instance.flagIds.map((id: number) =>
-        getFlagInfo(id)?.name.toLowerCase()
-    ).filter(Boolean);
-
-    if (flagNames.length === 1) {
-        return `Message flagged for ${flagNames[0]}`;
-    } else {
-        return `Message flagged for ${flagNames.slice(0, -1).join(', ')} and ${flagNames[flagNames.length - 1]}`;
-    }
-}

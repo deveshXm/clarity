@@ -485,8 +485,8 @@ function MessagesNeedingAttentionChart({ messages, workspaceId }: { messages: Ar
     return (
         <Stack gap={8}>
             {messages.map((msg, idx) => {
-                // Use correct Slack URL format with workspace ID
-                const link = `https://app.slack.com/client/${workspaceId}/${msg.channelId}/${msg.messageTs.replace('.', '')}`;
+                // Use Slack protocol for better app integration
+                const link = `slack://channel?team=${workspaceId}&id=${msg.channelId}&message=${msg.messageTs}`;
                 const flagNames = Array.isArray(msg.flagIds) 
                     ? msg.flagIds.map((id: number) => getFlagInfo(id)?.name || `#${id}`).join(', ') 
                     : '';
@@ -495,7 +495,7 @@ function MessagesNeedingAttentionChart({ messages, workspaceId }: { messages: Ar
                     <Row key={idx} justify="space-between" align="center" className="py-6 px-8 bg-gray-50 hover:bg-gray-100 transition-colors">
                         <Stack gap={4} className="flex-1 min-w-0">
                             <Text className="text-lg text-gray-900 leading-relaxed">
-                                &ldquo;{msg.summary}&rdquo;
+                                {msg.summary || 'Communication issue detected'}
                             </Text>
                             {flagNames && (
                                 <Text className="text-base text-gray-600">
