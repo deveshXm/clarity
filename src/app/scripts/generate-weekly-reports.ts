@@ -172,6 +172,7 @@ export async function generateWeeklyReports() {
             _id: new ObjectId(),
             reportId,
             userId: user._id.toString(),
+            workspaceId: workspaceForNames?.workspaceId || user.workspaceId,
             period: 'weekly' as const,
             periodStart: lastMonday,
             periodEnd: new Date(),

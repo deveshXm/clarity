@@ -137,6 +137,7 @@ export const ReportSchema = z.object({
     _id: z.string(),
     reportId: z.string(), // 🔐 Long unguessable ID
     userId: z.string(),
+    workspaceId: z.string(), // Slack team ID for deep links
     period: z.enum(['weekly', 'monthly']),
     periodStart: z.coerce.date(),
     periodEnd: z.coerce.date(),

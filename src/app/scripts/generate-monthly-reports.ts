@@ -165,6 +165,7 @@ export async function generateMonthlyReports() {
             _id: new ObjectId(),
             reportId,
             userId: user._id.toString(),
+            workspaceId: workspaceForNames?.workspaceId || user.workspaceId,
             period: 'monthly' as const,
             periodStart: firstOfMonth,
             periodEnd: new Date(),

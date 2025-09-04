@@ -145,7 +145,7 @@ export function MonthlyReportView({ report }: MonthlyReportViewProps) {
                     <Title order={3} className="mb-3 text-xl">Top flagged messages</Title>
                     <div className="space-y-3">
                         {report.messageExamples.slice(0, 10).map((ex: any, idx: number) => {
-                            const link = `https://slack.com/app_redirect?channel=${encodeURIComponent(ex.channelId)}&message_ts=${encodeURIComponent(ex.messageTs)}`;
+                            const link = `https://app.slack.com/client/${report.workspaceId}/${ex.channelId}/${ex.messageTs.replace('.', '')}`;
                             return (
                                 <Row key={idx} justify="space-between" className="p-3 border border-gray-200 rounded">
                                     <Stack className="min-w-0">

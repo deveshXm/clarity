@@ -94,7 +94,7 @@ export function WeeklyReportView({ report }: WeeklyReportViewProps) {
 					<Title order={2} className="text-2xl font-bold text-gray-900">
 						Messages Needing Most Attention
 					</Title>
-					<MessagesNeedingAttentionChart messages={report.messageExamples.slice(0, 8)} />
+					<MessagesNeedingAttentionChart messages={report.messageExamples.slice(0, 8)} workspaceId={report.workspaceId} />
 				</Stack>
 			)}
 
@@ -473,7 +473,7 @@ function PartnerAnalysisSection({ partners, totalFlaggedCount = 0 }: { partners:
     );
 }
 
-function MessagesNeedingAttentionChart({ messages }: { messages: Array<{ channelId: string; messageTs: string; summary: string; flagIds: number[] }> }) {
+function MessagesNeedingAttentionChart({ messages, workspaceId }: { messages: Array<{ channelId: string; messageTs: string; summary: string; flagIds: number[] }>; workspaceId: string }) {
     if (!messages || messages.length === 0) {
         return (
             <Stack align="center" justify="center" className="py-16">
@@ -485,7 +485,8 @@ function MessagesNeedingAttentionChart({ messages }: { messages: Array<{ channel
     return (
         <Stack gap={8}>
             {messages.map((msg, idx) => {
-                const link = `https://slack.com/app_redirect?channel=${encodeURIComponent(msg.channelId)}&message_ts=${encodeURIComponent(msg.messageTs)}`;
+                // Use correct Slack URL format with workspace ID
+                const link = `https://app.slack.com/client/${workspaceId}/${msg.channelId}/${msg.messageTs.replace('.', '')}`;
                 const flagNames = Array.isArray(msg.flagIds) 
                     ? msg.flagIds.map((id: number) => getFlagInfo(id)?.name || `#${id}`).join(', ') 
                     : '';
