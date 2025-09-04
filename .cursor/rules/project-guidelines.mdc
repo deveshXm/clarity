@@ -1826,6 +1826,13 @@ Report {
 - **Smooth Transitions**: 200ms duration for all hover effects
 - **Clear CTAs**: Blue buttons with proper contrast and sizing
 
+#### Privacy-First Data Management ✅ IMPLEMENTED
+- **No Message Text Storage**: Analysis instances store only `issueDescription` (AI-extracted summary) instead of actual message content
+- **Issue Description**: AI generates brief, privacy-compliant summaries of communication problems without storing confidential information
+- **Report Display**: Use `issueDescription` for message examples in both detailed reports and Slack DMs
+- **Data Flow**: `comprehensiveMessageAnalysis()` → `issueDescription` → database → reports → UI display
+- **Schema Structure**: `AnalysisInstanceSchema` includes `issueDescription: z.string()` but excludes `text` and `messageLength` fields
+
 ### Script Termination Best Practices ✅ IMPLEMENTED
 **All scripts properly terminate to prevent hanging:**
 

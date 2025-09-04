@@ -7,7 +7,7 @@ interface Props {
     params: Promise<{ id: string }>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(): Promise<Metadata> {
     return {
         title: '📈 Monthly Communication Report',
         description: 'Your detailed monthly communication analytics and trends',

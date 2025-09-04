@@ -5,10 +5,10 @@ console.log('📋 Starting monthly report generation...');
 import { ObjectId } from 'mongodb';
 import { analysisInstanceCollection, slackUserCollection, workspaceCollection, reportCollection } from '@/lib/db';
 import { sendMonthlyReportDM, resolveSlackUserNames } from '@/lib/slack';
-import { generateAICommunicationReport } from '@/lib/ai';
+import { generateAICommunicationReport, AiGeneratedReportData } from '@/lib/ai';
 import { randomBytes } from 'crypto';
 import { saveCommunicationScore } from '@/lib/server-actions';
-import { MESSAGE_ANALYSIS_TYPES } from '@/types';
+import { MESSAGE_ANALYSIS_TYPES, AnalysisInstance, Report, SlackUser } from '@/types';
 import { calculateCurrentFlagBreakdown, calculateChartMetadata, analyzeCommunicationPartners } from '@/lib/report-utils';
 
 export async function generateMonthlyReports() {
@@ -58,7 +58,7 @@ export async function generateMonthlyReports() {
         console.log(`📋 Previous report found: ${previousReport ? 'Yes' : 'No'}`);
 
         // 🤖 AI-generated report (no local algorithms)
-        const instancesForAi = currentMonthInstances.map((i, idx) => ({
+        const instancesForAi = (currentMonthInstances as unknown as AnalysisInstance[]).map((i, idx) => ({
             index: idx,
             messageTs: i.messageTs,
             channelId: i.channelId,
@@ -85,48 +85,47 @@ export async function generateMonthlyReports() {
                 partnerNames,
                 messageAnalysisTypes: MESSAGE_ANALYSIS_TYPES as unknown as Record<number, { key: string; name: string; description: string }>,
                 previousScores: previousTwo.map(r => r.communicationScore),
-                previousFlagBreakdowns: previousTwo.map(r => (r.currentPeriod?.flagBreakdown || []).map((f: any) => ({ flagId: f.flagId, count: f.count }))),
+                previousFlagBreakdowns: previousTwo.map(r => (r.currentPeriod?.flagBreakdown || []).map((f: { flagId: number; count: number; percentage: number; messageIds: string[] }) => ({ flagId: f.flagId, count: f.count }))),
                 severityWeights: { 5: 1.0, 6: 0.8, 1: 0.7, 2: 0.6, 3: 0.5, 4: 0.5, 7: 0.4, 8: 0.3 }
             }
         );
 
         // Normalize AI output to ensure required fields exist for DM rendering
         // Local deterministic chart data fallback
-        const localFlagBreakdown = calculateCurrentFlagBreakdown(currentMonthInstances);
-        const localChart = calculateChartMetadata(localFlagBreakdown, previousReport);
+        const localFlagBreakdown = calculateCurrentFlagBreakdown(currentMonthInstances as unknown as AnalysisInstance[]);
+        const localChart = calculateChartMetadata(localFlagBreakdown, previousReport as unknown as Report | null);
 
-        const localPartnerAnalysis = await analyzeCommunicationPartners(currentMonthInstances, partnerNames);
+        const localPartnerAnalysis = await analyzeCommunicationPartners(currentMonthInstances as unknown as AnalysisInstance[], partnerNames);
 
-        const normalizedReport = {
-            communicationScore: typeof (aiReport as any)?.communicationScore === 'number' ? (aiReport as any).communicationScore : 0,
-            previousScore: typeof previousReport?.communicationScore === 'number' ? previousReport.communicationScore : (typeof (aiReport as any)?.previousScore === 'number' ? (aiReport as any).previousScore : 0),
-            scoreChange: typeof (aiReport as any)?.scoreChange === 'number' ? (aiReport as any).scoreChange : ((typeof (aiReport as any)?.communicationScore === 'number' ? (aiReport as any).communicationScore : 0) - (typeof previousReport?.communicationScore === 'number' ? previousReport.communicationScore : 0)),
-            scoreTrend: (aiReport as any)?.scoreTrend || 'stable',
+        const normalizedReport: AiGeneratedReportData = {
+            communicationScore: typeof aiReport.communicationScore === 'number' ? aiReport.communicationScore : 0,
+            previousScore: typeof previousReport?.communicationScore === 'number' ? previousReport.communicationScore : (typeof aiReport.previousScore === 'number' ? aiReport.previousScore : 0),
+            scoreChange: typeof aiReport.scoreChange === 'number' ? aiReport.scoreChange : ((typeof aiReport.communicationScore === 'number' ? aiReport.communicationScore : 0) - (typeof previousReport?.communicationScore === 'number' ? previousReport.communicationScore : 0)),
+            scoreTrend: aiReport.scoreTrend || 'stable',
             currentPeriod: {
-                totalMessages: (aiReport as any)?.currentPeriod?.totalMessages ?? instancesForAi.length,
-                flaggedMessages: (aiReport as any)?.currentPeriod?.flaggedMessages ?? instancesForAi.filter(i => i.flagIds.length > 0).length,
-                flaggedMessageIds: Array.isArray((aiReport as any)?.currentPeriod?.flaggedMessageIds) ? (aiReport as any).currentPeriod.flaggedMessageIds : [],
-                flagBreakdown: Array.isArray((aiReport as any)?.currentPeriod?.flagBreakdown) && (aiReport as any).currentPeriod.flagBreakdown.length > 0
-                    ? (aiReport as any).currentPeriod.flagBreakdown
+                totalMessages: aiReport.currentPeriod?.totalMessages ?? instancesForAi.length,
+                flaggedMessages: aiReport.currentPeriod?.flaggedMessages ?? instancesForAi.filter(i => i.flagIds.length > 0).length,
+                flaggedMessageIds: Array.isArray(aiReport.currentPeriod?.flaggedMessageIds) ? aiReport.currentPeriod.flaggedMessageIds : [],
+                flagBreakdown: Array.isArray(aiReport.currentPeriod?.flagBreakdown) && aiReport.currentPeriod.flagBreakdown.length > 0
+                    ? aiReport.currentPeriod.flagBreakdown
                     : localFlagBreakdown,
-                partnerAnalysis: localPartnerAnalysis,
+                partnerAnalysis: Array.isArray(aiReport.currentPeriod?.partnerAnalysis) ? aiReport.currentPeriod.partnerAnalysis : localPartnerAnalysis,
             },
             chartMetadata: {
-                flagTrends: Array.isArray((aiReport as any)?.chartMetadata?.flagTrends) && (aiReport as any).chartMetadata.flagTrends.length > 0
-                    ? (aiReport as any).chartMetadata.flagTrends
+                flagTrends: Array.isArray(aiReport.chartMetadata?.flagTrends) && aiReport.chartMetadata.flagTrends.length > 0
+                    ? aiReport.chartMetadata.flagTrends
                     : localChart.flagTrends,
-                scoreHistory: Array.isArray((aiReport as any)?.chartMetadata?.scoreHistory) ? (aiReport as any).chartMetadata.scoreHistory : [],
-                partnerTrends: Array.isArray((aiReport as any)?.chartMetadata?.partnerTrends) ? (aiReport as any).chartMetadata.partnerTrends : [],
+                scoreHistory: Array.isArray(aiReport.chartMetadata?.scoreHistory) ? aiReport.chartMetadata.scoreHistory : [],
+                partnerTrends: Array.isArray(aiReport.chartMetadata?.partnerTrends) ? aiReport.chartMetadata.partnerTrends : [],
             },
-            messageExamples: Array.isArray((aiReport as any)?.messageExamples) ? (aiReport as any).messageExamples : [],
-            recommendations: Array.isArray((aiReport as any)?.recommendations) ? (aiReport as any).recommendations : [],
-            keyInsights: Array.isArray((aiReport as any)?.keyInsights) ? (aiReport as any).keyInsights : [],
-            achievements: Array.isArray((aiReport as any)?.achievements) ? (aiReport as any).achievements : [],
-            partnerAnalysis: Array.isArray((aiReport as any)?.currentPeriod?.partnerAnalysis) ? (aiReport as any).currentPeriod.partnerAnalysis : [],
+            messageExamples: Array.isArray(aiReport.messageExamples) ? aiReport.messageExamples : [],
+            recommendations: Array.isArray(aiReport.recommendations) ? aiReport.recommendations : [],
+            keyInsights: Array.isArray(aiReport.keyInsights) ? aiReport.keyInsights : [],
+            achievements: Array.isArray(aiReport.achievements) ? aiReport.achievements : [],
         };
 
         // Build examples list using AI-selected indexes or fallback deterministic selection
-        const focusIdx: number[] = Array.isArray((aiReport as any)?.focusExampleIndexes) ? (aiReport as any).focusExampleIndexes.slice(0, 10) : [];
+        const focusIdx: number[] = Array.isArray(aiReport.focusExampleIndexes) ? aiReport.focusExampleIndexes.slice(0, 10) : [];
         const severityWeights: Record<number, number> = { 5: 1.0, 6: 0.8, 1: 0.7, 2: 0.6, 3: 0.5, 4: 0.5, 7: 0.4, 8: 0.3 };
         let exampleInstances = focusIdx
             .map((idx) => currentMonthInstances[idx])
@@ -136,15 +135,15 @@ export async function generateMonthlyReports() {
             exampleInstances = currentMonthInstances
                 .slice()
                 .sort((a, b) => {
-                    const score = (inst: any) => (inst.flagIds || []).reduce((acc: number, id: number) => acc + (severityWeights[id] || 0), 0);
-                    const sb = score(b) - score(a);
+                    const score = (inst: AnalysisInstance) => (inst.flagIds || []).reduce((acc: number, id: number) => acc + (severityWeights[id] || 0), 0);
+                    const sb = score(b as unknown as AnalysisInstance) - score(a as unknown as AnalysisInstance);
                     if (sb !== 0) return sb;
-                    return (b.flagIds?.length || 0) - (a.flagIds?.length || 0);
+                    return ((b as unknown as AnalysisInstance).flagIds?.length || 0) - ((a as unknown as AnalysisInstance).flagIds?.length || 0);
                 })
                 .slice(0, Math.min(10, currentMonthInstances.length));
         }
 
-        const examples = exampleInstances.slice(0, 10).map((inst: any) => ({
+        const examples = (exampleInstances as unknown as AnalysisInstance[]).slice(0, 10).map((inst) => ({
             messageTs: inst.messageTs,
             channelId: inst.channelId,
             flagIds: inst.flagIds || [],
@@ -170,7 +169,7 @@ export async function generateMonthlyReports() {
             ...normalizedReport,
             chartMetadata: {
                 ...normalizedReport.chartMetadata,
-                instancesTrend: buildMonthlyInstancesTrend(currentMonthInstances, firstOfMonth)
+                instancesTrend: buildMonthlyInstancesTrend(currentMonthInstances as unknown as AnalysisInstance[], firstOfMonth)
             },
             createdAt: new Date(),
             expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
@@ -193,7 +192,18 @@ export async function generateMonthlyReports() {
         if (workspace?.botToken) {
             // 📤 Send Slack DM
             try {
-                const sent = await sendMonthlyReportDM(user, report, workspace.botToken);
+                // Serialize report to convert ObjectIds to strings
+                const serializedReport = JSON.parse(JSON.stringify(report, (key, value) => {
+                    if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'ObjectId') {
+                        return value.toString();
+                    }
+                    if (value instanceof Date) {
+                        return value.toISOString();
+                    }
+                    return value;
+                })) as Report;
+
+                const sent = await sendMonthlyReportDM(user as unknown as SlackUser, serializedReport, workspace.botToken);
                 if (sent) {
                     console.log(`✅ Sent monthly report to user: ${user.slackId}`);
                 } else {
@@ -216,7 +226,7 @@ export async function generateMonthlyReports() {
 }
 
 
-function buildMonthlyInstancesTrend(instances: any[], firstOfMonth: Date) {
+function buildMonthlyInstancesTrend(instances: AnalysisInstance[], firstOfMonth: Date) {
     const labels: string[] = [];
     const current: number[] = [];
     const previous: number[] = [];
@@ -241,8 +251,6 @@ function buildMonthlyInstancesTrend(instances: any[], firstOfMonth: Date) {
 
     // Previous month range
     const prevMonthStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
-    const prevDays = new Date(prevMonthStart.getFullYear(), prevMonthStart.getMonth() + 1, 0).getDate();
-    const prevMonthEnd = new Date(prevMonthStart.getFullYear(), prevMonthStart.getMonth(), prevDays);
 
     instances.forEach((i) => {
         const d = new Date(i.createdAt);

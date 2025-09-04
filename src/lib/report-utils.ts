@@ -1,14 +1,81 @@
-import { getFlagInfo } from '@/types';
+import { getFlagInfo, AnalysisInstance, Report } from '@/types';
+
+// Type definitions for report utilities
+interface FlagBreakdownItem {
+	flagId: number;
+	count: number;
+	percentage: number;
+	messageIds: string[];
+}
+
+interface PartnerAnalysisItem {
+	partnerName: string;
+	partnerSlackId: string;
+	messagesExchanged: number;
+	flagsWithPartner: number;
+	topIssues: number[];
+	relationshipScore: number;
+}
+
+interface FlagTrendItem {
+	flagId: number;
+	currentCount: number;
+	previousCount: number;
+	trend: 'up' | 'down' | 'stable';
+	changePercent: number;
+}
+
+interface ScoreHistoryItem {
+	period: string;
+	score: number;
+}
+
+interface PartnerTrendItem {
+	partnerName: string;
+	partnerSlackId: string;
+	currentFlags: number;
+	previousFlags: number;
+	trend: 'improving' | 'declining' | 'stable';
+}
+
+interface ChartMetadata {
+	flagTrends: FlagTrendItem[];
+	scoreHistory: ScoreHistoryItem[];
+	partnerTrends: PartnerTrendItem[];
+}
+
+interface MessageExample {
+	messageTs: string;
+	channelId: string;
+	flagIds: number[];
+	summary: string;
+	targetNames: string[] | null;
+	improvement?: string;
+}
+
+interface Achievement {
+	type: string;
+	description: string;
+	icon: string;
+}
+
+interface PartnerStats {
+	partnerName: string;
+	partnerSlackId: string;
+	messagesExchanged: number;
+	flagsWithPartner: number;
+	topIssues: number[];
+}
 
 // 🎯 Communication Score Calculation
-export function calculateCommunicationScore(instances: any[]): number {
+export function calculateCommunicationScore(instances: AnalysisInstance[]): number {
     if (instances.length === 0) return 100;
 
     const totalFlags = instances.reduce((sum, instance) => sum + instance.flagIds.length, 0);
     const flaggingRate = (totalFlags / instances.length) * 100;
 
     // Base score from flagging rate
-    let baseScore = Math.max(0, 100 - flaggingRate);
+    const baseScore = Math.max(0, 100 - flaggingRate);
 
     // Adjust for flag severity
     const severityWeights = {
@@ -33,7 +100,7 @@ export function calculateCommunicationScore(instances: any[]): number {
 }
 
 // 🏷️ Flag Analysis for Current Period (No Trends - Calculated Later)
-export function calculateCurrentFlagBreakdown(currentInstances: any[]) {
+export function calculateCurrentFlagBreakdown(currentInstances: AnalysisInstance[]): FlagBreakdownItem[] {
     const flagCounts: Record<number, { count: number; messageIds: string[] }> = {};
 
     // Count current flags and store message IDs
@@ -56,12 +123,12 @@ export function calculateCurrentFlagBreakdown(currentInstances: any[]) {
 }
 
 // 📈 Calculate Chart Metadata by Comparing with Previous Report
-export function calculateChartMetadata(currentFlagBreakdown: any[], previousReport: any | null) {
+export function calculateChartMetadata(currentFlagBreakdown: FlagBreakdownItem[], previousReport: Report | null): ChartMetadata {
     const flagTrends = currentFlagBreakdown.map(current => {
         let previousCount = 0;
         if (previousReport?.chartMetadata?.flagTrends) {
             const previousFlag = previousReport.chartMetadata.flagTrends.find(
-                (f: any) => f.flagId === current.flagId
+                (f: FlagTrendItem) => f.flagId === current.flagId
             );
             previousCount = previousFlag?.currentCount || 0;
         }
@@ -99,15 +166,15 @@ export function calculateChartMetadata(currentFlagBreakdown: any[], previousRepo
 
 // 🤝 Communication Partner Analysis (Current Period Only)
 export async function analyzeCommunicationPartners(
-    currentInstances: any[], 
+    currentInstances: AnalysisInstance[],
     resolvedUserNames: Record<string, string>
-) {
-    const partnerStats: Record<string, any> = {};
+): Promise<PartnerAnalysisItem[]> {
+    const partnerStats: Record<string, PartnerStats> = {};
 
     // Analyze current instances with new targetIds structure
     currentInstances.forEach(instance => {
-        // Handle both new targetIds array and legacy target object
-        const targetIds = instance.targetIds || (instance.target ? [instance.target.slackId] : []);
+        // Use targetIds array (legacy target object support removed)
+        const targetIds = instance.targetIds;
         
         targetIds.forEach((partnerId: string) => {
             if (!partnerStats[partnerId]) {
@@ -125,7 +192,7 @@ export async function analyzeCommunicationPartners(
         });
     });
 
-    return Object.values(partnerStats).map((partner: any) => {
+    return Object.values(partnerStats).map((partner: PartnerStats) => {
         const flagCounts: Record<number, number> = {};
         partner.topIssues.forEach((flagId: number) => {
             flagCounts[flagId] = (flagCounts[flagId] || 0) + 1;
@@ -151,17 +218,17 @@ export async function analyzeCommunicationPartners(
 
 // 💬 Message Examples (Privacy-Compliant)
 export function getMessageExamples(
-    instances: any[], 
+    instances: AnalysisInstance[],
     resolvedUserNames: Record<string, string>
-): any[] {
+): MessageExample[] {
     // Filter to only instances that have issue descriptions (new format)
     const instancesWithDescriptions = instances.filter(instance => 
         instance.issueDescription && instance.issueDescription.trim().length > 0
     );
     
     return instancesWithDescriptions.slice(0, 3).map(instance => {
-        // Handle both new targetIds array and legacy target object
-        const targetIds = instance.targetIds || (instance.target ? [instance.target.slackId] : []);
+        // Use targetIds array (legacy target object support removed)
+        const targetIds = instance.targetIds;
         const targetNames = targetIds.map((id: string) => 
             resolvedUserNames[id] || `User ${id}`
         );
@@ -187,7 +254,7 @@ export function getScoreTrend(currentScore: number, previousScore: number | null
 }
 
 // 💡 Recommendation Generation
-export function generateRecommendations(flagBreakdown: any[], partnerAnalysis: any[]): string[] {
+export function generateRecommendations(flagBreakdown: FlagBreakdownItem[], partnerAnalysis: PartnerAnalysisItem[]): string[] {
     const recommendations: string[] = [];
 
     // Flag-based recommendations
@@ -223,8 +290,8 @@ export function generateRecommendations(flagBreakdown: any[], partnerAnalysis: a
 }
 
 // 🏆 Achievement Calculation
-export function calculateAchievements(currentScore: number, previousScore: number | null): any[] {
-    const achievements: any[] = [];
+export function calculateAchievements(currentScore: number, previousScore: number | null): Achievement[] {
+    const achievements: Achievement[] = [];
 
     if (currentScore >= 90) {
         achievements.push({
@@ -246,7 +313,7 @@ export function calculateAchievements(currentScore: number, previousScore: numbe
 }
 
 // 🔍 Key Insights Generation
-export function generateKeyInsights(flagBreakdown: any[], partnerAnalysis: any[]): string[] {
+export function generateKeyInsights(flagBreakdown: FlagBreakdownItem[], partnerAnalysis: PartnerAnalysisItem[]): string[] {
     const insights: string[] = [];
 
     const topFlag = flagBreakdown.sort((a, b) => b.count - a.count)[0];
@@ -264,7 +331,7 @@ export function generateKeyInsights(flagBreakdown: any[], partnerAnalysis: any[]
 }
 
 // 🔗 Helper Functions
-function calculateRelationshipScore(partner: any): number {
+function calculateRelationshipScore(partner: PartnerStats): number {
     const baseScore = 100;
     const flagPenalty = partner.flagsWithPartner * 2;
     const messageBonus = Math.min(partner.messagesExchanged * 0.5, 20);

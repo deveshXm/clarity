@@ -10,7 +10,8 @@ import {
 	LineElement,
 	Filler,
 	Tooltip,
-	Legend
+	Legend,
+	TooltipItem
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
 
@@ -115,7 +116,7 @@ export function FlagCountBarChart({ flags }: { flags: Array<{ id: number; name: 
 			legend: { position: 'bottom' as const, labels: { boxWidth: 10, boxHeight: 10 } },
 			tooltip: {
 				callbacks: {
-					label: (ctx: any) => `${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%`
+					label: (ctx: TooltipItem<'bar'>) => `${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%`
 				}
 			}
 		},

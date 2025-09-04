@@ -182,12 +182,12 @@ export const ReportSchema = z.object({
             trend: z.enum(['up', 'down', 'stable']),
             changePercent: z.number(),
         })),
-        
+
         scoreHistory: z.array(z.object({
-            period: z.string(), // "2025-W03", "2025-01" 
+            period: z.string(), // "2025-W03", "2025-01"
             score: z.number(),
         })),
-        
+
         partnerTrends: z.array(z.object({
             partnerName: z.string(),
             partnerSlackId: z.string(),
@@ -195,6 +195,12 @@ export const ReportSchema = z.object({
             previousFlags: z.number(),
             trend: z.enum(['improving', 'declining', 'stable']),
         })),
+
+        instancesTrend: z.object({
+            labels: z.array(z.string()),
+            current: z.array(z.number()),
+            previous: z.array(z.number()),
+        }).optional(),
     }),
 
     // 💬 Message examples (privacy-compliant, limited to current period)

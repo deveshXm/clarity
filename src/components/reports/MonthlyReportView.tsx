@@ -2,33 +2,35 @@
 
 import { useMemo } from 'react';
 import { Title, Text, Stack, Row, Container, Link } from '@/components/ui';
-import { getFlagInfo, getFlagEmoji } from '@/types';
+import { getFlagInfo, Report } from '@/types';
 import { InstancesTrendChart, FlagCountBarChart } from './FlagTrendChart';
 import { PartnerAnalysis } from './PartnerAnalysis';
 
 interface MonthlyReportViewProps {
-    report: any;
+    report: Report;
 }
 
 export function MonthlyReportView({ report }: MonthlyReportViewProps) {
     const flagBarData = useMemo(() => {
-        return report.currentPeriod.flagBreakdown.map((f: any) => ({
+        return report.currentPeriod.flagBreakdown.map((f) => ({
+            id: f.flagId,
             name: getFlagInfo(f.flagId)?.name || 'Unknown',
             count: f.count
         }));
     }, [report.currentPeriod.flagBreakdown]);
 
-    const formatDate = (date: string) => {
-        return new Date(date).toLocaleDateString('en-US', {
+    const formatDate = (date: Date | string) => {
+        const dateObj = typeof date === 'string' ? new Date(date) : date;
+        return dateObj.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long'
         });
     };
 
-    // Separate improving and concerning flags
-    const improvingFlags = report.currentPeriod.flagBreakdown.filter((f: any) => f.trend === 'down');
-    const concerningFlags = report.currentPeriod.flagBreakdown.filter((f: any) => f.trend === 'up');
-    const stableFlags = report.currentPeriod.flagBreakdown.filter((f: any) => f.trend === 'stable');
+    // Separate improving and concerning flags using chart metadata
+    const improvingFlags = report.chartMetadata.flagTrends.filter((f) => f.trend === 'down');
+    const concerningFlags = report.chartMetadata.flagTrends.filter((f) => f.trend === 'up');
+    const stableFlags = report.chartMetadata.flagTrends.filter((f) => f.trend === 'stable');
 
     return (
         <Container className="mx-auto max-w-[820px] px-6 py-12 space-y-8 bg-white min-h-screen">
@@ -64,7 +66,7 @@ export function MonthlyReportView({ report }: MonthlyReportViewProps) {
             {/* Daily instances trend (line) */}
             <div>
                 <Title order={3} className="mb-3 text-base font-semibold text-neutral-900">Daily instances trend</Title>
-                <InstancesTrendChart data={report.chartMetadata?.instancesTrend} />
+                <InstancesTrendChart data={report.chartMetadata?.instancesTrend || undefined} />
             </div>
 
             {/* Flag counts (bar) */}
@@ -80,7 +82,7 @@ export function MonthlyReportView({ report }: MonthlyReportViewProps) {
                     <Stack className="bg-green-50 border-green-200 rounded p-4">
                         <Title order={4} className="mb-4 text-base font-semibold text-neutral-900">Areas showing improvement</Title>
                         <Stack>
-                            {improvingFlags.map((flag: any) => {
+                            {improvingFlags.map((flag) => {
                                 const flagInfo = getFlagInfo(flag.flagId);
                                 return (
                                     <Row key={flag.flagId} justify="space-between" className="p-3 bg-white rounded">
@@ -100,7 +102,7 @@ export function MonthlyReportView({ report }: MonthlyReportViewProps) {
                     <Stack className="bg-red-50 border-red-200 rounded p-4">
                         <Title order={4} className="mb-4 text-base font-semibold text-neutral-900">Areas needing attention</Title>
                         <Stack>
-                            {concerningFlags.map((flag: any) => {
+                            {concerningFlags.map((flag) => {
                                 const flagInfo = getFlagInfo(flag.flagId);
                                 return (
                                     <Row key={flag.flagId} justify="space-between" className="p-3 bg-white rounded">
@@ -120,7 +122,7 @@ export function MonthlyReportView({ report }: MonthlyReportViewProps) {
                     <Stack className="bg-yellow-50 border-yellow-200 rounded p-4">
                         <Title order={4} className="mb-4 text-base font-semibold text-neutral-900">Stable performance</Title>
                         <Stack>
-                            {stableFlags.map((flag: any) => {
+                            {stableFlags.map((flag) => {
                                 const flagInfo = getFlagInfo(flag.flagId);
                                 return (
                                     <Row key={flag.flagId} justify="space-between" className="p-3 bg-white rounded">
@@ -137,14 +139,26 @@ export function MonthlyReportView({ report }: MonthlyReportViewProps) {
             </Row>
 
             {/* Communication Partners */}
-            <PartnerAnalysis partners={report.currentPeriod.partnerAnalysis} totalFlaggedCount={report.currentPeriod.flaggedMessages} />
+            {(() => {
+                // Merge partner analysis with trend data from chart metadata
+                const partnersWithTrends = report.currentPeriod.partnerAnalysis.map(partner => {
+                    const trendData = report.chartMetadata.partnerTrends.find(
+                        (t) => t.partnerSlackId === partner.partnerSlackId
+                    );
+                    return {
+                        ...partner,
+                        trend: trendData?.trend || 'stable' as const
+                    };
+                });
+                return <PartnerAnalysis partners={partnersWithTrends} totalFlaggedCount={report.currentPeriod.flaggedMessages} />;
+            })()}
 
             {/* Top flagged messages */}
             {Array.isArray(report.messageExamples) && report.messageExamples.length > 0 && (
                 <div>
                     <Title order={3} className="mb-3 text-xl">Top flagged messages</Title>
                     <div className="space-y-3">
-                        {report.messageExamples.slice(0, 10).map((ex: any, idx: number) => {
+                        {report.messageExamples.slice(0, 10).map((ex, idx: number) => {
                             const link = `slack://channel?team=${report.workspaceId}&id=${ex.channelId}&message=${ex.messageTs}`;
                             return (
                                 <Row key={idx} justify="space-between" className="p-3 border border-gray-200 rounded">
@@ -189,7 +203,7 @@ export function MonthlyReportView({ report }: MonthlyReportViewProps) {
                 <Stack className="bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200 rounded p-6">
                     <Title order={3} className="mb-6 text-xl text-yellow-800">Monthly achievements</Title>
                     <Stack>
-                        {report.achievements.map((achievement: any, index: number) => (
+                        {report.achievements.map((achievement, index: number) => (
                             <Row key={index} gap={12} className="p-4 bg-white rounded-lg shadow-sm">
                                 <Text className="text-yellow-800 font-medium">{achievement.description}</Text>
                             </Row>

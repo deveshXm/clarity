@@ -1,7 +1,7 @@
 import { WebClient } from '@slack/web-api';
 import * as crypto from 'crypto';
 import { botChannelsCollection } from './db';
-import { SlackChannel, SlackUser, SUBSCRIPTION_TIERS } from '@/types';
+import { SlackChannel, SlackUser, SUBSCRIPTION_TIERS, Report } from '@/types';
 
 // OAuth configuration
 export const slackOAuthConfig = {
@@ -329,9 +329,9 @@ export const sendDirectMessage = async (
         });
         
         if (!result.ok) {
-            console.error('chat.postMessage failed:', (result as any).error);
+            console.error('chat.postMessage failed:', (result as { error?: string }).error);
         } else {
-            console.log('DM sent', { channel: dmResult.channel.id, ts: (result as any).ts });
+            console.log('DM sent', { channel: dmResult.channel.id, ts: (result as { ts?: string }).ts });
         }
         return result.ok || false;
     } catch (error) {
@@ -768,13 +768,13 @@ export const sendChannelMonitoringNotification = async (
 
 // 🔔 NEW: Weekly report DM delivery
 export const sendWeeklyReportDM = async (
-    user: any,
-    report: any,
+    user: SlackUser,
+    report: Report,
     botToken: string
 ): Promise<boolean> => {
     const { getFlagInfo, getFlagEmoji } = await import('@/types');
 
-    const blocks = [
+    const blocks: unknown[] = [
         {
             type: "header",
             text: { type: "plain_text", text: "📊 Your Weekly Communication Report" }
@@ -797,7 +797,7 @@ export const sendWeeklyReportDM = async (
             text: {
                 type: "mrkdwn",
                 text: `*This week:* ${report.currentPeriod.flaggedMessages} improvements from ${report.currentPeriod.totalMessages} messages\n\n*Top areas to focus on:*\n${
-                    (report.currentPeriod.flagBreakdown || []).slice(0, 3).map((flag: any) => {
+                    (report.currentPeriod.flagBreakdown || []).slice(0, 3).map((flag) => {
                         const flagInfo = getFlagInfo(flag.flagId);
                         return `• ${getFlagEmoji(flag.flagId)} ${flagInfo?.name || 'Unknown'} (${flag.count ?? 0} times)`;
                     }).join('\n') || '• None'
@@ -810,11 +810,11 @@ export const sendWeeklyReportDM = async (
                 type: "mrkdwn",
                 text: `*💡 Key Insight*\n${(report.keyInsights && report.keyInsights[0]) || 'Keep up the great work!'}\n\n*🤝 Communication Partners:*\n${
                     (report.currentPeriod.partnerAnalysis || [])
-                        .filter((p: any) => (p.messagesExchanged ?? 0) > 0)
+                        .filter((p) => (p.messagesExchanged ?? 0) > 0)
                         .slice()
-                        .sort((a: any, b: any) => (b.messagesExchanged ?? 0) - (a.messagesExchanged ?? 0))
+                        .sort((a, b) => (b.messagesExchanged ?? 0) - (a.messagesExchanged ?? 0))
                         .slice(0, 3)
-                        .map((partner: any) => `• ${partner.partnerName} (${partner.messagesExchanged} instances)`) 
+                        .map((partner) => `• ${partner.partnerName} (${partner.messagesExchanged} instances)`)
                         .join('\n') || '• None'
                 }`
             }
@@ -827,7 +827,7 @@ export const sendWeeklyReportDM = async (
             type: "section",
             text: {
                 type: "mrkdwn",
-                text: `*🏆 Achievements:*\n${report.achievements.map((achievement: any) =>
+                text: `*🏆 Achievements:*\n${report.achievements.map((achievement) =>
                     `${achievement.icon} ${achievement.description}`
                 ).join('\n')}`
             }
@@ -842,7 +842,7 @@ export const sendWeeklyReportDM = async (
         });
 
         const top = report.messageExamples.slice(0, 2);
-        top.forEach((ex: any, idx: number) => {
+        top.forEach((ex, idx) => {
             const summaryText = ex.summary && ex.summary.trim() 
                 ? ex.summary.slice(0, 120)
                 : 'Communication issue detected';
@@ -856,15 +856,15 @@ export const sendWeeklyReportDM = async (
                 accessory: {
                     type: "button",
                     text: { type: "plain_text", text: "Open" },
-                    url: getSlackMessageUrl(ex.channelId, ex.messageTs),
+                    url: `slack://channel?team=T123456&id=${ex.channelId}&message=${ex.messageTs}`,
                     action_id: `open_example_${idx}`
                 }
-            } as any);
+            } as unknown as { type: string; text: { type: string; text: string }; accessory?: unknown });
         });
     }
 
     // Action buttons
-    const actionBlock: any = {
+    const actionBlock = {
         type: "actions",
         elements: [
             {
@@ -885,16 +885,16 @@ export const sendWeeklyReportDM = async (
 
 // 🔔 NEW: Monthly report DM delivery
 export const sendMonthlyReportDM = async (
-    user: any,
-    report: any,
+    user: SlackUser,
+    report: Report,
     botToken: string
 ): Promise<boolean> => {
     const { getFlagInfo, getFlagEmoji } = await import('@/types');
 
-    const improvingFlags = report.chartMetadata.flagTrends.filter((f: any) => f.trend === 'down').slice(0, 2);
-    const concerningFlags = report.chartMetadata.flagTrends.filter((f: any) => f.trend === 'up').slice(0, 2);
+    const improvingFlags = report.chartMetadata.flagTrends.filter((f) => f.trend === 'down').slice(0, 2);
+    const concerningFlags = report.chartMetadata.flagTrends.filter((f) => f.trend === 'up').slice(0, 2);
 
-    const blocks = [
+    const blocks: unknown[] = [
         {
             type: "header",
             text: { type: "plain_text", text: "📈 Your Monthly Communication Report" }
@@ -918,13 +918,13 @@ export const sendMonthlyReportDM = async (
                 type: "mrkdwn",
                 text: `*This month:* ${report.currentPeriod.flaggedMessages} improvements from ${report.currentPeriod.totalMessages} messages\n\n${
                     improvingFlags.length > 0 ?
-                    `*🟢 Areas showing improvement:*\n${improvingFlags.map((flag: any) => {
+                    `*🟢 Areas showing improvement:*\n${improvingFlags.map((flag) => {
                         const flagInfo = getFlagInfo(flag.flagId);
                         return `• ${getFlagEmoji(flag.flagId)} ${flagInfo?.name} (-${Math.abs(flag.changePercent)}%)`;
                     }).join('\n')}\n\n` : ''
                 }${
                     concerningFlags.length > 0 ?
-                    `*🔴 Areas needing attention:*\n${concerningFlags.map((flag: any) => {
+                    `*🔴 Areas needing attention:*\n${concerningFlags.map((flag) => {
                         const flagInfo = getFlagInfo(flag.flagId);
                         return `• ${getFlagEmoji(flag.flagId)} ${flagInfo?.name} (+${flag.changePercent}%)`;
                     }).join('\n')}` : ''
@@ -936,11 +936,11 @@ export const sendMonthlyReportDM = async (
             text: {
                 type: "mrkdwn",
                 text: `*🤝 Communication Partners:*\n${
-                    (report.partnerAnalysis || [])
+                    (report.currentPeriod.partnerAnalysis || [])
                         .slice()
-                        .sort((a: any, b: any) => (b.messagesExchanged ?? 0) - (a.messagesExchanged ?? 0))
+                        .sort((a, b) => (b.messagesExchanged ?? 0) - (a.messagesExchanged ?? 0))
                         .slice(0, 3)
-                        .map((partner: any) => `${partner.partnerName} (${partner.messagesExchanged ?? 0} instances)`) 
+                        .map((partner) => `${partner.partnerName} (${partner.messagesExchanged ?? 0} instances)`)
                         .join(' • ') || 'None'
                 }\n\n*💡 Monthly Insight:* ${report.recommendations[0] || 'Keep practicing your improved communication habits!'}`
             }
@@ -961,10 +961,4 @@ export const sendMonthlyReportDM = async (
     return await sendDirectMessage(user.slackId, '', botToken, blocks);
 };
 
-// 🔗 Helper function for Slack message URLs
-function getSlackMessageUrl(channelId: string, messageTs: string): string {
-    // Convert Slack timestamp to permalink format
-    const timestamp = messageTs.replace('.', '');
-    return `slack://channel?team=T123456&id=${channelId}&message=${timestamp}`;
-}
  

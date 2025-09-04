@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { Title, Text, Stack, Row, Container, Button } from '@/components/ui';
-import { getFlagInfo } from '@/types';
+import { getFlagInfo, Report } from '@/types';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -14,20 +14,23 @@ import {
     Tooltip,
     Legend
 } from 'chart.js';
-import { Bar, Line } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler, Tooltip, Legend);
 
-interface WeeklyReportViewProps { report: any }
+interface WeeklyReportViewProps { report: Report }
 
-function formatRange(start: string, end: string) {
-	const fmt = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+function formatRange(start: Date | string, end: Date | string) {
+	const fmt = (d: Date | string) => {
+		const dateObj = typeof d === 'string' ? new Date(d) : d;
+		return dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+	};
 	return `${fmt(start)} — ${fmt(end)}`;
 }
 
 export function WeeklyReportView({ report }: WeeklyReportViewProps) {
 	const flagBarData = useMemo(() => (
-		(report.currentPeriod.flagBreakdown || []).map((f: any) => ({
+		(report.currentPeriod.flagBreakdown || []).map((f) => ({
 			id: f.flagId,
 			name: getFlagInfo(f.flagId)?.name || 'Unknown',
 			count: f.count
@@ -79,13 +82,26 @@ export function WeeklyReportView({ report }: WeeklyReportViewProps) {
 					<Title order={2} className="text-2xl font-bold text-gray-900">
 						Areas to Focus On
 					</Title>
-					<AreasToFocusChart flags={report.currentPeriod.flagBreakdown} />
+					                                  {(() => {
+                                          // Merge flag breakdown with trend data from chart metadata
+                                          const flagsWithTrends = report.currentPeriod.flagBreakdown.map(flag => {
+                                                  const trendData = report.chartMetadata.flagTrends.find(
+                                                          (t) => t.flagId === flag.flagId
+                                                  );
+                                                  return {
+                                                          ...flag,
+                                                          trend: trendData?.trend || 'stable',
+                                                          changePercent: trendData?.changePercent || 0
+                                                  };
+                                          });
+                                          return <AreasToFocusChart flags={flagsWithTrends} />;
+                                  })()}
 				</Stack>
 			)}
 
 			{/* Communication Partners */}
 			<Stack gap={16} className="mb-16">
-				<PartnerAnalysisSection partners={report.currentPeriod.partnerAnalysis || []} totalFlaggedCount={report.currentPeriod.flaggedMessages} />
+				<PartnerAnalysisSection partners={report.currentPeriod.partnerAnalysis || []} />
 			</Stack>
 
 			{/* Messages Needing Attention */}
@@ -124,7 +140,7 @@ export function WeeklyReportView({ report }: WeeklyReportViewProps) {
 						Achievements
 					</Title>
 					<Stack gap={8}>
-						{report.achievements.map((a: any, i: number) => (
+						{report.achievements.map((a, i: number) => (
 							<Row key={i} align="start" gap={16} className="py-6 px-8 bg-green-50">
 								<div className="w-2 h-2 bg-green-600 mt-3 flex-shrink-0" />
 								<Text className="text-lg text-gray-900 leading-relaxed">
@@ -207,7 +223,7 @@ function InstancesTrendChart({ data }: { data?: InstancesTrendData }) {
                     padding: 24,
                     font: {
                         size: 16,
-                        weight: '600',
+                        weight: 'bold',
                     },
                     color: '#374151',
                     usePointStyle: true,
@@ -224,7 +240,7 @@ function InstancesTrendChart({ data }: { data?: InstancesTrendData }) {
                 padding: 16,
                 titleFont: {
                     size: 16,
-                    weight: '600',
+                    weight: 'bold',
                 },
                 bodyFont: {
                     size: 14,
@@ -239,7 +255,7 @@ function InstancesTrendChart({ data }: { data?: InstancesTrendData }) {
                     color: '#6b7280',
                     font: {
                         size: 14,
-                        weight: '500',
+                        weight: 'normal',
                     },
                     padding: 12,
                 }
@@ -255,7 +271,7 @@ function InstancesTrendChart({ data }: { data?: InstancesTrendData }) {
                     color: '#6b7280',
                     font: {
                         size: 14,
-                        weight: '500',
+                        weight: 'normal',
                     },
                     padding: 12,
                 }
@@ -270,7 +286,7 @@ function InstancesTrendChart({ data }: { data?: InstancesTrendData }) {
 
     return (
         <div className="relative h-[500px] bg-white rounded-3xl p-4">
-            <Line data={chartData as any} options={options as any} />
+            <Line data={chartData} options={options} />
         </div>
     );
 }
@@ -408,7 +424,7 @@ function AreasToFocusChart({ flags }: { flags: Array<{ flagId: number; count: nu
     );
 }
 
-function PartnerAnalysisSection({ partners, totalFlaggedCount = 0 }: { partners: Array<{ partnerName: string; partnerSlackId: string; messagesExchanged: number; flagsWithPartner: number }>; totalFlaggedCount?: number }) {
+function PartnerAnalysisSection({ partners }: { partners: Array<{ partnerName: string; partnerSlackId: string; messagesExchanged: number; flagsWithPartner: number }> }) {
     const segments = partners
         .filter(p => (p.messagesExchanged || 0) > 0 && (p.flagsWithPartner || 0) > 0)
         .sort((a, b) => (b.flagsWithPartner - a.flagsWithPartner))
