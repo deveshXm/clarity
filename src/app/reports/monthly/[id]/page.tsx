@@ -2,6 +2,8 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { reportCollection } from '@/lib/db';
 import { MonthlyReportView } from '@/components/reports/MonthlyReportView';
+import { trackEvent } from '@/lib/posthog';
+import { EVENTS } from '@/lib/analytics/events';
 
 interface Props {
     params: Promise<{ id: string }>;
@@ -28,6 +30,15 @@ export default async function MonthlyReportPage({ params }: Props) {
     if (new Date() > report.expiresAt) {
         notFound();
     }
+
+    // 📊 Track report view
+    trackEvent(report.userId, EVENTS.REPORT_VIEWED, {
+        report_id: report.reportId,
+        period: report.period,
+        workspace_id: report.workspaceId,
+        communication_score: report.communicationScore,
+        score_trend: report.scoreTrend,
+    });
 
     // Convert MongoDB document to plain object and serialize all data
     const serializedReport = JSON.parse(JSON.stringify(report, (key, value) => {

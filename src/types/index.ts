@@ -472,12 +472,12 @@ export const SUBSCRIPTION_TIERS = {
     description: 'Quick start with core coaching.',
     priceLabel: '/ forever',
     monthlyLimits: {
-      autoCoaching: 50,        // messages per month
+      autoCoaching: 20,        // messages per month
       manualRephrase: 50,      // messages per month  
-      personalFeedback: 1,     // personal feedback reports per month
+      personalFeedback: 12,     // personal feedback reports per month
     },
     features: {
-      reports: true,      // Paid only
+      reports: false,      // Paid only
       advancedReportAnalytics: false // Paid only
     },
     displayFeatures: [
@@ -516,9 +516,9 @@ export const SUBSCRIPTION_TIERS = {
     description: 'Advanced, context-aware coaching.',
     priceLabel: '/ month',
     monthlyLimits: {
-      autoCoaching: 1000,        // messages per month
-      manualRephrase: 1000,      // messages per month  
-      personalFeedback: 1,    // personal feedback reports per month
+      autoCoaching: 200,        // messages per month
+      manualRephrase: 200,      // messages per month  
+      personalFeedback: 40,    // personal feedback reports per month
     },
     features: {
       reports: true,       // Enabled
