@@ -10,7 +10,7 @@ export default function PrivacyPage(): React.ReactElement {
       <h1 className="mb-4 text-3xl font-bold leading-tight tracking-tight text-neutral-900">Privacy &amp; security</h1>
       <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Your messages stay private. Feedback is visible only to you.</p>
       <div className="mb-8 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm">
-        <Image src="/landing/temp.png" alt="Privacy and permissions overview" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
+        <Image src="/app_image.png" alt="Privacy and permissions overview" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
       </div>
 
       <h2 id="data-policy" className="mb-4 text-xl font-semibold leading-tight text-neutral-900">Data policy</h2>

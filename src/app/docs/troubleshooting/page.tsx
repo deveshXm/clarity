@@ -11,7 +11,7 @@ export default function TroubleshootingPage(): React.ReactElement {
       <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Solutions for common problems and FAQs.</p>
 
       <div className="mb-8 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm">
-        <Image src="/landing/temp.png" alt="Troubleshooting overview with examples" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
+        <Image src="/status_command.png" alt="Troubleshooting overview with examples" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
       </div>
 
       <h2 id="networking-issues" className="mb-4 text-xl font-semibold leading-tight text-neutral-900">Networking issues</h2>

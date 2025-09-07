@@ -12,7 +12,7 @@ export default function GettingStartedPage(): React.ReactElement {
       <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Add Clarity to Slack, then try a command.</p>
 
       <div className="mb-8 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm">
-        <Image src="/landing/temp.png" alt="Slack app welcome and quickstart view" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
+        <Image src="/complete_onboarding_prompt.png" alt="Slack app welcome and quickstart view" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
       </div>
 
       <h2 id="overview" className="mb-4 text-xl font-semibold leading-tight text-neutral-900">Overview</h2>

@@ -11,7 +11,7 @@ export default function RealtimePage(): React.ReactElement {
       <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Private suggestions appear after you send a message.</p>
 
       <div className="mb-8 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm">
-        <Image src="/landing/temp.png" alt="Ephemeral suggestion preview in Slack" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
+        <Image src="/auto_coaching.png" alt="Ephemeral suggestion preview in Slack" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
       </div>
 
       <h2 id="how-it-works" className="mb-4 text-xl font-semibold leading-tight text-neutral-900">How it works</h2>

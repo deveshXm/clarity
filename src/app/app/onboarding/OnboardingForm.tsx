@@ -453,6 +453,12 @@ export default function OnboardingForm() {
 
   const renderPaymentStep = () => (
     <Stack gap="lg" w="100%">
+      {/* Privacy note (visible and above plans) */}
+      <Center>
+        <Text size="sm" ta="center" style={{ maxWidth: 640, color: '#334155', fontWeight: 600 as unknown as number }}>
+          We never store your chats or any personal information.
+        </Text>
+      </Center>
       {/* Pricing cards side by side (match landing style) */}
       <Row justify="center" gap={isMobile ? 12 : 24} wrap={isMobile ? 'wrap' : 'nowrap'} align="stretch" style={{ width: '100%' }}>
         {/* Free plan card */}
@@ -597,6 +603,7 @@ export default function OnboardingForm() {
           </Stack>
         </Card>
       </Row>
+      
     </Stack>
   );
 

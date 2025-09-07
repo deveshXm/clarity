@@ -23,7 +23,7 @@ export default function HelpPage(): React.ReactElement {
         it suggests a polished version you can send with confidence.
       </p>
       <div className="mb-10 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm">
-        <Image src="/landing/temp.png" alt="Clarity overview - Slack assistant for clearer communication" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
+        <Image src="/app_image.png" alt="Clarity overview - Slack assistant for clearer communication" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">

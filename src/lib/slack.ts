@@ -381,6 +381,13 @@ export const sendWelcomeMessage = async (
                 }
             },
             {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: "*Privacy:*\nWe never store your chats or any personal information."
+                }
+            },
+            {
                 type: "actions",
                 elements: [
                     {

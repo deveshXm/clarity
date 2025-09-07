@@ -10,7 +10,7 @@ export default function ReportsPage(): React.ReactElement {
       <h1 className="mb-4 text-3xl font-bold leading-tight tracking-tight text-neutral-900">Reports</h1>
       <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Get a simple summary in Slack on a schedule you choose.</p>
       <div className="mb-8 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm">
-        <Image src="/landing/temp.png" alt="Report summary DM preview" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
+        <Image src="/weekly_report.png" alt="Report summary DM preview" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
       </div>
 
       <h2 id="personal-reports" className="mb-4 text-xl font-semibold leading-tight text-neutral-900">Personal reports</h2>

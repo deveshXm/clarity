@@ -11,7 +11,7 @@ export default function CommandsPage(): React.ReactElement {
       <h1 className="mb-4 text-3xl font-bold leading-tight tracking-tight text-neutral-900">Slash commands</h1>
       <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Type these in Slack. Suggestions are private to you.</p>
       <div className="mb-8 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm">
-        <Image src="/landing/temp.png" alt="Slash commands in Slack message box" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
+        <Image src="/rephrase_command.png" alt="Slash commands in Slack message box" width={1200} height={720} className="h-auto w-full rounded-lg border border-neutral-200/60" />
       </div>
       <div className="mb-8">
         <CodeBlock label="Try in Slack" code={'/clarity-rephrase Can you get this done ASAP?'} />
@@ -33,7 +33,7 @@ export default function CommandsPage(): React.ReactElement {
           <div className="mb-2 text-base font-semibold text-blue-700">/clarity-settings</div>
           <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Opens a settings modal to change report frequency and auto‑coaching preferences.</p>
           <div className="mb-4 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm">
-            <Image src="/landing/temp.png" alt="Settings modal showing report frequency and auto coaching options" width={600} height={400} className="h-auto w-full rounded-lg border border-neutral-200/60" />
+            <Image src="/settings_modal_command.png" alt="Settings modal showing report frequency and auto coaching options" width={600} height={400} className="h-auto w-full rounded-lg border border-neutral-200/60" />
           </div>
           <CodeBlock label="Usage" code={'/clarity-settings'} />
         </div>

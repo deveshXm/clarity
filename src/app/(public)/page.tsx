@@ -81,6 +81,9 @@ export default function LandingPage() {
               <Text size="sm" style={{ color: '#475569' }}>
                 Privacy-first. Feedback is ephemeral and visible only to you.
               </Text>
+              <Text size="sm" style={{ color: '#64748B' }}>
+                We never store your chats or any personal information.
+              </Text>
             </Stack>
           </motion.div>
         </div>
@@ -93,7 +96,7 @@ export default function LandingPage() {
                 {demoVideoId ? (
                   <LiteYouTubeEmbed id={demoVideoId} title="Clarity demo" rel="prefetch" poster="maxresdefault" />
                 ) : (
-                  <Image src="/landing/temp.png" alt="Clarity demo" width={1280} height={720} className="block w-full" />
+                  <Image src="/app_image.png" alt="Clarity demo" width={1280} height={720} className="block w-full" />
                 )}
               </div>
             </Card>

@@ -61,22 +61,22 @@ export const SubscriptionSchema = z.object({
     // Tier and billing info
     tier: z.enum(['FREE', 'PRO']).default('FREE'),
     status: z.enum(['active', 'cancelled', 'past_due']).default('active'),
-    
+
     // Billing cycle (for usage reset)
     currentPeriodStart: z.coerce.date(),
     currentPeriodEnd: z.coerce.date(),
-    
+
     // Stripe integration
     stripeCustomerId: z.string().optional(),
     stripeSubscriptionId: z.string().optional(),
-    
+
     // Usage tracking (resets on billing cycle)
     monthlyUsage: z.object({
         autoCoaching: z.number().default(0),
         manualRephrase: z.number().default(0),
         personalFeedback: z.number().default(0),
     }),
-    
+
     // Timestamps
     createdAt: z.coerce.date(),
     updatedAt: z.coerce.date(),
@@ -153,7 +153,7 @@ export const ReportSchema = z.object({
         totalMessages: z.number(),
         flaggedMessages: z.number(),
         flaggedMessageIds: z.array(z.string()), // Store IDs for deep linking
-        
+
         // 🏷️ Flag breakdown for current period
         flagBreakdown: z.array(z.object({
             flagId: z.number().min(1).max(8),
@@ -466,94 +466,107 @@ export type ExampleTaskInput = z.infer<typeof ExampleTaskInputSchema>;
 
 // Subscription Tiers Configuration
 export const SUBSCRIPTION_TIERS = {
-  FREE: {
-    name: 'Free',
-    price: 0,
-    description: 'Quick start with core coaching.',
-    priceLabel: '/ forever',
-    monthlyLimits: {
-      autoCoaching: 20,        // messages per month
-      manualRephrase: 50,      // messages per month  
-      personalFeedback: 12,     // personal feedback reports per month
+    FREE: {
+        name: 'Free',
+        price: 0,
+        description: 'Quick start with core coaching.',
+        priceLabel: '/ forever',
+        monthlyLimits: {
+            autoCoaching: 20,        // messages per month
+            manualRephrase: 50,      // messages per month  
+            personalFeedback: 12,     // personal feedback reports per month
+        },
+        features: {
+            reports: false,      // Paid only
+            advancedReportAnalytics: false // Paid only
+        },
+        displayFeatures: [
+            {
+                name: 'Auto coaching suggestions',
+                description: 'Get instant, private suggestions to improve your messages',
+                included: true,
+                limit: 50,
+                limitLabel: 'Limited auto coaching'
+            },
+            {
+                name: 'Manual rephrase',
+                description: 'Use /rephrase command to improve specific messages',
+                included: true,
+                limit: 50,
+                limitLabel: 'Limited manual rephrase'
+            },
+            {
+                name: 'Personal feedback reports',
+                description: 'Get detailed analysis of your communication patterns',
+                included: true,
+                limit: 1,
+                limitLabel: 'Fewer personal feedback reports'
+            },
+            {
+                name: 'Basic tone guardrails',
+                description: 'Prevent common communication issues',
+                included: true,
+                limitLabel: 'Limited basic tone guardrails'
+            },
+
+            {
+                name: 'Free model',
+                description: 'Get free analysis of your communication',
+                included: false,
+                limitLabel: 'Access to free model'
+            },
+        ]
     },
-    features: {
-      reports: false,      // Paid only
-      advancedReportAnalytics: false // Paid only
-    },
-    displayFeatures: [
-      {
-        name: 'Auto coaching suggestions',
-        description: 'Get instant, private suggestions to improve your messages',
-        included: true,
-        limit: 50,
-        limitLabel: 'auto coaching/month'
-      },
-      {
-        name: 'Manual rephrase',
-        description: 'Use /rephrase command to improve specific messages',
-        included: true,
-        limit: 50,
-        limitLabel: 'manual rephrase/month'
-      },
-      {
-        name: 'Personal feedback reports',
-        description: 'Get detailed analysis of your communication patterns',
-        included: true,
-        limit: 1,
-        limitLabel: 'personal feedback/month'
-      },
-      {
-        name: 'Basic tone guardrails',
-        description: 'Prevent common communication issues',
-        included: true,
-        limitLabel: 'Basic tone guardrails'
-      }
-    ]
-  },
-  PRO: {
-    name: 'Pro', 
-    price: 4.99, // $4.99/month
-    description: 'Advanced, context-aware coaching.',
-    priceLabel: '/ month',
-    monthlyLimits: {
-      autoCoaching: 200,        // messages per month
-      manualRephrase: 200,      // messages per month  
-      personalFeedback: 40,    // personal feedback reports per month
-    },
-    features: {
-      reports: true,       // Enabled
-      advancedReportAnalytics: true  // Enabled
-    },
-    displayFeatures: [
-      {
-        name: 'Auto coaching suggestions',
-        description: 'Get instant, private suggestions to improve your messages',
-        included: true,
-        limit: 1000,
-        limitLabel: 'auto coaching/month'
-      },
-      {
-        name: 'Manual rephrase',
-        description: 'Use /rephrase command to improve specific messages',
-        included: true,
-        limit: 1000,
-        limitLabel: 'manual rephrase/month'
-      },
-      {
-        name: 'Personal feedback reports',
-        description: 'Get detailed analysis of your communication patterns',
-        included: true,
-        limit: 1,
-        limitLabel: 'personal feedback/month'
-      },
-      {
-        name: 'Advanced report analytics',
-        description: 'Deep insights and trends in your communication',
-        included: true,
-        limitLabel: 'Advanced report analytics'
-      }
-    ]
-  }
+    PRO: {
+        name: 'Pro',
+        price: 4.99, // $4.99/month
+        description: 'Advanced, context-aware coaching.',
+        priceLabel: '/ month',
+        monthlyLimits: {
+            autoCoaching: 200,        // messages per month
+            manualRephrase: 200,      // messages per month  
+            personalFeedback: 40,    // personal feedback reports per month
+        },
+        features: {
+            reports: true,       // Enabled
+            advancedReportAnalytics: true  // Enabled
+        },
+        displayFeatures: [
+            {
+                name: 'Auto coaching suggestions',
+                description: 'Get instant, private suggestions to improve your messages',
+                included: true,
+                limit: 1000,
+                limitLabel: 'Expanded auto coaching'
+            },
+            {
+                name: 'Manual rephrase',
+                description: 'Use /rephrase command to improve specific messages',
+                included: true,
+                limit: 1000,
+                limitLabel: 'Expanded manual rephrase'
+            },
+            {
+                name: 'Personal feedback reports',
+                description: 'Get detailed analysis of your communication patterns',
+                included: true,
+                limit: 1,
+                limitLabel: 'Many personal feedback reports'
+            },
+            {
+                name: 'Advanced report analytics',
+                description: 'Deep insights and trends in your communication',
+                included: true,
+                limitLabel: 'Access to weekly & monthly reports'
+            },
+            {
+                name: 'Advanced reasoning model',
+                description: 'Get more accurate analysis of your communication',
+                included: true,
+                limitLabel: 'Access to advanced reasoning model'
+            }
+        ]
+    }
 } as const;
 
 // Subscription Types
@@ -562,30 +575,30 @@ export type SubscriptionFeature = keyof typeof SUBSCRIPTION_TIERS.FREE.monthlyLi
 
 // Subscription Check Result
 export interface SubscriptionCheckResult {
-  allowed: boolean;
-  reason?: string;
-  upgradeRequired?: boolean;
-  user?: SlackUser;
-  remainingUsage?: number;
-  resetDate?: Date;
+    allowed: boolean;
+    reason?: string;
+    upgradeRequired?: boolean;
+    user?: SlackUser;
+    remainingUsage?: number;
+    resetDate?: Date;
 }
 
 // Stripe Price IDs Configuration
 export const STRIPE_PRICE_IDS = {
-  PRO_MONTHLY: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || 'price_pro_monthly',
+    PRO_MONTHLY: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || 'price_pro_monthly',
 } as const;
 
 // Helper functions for subscription management
 export function getTierConfig(tier: SubscriptionTier) {
-  return SUBSCRIPTION_TIERS[tier];
+    return SUBSCRIPTION_TIERS[tier];
 }
 
 export function isRateLimitedFeature(feature: string): feature is keyof typeof SUBSCRIPTION_TIERS.FREE.monthlyLimits {
-  return feature in SUBSCRIPTION_TIERS.FREE.monthlyLimits;
+    return feature in SUBSCRIPTION_TIERS.FREE.monthlyLimits;
 }
 
 export function isPaidFeature(feature: string): feature is keyof typeof SUBSCRIPTION_TIERS.FREE.features {
-  return feature in SUBSCRIPTION_TIERS.FREE.features;
+    return feature in SUBSCRIPTION_TIERS.FREE.features;
 }
 
 // Server Action Result Type

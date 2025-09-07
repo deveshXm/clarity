@@ -899,7 +899,7 @@ async function handleClarityHelp() {
                     },
                     {
                         type: 'mrkdwn',
-                        text: '_Rephrase your original text for clarity or variation_\n\n`/rephrase your_original_text`'
+                        text: '_Rephrase your original text for clarity or variation_\n\n`/clarity-rephrase [your text]`'
                     }
                 ]
             },
@@ -908,26 +908,20 @@ async function handleClarityHelp() {
                 fields: [
                     {
                         type: 'mrkdwn',
-                        text: '_Get analysis of your recent communication patterns_\n\n`/personalfeedback`'
+                        text: '_Get analysis of your recent communication patterns_\n\n`/clarity-personal-feedback`'
                     },
                     {
                         type: 'mrkdwn',
-                        text: '_Check Clarity\'s status in current channel_\n\n`/status`'
+                        text: '_Check Clarity\'s status in current channel_\n\n`/clarity-status`'
                     }
                 ]
             },
             {
                 type: 'section',
-                fields: [
-                    {
-                        type: 'mrkdwn',
-                        text: '_Configure your AI coach preferences_\n\n`/settings`'
-                    },
-                    {
-                        type: 'mrkdwn',
-                        text: ''
-                    }
-                ]
+                text: {
+                    type: 'mrkdwn',
+                    text: '_Configure your AI coach preferences_\n\n`/clarity-settings`'
+                }
             },
             {
                 type: 'divider'
