@@ -13,7 +13,6 @@
     "reports:monthly:prod": "tsx --env-file=.env.production src/app/scripts/generate-monthly-reports.ts"
   },
   "dependencies": {
-    "@azure/openai": "^2.0.0",
     "@mantine/core": "^8.2.5",
     "@mantine/dates": "^8.2.5",
     "@mantine/form": "^8.2.5",
@@ -37,6 +36,7 @@
     "mongodb": "^6.18.0",
     "next": "15.4.6",
     "openai": "^5.12.2",
+    "portkey-ai": "^2.0.0",
     "posthog-js": "^1.260.1",
     "posthog-node": "^5.7.0",
     "react": "^19.1.1",

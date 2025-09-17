@@ -362,7 +362,7 @@ async function handleMessageEvent(event: Record<string, unknown>) {
                 elements: [
                     {
                         type: "mrkdwn",
-                        text: "💡 *Tip: Use `/settings` to adjust coaching preferences*"
+                        text: "🔒 *Only you can see this suggestion* • Use `/clarity-settings` to adjust preferences"
                     }
                 ]
             }

@@ -538,7 +538,7 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
                     await workspaceSlack.chat.postEphemeral({
                         channel: channelId,
                         user: userId,
-                        text: `✅ *Your message looks great!*\n\n*Original:* "${text}"\n\nNo significant communication issues detected. Your message is clear and professional! 🎉`
+                        text: `✅ *Your message looks great!*\n\n*Original:* "${text}"\n\nNo significant communication issues detected. Your message is clear and professional! 🎉\n\n🔒 _Only you can see this message_`
                     });
                 } else {
                     // Generate improved version for the first flag found
@@ -559,7 +559,7 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
                     await workspaceSlack.chat.postEphemeral({
                         channel: channelId,
                         user: userId,
-                        text: `🔄 *Message Improvement Suggestions*\n\n*Original:* "${text}"\n\n*Improved:* "${improvedMessage.improvedMessage}"\n\n_Tone: ${improvedMessage.tone}_`
+                        text: `🔄 *Message Improvement Suggestions*\n\n*Original:* "${text}"\n\n*Improved:* "${improvedMessage.improvedMessage}"\n\n_Tone: ${improvedMessage.tone}_\n\n🔒 _Only you can see this suggestion_`
                     });
                 }
                 
@@ -760,7 +760,7 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                     elements: [
                         {
                             type: 'mrkdwn',
-                            text: 'You can still use `/rephrase [your message]` manually in any channel.'
+                            text: '🔒 All coaching is private to you. You can still use `/clarity-rephrase [your message]` manually in any channel.'
                         }
                     ]
                 },

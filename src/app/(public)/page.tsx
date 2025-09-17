@@ -74,15 +74,15 @@ export default function LandingPage() {
               <span className="brand-marker">Clarity AI</span> for Slack
             </Title>
             <Text size="xl" mt="md" style={{ color: '#334155', fontSize: '20px' }}>
-              Your AI-powered communication coach for Slack. Get real-time feedback, personalized reports, and actionable suggestions to improve your messaging.
+              Your private AI communication coach for Slack. Get personalized feedback and suggestions that only you can see.
             </Text>
             <Stack gap="sm" mt="xl" align="center">
               <CTAButton onClick={handleInstallSlack} loading={isLoading}>Install Clarity AI</CTAButton>
               <Text size="sm" style={{ color: '#475569' }}>
-                Privacy-first. Feedback is ephemeral and visible only to you.
+                Private coaching just for you. Your teammates can&apos;t see any feedback.
               </Text>
               <Text size="sm" style={{ color: '#64748B' }}>
-                We never store your chats or any personal information.
+                We don&apos;t save your messages or share your data with anyone.
               </Text>
             </Stack>
           </motion.div>
@@ -126,12 +126,12 @@ export default function LandingPage() {
               Write clearer messages in seconds
             </Title>
             <Text size="lg" mt="sm" style={{ color: '#475569', fontSize: '20px' }}>
-              Add Clarity AI to Slack for private, real-time coaching that fits your team&apos;s tone.
+              Add Clarity AI to Slack for private coaching that only you can see.
             </Text>
             <Stack gap="sm" mt="xl" align="center">
               <CTAButton onClick={handleInstallSlack} loading={isLoading}>Install Clarity AI — It&apos;s free</CTAButton>
               <Text size="sm" style={{ color: '#64748B' }}>
-                No setup hassle. Private, ephemeral feedback by default.
+                No setup hassle. All feedback is private and just for you.
               </Text>
             </Stack>
 

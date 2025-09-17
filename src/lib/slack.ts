@@ -356,14 +356,14 @@ export const sendWelcomeMessage = async (
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*Hey there! I'm Clarity*\n\nThanks for installing me as your Slack assistant for clearer, kinder communication. I help you write more effective messages by providing real-time suggestions and insights."
+                    text: "*Hey there! I'm Clarity*\n\nThanks for installing me as your private communication coach. I help you write better messages by giving you personal suggestions that only you can see."
                 }
             },
             {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*What I do:*\n• I analyze your messages and suggest improvements for clarity and tone\n• I help you rephrase messages to be more professional and effective\n• I provide weekly or monthly insights on your communication patterns\n• I identify areas like vagueness, pushiness, and passive-aggressive language"
+                    text: "*What I do for you:*\n• Give you private suggestions to improve your messages\n• Help you rephrase text to be clearer and more effective\n• Send you personal weekly or monthly communication insights\n• Point out areas like vagueness or tone that could be improved"
                 }
             },
             {
@@ -377,14 +377,14 @@ export const sendWelcomeMessage = async (
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*How I work:*\nI quietly monitor your selected channels and provide private suggestions when I identify opportunities to improve your communication. All my feedback is visible only to you."
+                    text: "*How I work:*\nI watch the channels you choose and give you private suggestions when I spot ways to improve your messages. Your teammates never see any of my coaching - it's completely private and just for you."
                 }
             },
             {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*Privacy:*\nWe never store your chats or any personal information."
+                    text: "*Your privacy:*\nEverything I do is private to you. I don't save your messages and your teammates can't see any of my suggestions or feedback."
                 }
             },
             {
@@ -744,14 +744,14 @@ export const sendChannelMonitoringNotification = async (
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: `*Clarity is now monitoring your communication in :*\n\n${channelList}`    
+                    text: `*Clarity is now giving you private coaching in:*\n\n${channelList}`    
                 }
             },
             {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: `💡 *How it works:*\n• I'll analyze your messages and suggest improvements privately\n• Only you can see my suggestions (ephemeral messages)\n• Use */clarity-settings* to enable/disable channels anytime`
+                    text: `💡 *How it works:*\n• I'll give you private suggestions to improve your messages\n• Only you can see my coaching - your teammates can't see anything\n• Use */clarity-settings* to control which channels I help you in`
                 }
             },
             {
@@ -761,7 +761,7 @@ export const sendChannelMonitoringNotification = async (
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: `🚀 *Ready to get started?* Just start chatting in the enabled channels!`
+                    text: `🚀 *Ready to get started?* Just start chatting in these channels and I'll help you privately!`
                 }
             }
         ];
