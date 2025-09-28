@@ -77,6 +77,9 @@ export default function LandingPage() {
               Your private AI communication coach for Slack. Get personalized feedback and suggestions that only you can see.
             </Text>
             <Stack gap="sm" mt="xl" align="center">
+              <Text size="sm" className="rounded-full border border-neutral-200/70 px-3 py-1 bg-white/70" style={{ color: '#334155' }}>
+                Don&apos;t have install permissions? <Link href="/docs/troubleshooting/non-admin-install" style={{ color: '#2563EB', textDecoration: 'underline', textUnderlineOffset: 2 }}>Follow this quick guide</Link>.
+              </Text>
               <CTAButton onClick={handleInstallSlack} loading={isLoading}>Install Clarity AI</CTAButton>
               <Text size="sm" style={{ color: '#475569' }}>
                 Private coaching just for you. Your teammates can&apos;t see any feedback.
