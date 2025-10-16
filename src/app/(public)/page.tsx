@@ -88,11 +88,16 @@ export default function LandingPage() {
         </div>
 
         {/* Documentation button */}
-        <div className="mx-auto mt-8 text-center">
+        <motion.div 
+          className="mx-auto mt-8 text-center"
+          initial={{ opacity: 0, y: 12 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
           <CTAButton size="sm" onClick={() => { window.location.href = '/docs'; }}>
             View Documentation
           </CTAButton>
-        </div>
+        </motion.div>
 
         {/* See it in action */}
         <div className="mx-auto mt-12 max-w-5xl px-2">
