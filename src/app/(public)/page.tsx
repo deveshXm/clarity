@@ -1,12 +1,10 @@
 'use client';
 
-import { useMemo, useState, useRef, useLayoutEffect } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
 import { motion } from 'framer-motion';
-import LiteYouTubeEmbed from 'react-lite-youtube-embed';
-import 'react-lite-youtube-embed/dist/LiteYouTubeEmbed.css';
 
 import { getSlackOAuthUrl } from '@/lib/server-actions';
-import { Card, Container, Image, Link, Stack, Text, Title } from '@/components/ui';
+import { Card, Container, Link, Stack, Text, Title } from '@/components/ui';
 import { SUBSCRIPTION_TIERS } from '@/types';
 // PostHog autocapture handles all frontend tracking automatically
 import BackgroundMesh from './components/BackgroundMesh';
@@ -18,8 +16,6 @@ export default function LandingPage() {
   const freeCardRef = useRef<HTMLDivElement | null>(null);
   const proCardRef = useRef<HTMLDivElement | null>(null);
   // PostHog autocapture handles all tracking automatically
-
-  const demoVideoId = useMemo(() => process.env.NEXT_PUBLIC_DEMO_VIDEO_ID, []);
 
   // Note: Page views automatically tracked by PostHog autocapture
 
@@ -91,16 +87,27 @@ export default function LandingPage() {
           </motion.div>
         </div>
 
+        {/* Documentation button */}
+        <div className="mx-auto mt-8 text-center">
+          <CTAButton size="sm" onClick={() => { window.location.href = '/docs'; }}>
+            View Documentation
+          </CTAButton>
+        </div>
+
         {/* See it in action */}
-        <div className="mx-auto mt-16 max-w-5xl px-2">
+        <div className="mx-auto mt-12 max-w-5xl px-2">
           <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}>
             <Card shadow="xl" radius="lg" p={0} style={{ backgroundColor: 'white', border: '1px solid rgba(2,6,23,0.06)' }}>
               <div className="relative overflow-hidden rounded-lg">
-                {demoVideoId ? (
-                  <LiteYouTubeEmbed id={demoVideoId} title="Clarity demo" rel="prefetch" poster="maxresdefault" />
-                ) : (
-                  <Image src="/app_image.png" alt="Clarity demo" width={1280} height={720} className="block w-full" />
-                )}
+                <video
+                  src="https://2zcqmlx6rzbfxr5q.public.blob.vercel-storage.com/ebea0b873fe44b739cd0640d7ebe2e6b-1759846674171.mp4"
+                  controls
+                  playsInline
+                  className="block w-full"
+                  style={{ maxWidth: '100%', height: 'auto' }}
+                >
+                  Your browser does not support the video tag.
+                </video>
               </div>
             </Card>
           </motion.div>
@@ -249,6 +256,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-2 py-4 text-xs text-slate-500 sm:flex-row">
           <div>© {new Date().getFullYear()} Clarity. All rights reserved.</div>
           <div className="flex items-center gap-4">
+            <Link href="/docs">Documentation</Link>
             <Link href="/contact-us">Contact</Link>
             <Link href="/terms">Terms</Link>
             <Link href="/privacy">Privacy</Link>
