@@ -3,11 +3,10 @@ import {
     MessageAnalysisResult,
     ImprovedMessageResult,
     PersonalFeedbackResult,
-    ReportResult,
     ComprehensiveAnalysisResult
 } from "@/types";
 import Portkey from 'portkey-ai';
-import { PERSONAL_FEEDBACK_ANALYSIS_PROMPT, BASIC_MESSAGE_IMPROVEMENT_PROMPT, CONTEXTUAL_MESSAGE_IMPROVEMENT_PROMPT, BASIC_REPHRASE_ANALYSIS_PROMPT, CONTEXTUAL_REPHRASE_ANALYSIS_PROMPT, PERSONAL_FEEDBACK_GENERATION_PROMPT, AUTO_COACHING_ANALYSIS_PROMPT } from "@/lib/prompts";
+import { PERSONAL_FEEDBACK_ANALYSIS_PROMPT, IMPROVEMENT_PROMPT_TEMPLATE, IMPROVEMENT_WITH_CONTEXT_PROMPT_TEMPLATE, BASIC_REPHRASE_ANALYSIS_PROMPT, CONTEXTUAL_REPHRASE_ANALYSIS_PROMPT, PERSONAL_FEEDBACK_GENERATION_PROMPT, AUTO_COACHING_ANALYSIS_PROMPT } from "@/lib/prompts";
 
 export const exampleTask = async (payload: ExampleTaskInput) => {
     console.log('Example task called with payload:', payload);
@@ -84,7 +83,7 @@ export const analyzeMessageForFlags = async (
 };
 
 export const generateImprovedMessage = async (message: string, flagType: string): Promise<ImprovedMessageResult> => {
-    const prompt = BASIC_MESSAGE_IMPROVEMENT_PROMPT.replace('{{FLAG}}', flagType);
+    const prompt = IMPROVEMENT_PROMPT_TEMPLATE.replace('{{FLAG}}', flagType);
     const raw = await chatCompletion([
         { role: 'system', content: prompt },
         { role: 'user', content: message },
@@ -145,7 +144,7 @@ export const generateImprovedMessageWithContext = async (
     flagType: string, 
     context: string[]
 ): Promise<ImprovedMessageResult> => {
-    const prompt = CONTEXTUAL_MESSAGE_IMPROVEMENT_PROMPT.replace('{{FLAG}}', flagType);
+    const prompt = IMPROVEMENT_WITH_CONTEXT_PROMPT_TEMPLATE.replace('{{FLAG}}', flagType);
     const history = context.slice(0, 10).join('\n'); // Last 10 messages for context
     const userPrompt = `MESSAGE TO IMPROVE: "${message}"\n\nCONVERSATION HISTORY (for context):\n${history || 'None.'}`;
     const raw = await chatCompletion([
