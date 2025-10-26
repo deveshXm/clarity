@@ -1,12 +1,10 @@
 'use client';
 
-import { useMemo, useState, useRef, useLayoutEffect } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
 import { motion } from 'framer-motion';
-import LiteYouTubeEmbed from 'react-lite-youtube-embed';
-import 'react-lite-youtube-embed/dist/LiteYouTubeEmbed.css';
 
 import { getSlackOAuthUrl } from '@/lib/server-actions';
-import { Card, Container, Image, Link, Stack, Text, Title } from '@/components/ui';
+import { Card, Container, Link, Stack, Text, Title } from '@/components/ui';
 import { SUBSCRIPTION_TIERS } from '@/types';
 // PostHog autocapture handles all frontend tracking automatically
 import BackgroundMesh from './components/BackgroundMesh';
@@ -18,8 +16,6 @@ export default function LandingPage() {
   const freeCardRef = useRef<HTMLDivElement | null>(null);
   const proCardRef = useRef<HTMLDivElement | null>(null);
   // PostHog autocapture handles all tracking automatically
-
-  const demoVideoId = useMemo(() => process.env.NEXT_PUBLIC_DEMO_VIDEO_ID, []);
 
   // Note: Page views automatically tracked by PostHog autocapture
 
@@ -74,30 +70,49 @@ export default function LandingPage() {
               <span className="brand-marker">Clarity AI</span> for Slack
             </Title>
             <Text size="xl" mt="md" style={{ color: '#334155', fontSize: '20px' }}>
-              Your AI-powered communication coach for Slack. Get real-time feedback, personalized reports, and actionable suggestions to improve your messaging.
+              Your private AI communication coach for Slack. Get personalized feedback and suggestions that only you can see.
             </Text>
             <Stack gap="sm" mt="xl" align="center">
+              <Text size="sm" className="rounded-full border border-neutral-200/70 px-3 py-1 bg-white/70" style={{ color: '#334155' }}>
+                Don&apos;t have install permissions? <Link href="/docs/troubleshooting/non-admin-install" style={{ color: '#2563EB', textDecoration: 'underline', textUnderlineOffset: 2 }}>Follow this quick guide</Link>.
+              </Text>
               <CTAButton onClick={handleInstallSlack} loading={isLoading}>Install Clarity AI</CTAButton>
               <Text size="sm" style={{ color: '#475569' }}>
-                Privacy-first. Feedback is ephemeral and visible only to you.
+                Private coaching just for you. Your teammates can&apos;t see any feedback.
               </Text>
               <Text size="sm" style={{ color: '#64748B' }}>
-                We never store your chats or any personal information.
+                We don&apos;t save your messages or share your data with anyone.
               </Text>
             </Stack>
           </motion.div>
         </div>
 
+        {/* Documentation button */}
+        <motion.div 
+          className="mx-auto mt-8 text-center"
+          initial={{ opacity: 0, y: 12 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
+          <CTAButton size="sm" onClick={() => { window.location.href = '/docs'; }}>
+            View Documentation
+          </CTAButton>
+        </motion.div>
+
         {/* See it in action */}
-        <div className="mx-auto mt-16 max-w-5xl px-2">
+        <div className="mx-auto mt-12 max-w-5xl px-2">
           <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}>
             <Card shadow="xl" radius="lg" p={0} style={{ backgroundColor: 'white', border: '1px solid rgba(2,6,23,0.06)' }}>
               <div className="relative overflow-hidden rounded-lg">
-                {demoVideoId ? (
-                  <LiteYouTubeEmbed id={demoVideoId} title="Clarity demo" rel="prefetch" poster="maxresdefault" />
-                ) : (
-                  <Image src="/app_image.png" alt="Clarity demo" width={1280} height={720} className="block w-full" />
-                )}
+                <video
+                  src="https://2zcqmlx6rzbfxr5q.public.blob.vercel-storage.com/ebea0b873fe44b739cd0640d7ebe2e6b-1759846674171.mp4"
+                  controls
+                  playsInline
+                  className="block w-full"
+                  style={{ maxWidth: '100%', height: 'auto' }}
+                >
+                  Your browser does not support the video tag.
+                </video>
               </div>
             </Card>
           </motion.div>
@@ -126,12 +141,12 @@ export default function LandingPage() {
               Write clearer messages in seconds
             </Title>
             <Text size="lg" mt="sm" style={{ color: '#475569', fontSize: '20px' }}>
-              Add Clarity AI to Slack for private, real-time coaching that fits your team&apos;s tone.
+              Add Clarity AI to Slack for private coaching that only you can see.
             </Text>
             <Stack gap="sm" mt="xl" align="center">
               <CTAButton onClick={handleInstallSlack} loading={isLoading}>Install Clarity AI — It&apos;s free</CTAButton>
               <Text size="sm" style={{ color: '#64748B' }}>
-                No setup hassle. Private, ephemeral feedback by default.
+                No setup hassle. All feedback is private and just for you.
               </Text>
             </Stack>
 
@@ -246,6 +261,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-2 py-4 text-xs text-slate-500 sm:flex-row">
           <div>© {new Date().getFullYear()} Clarity. All rights reserved.</div>
           <div className="flex items-center gap-4">
+            <Link href="/docs">Documentation</Link>
             <Link href="/contact-us">Contact</Link>
             <Link href="/terms">Terms</Link>
             <Link href="/privacy">Privacy</Link>

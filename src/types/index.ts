@@ -499,7 +499,7 @@ export const SUBSCRIPTION_TIERS = {
                 name: 'Personal feedback reports',
                 description: 'Get detailed analysis of your communication patterns',
                 included: true,
-                limit: 1,
+                limit: 5,
                 limitLabel: 'Fewer personal feedback reports'
             },
             {
@@ -550,7 +550,7 @@ export const SUBSCRIPTION_TIERS = {
                 name: 'Personal feedback reports',
                 description: 'Get detailed analysis of your communication patterns',
                 included: true,
-                limit: 1,
+                limit: 500,
                 limitLabel: 'Many personal feedback reports'
             },
             {

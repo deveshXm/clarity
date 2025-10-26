@@ -304,7 +304,7 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
                     elements: [
                         {
                             type: "mrkdwn",
-                            text: "💡 *Tip: Use `/personalfeedback` to get your overall communication analysis*"
+                            text: "🔒 *This coaching is private to you* • Use `/clarity-personal-feedback` for more insights"
                         }
                     ]
                 }
@@ -504,8 +504,17 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                         type: 'section',
                         text: {
                             type: 'mrkdwn',
-                            text: '✅ Settings updated'
+                            text: '✅ *Settings updated successfully*\n\nYour private coaching preferences have been saved.'
                         }
+                    },
+                    {
+                        type: 'context',
+                        elements: [
+                            {
+                                type: 'mrkdwn',
+                                text: '🔒 Remember: All coaching is completely private to you'
+                            }
+                        ]
                     }
                 ]
             }

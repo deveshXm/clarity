@@ -23,6 +23,7 @@ export const nav: NavGroup[] = [
     title: 'Reference',
     items: [
       { label: 'Troubleshooting', href: '/docs/troubleshooting' },
+      { label: 'Install without admin access', href: '/docs/troubleshooting/non-admin-install' },
       { label: 'Privacy and Security', href: '/docs/privacy' },
     ],
   },

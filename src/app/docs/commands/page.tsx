@@ -37,6 +37,25 @@ export default function CommandsPage(): React.ReactElement {
           </div>
           <CodeBlock label="Usage" code={'/clarity-settings'} />
         </div>
+        <div>
+          <div className="mb-2 text-base font-semibold text-blue-700">/clarity-status</div>
+          <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Check if Clarity is installed and monitoring the current channel. Shows installation status and auto-coaching settings.</p>
+          <div className="mb-4 space-y-2">
+            <div className="flex items-start gap-2">
+              <span className="text-lg">🟢</span>
+              <span className="text-sm text-[#3e3e3f]">Clarity is installed and monitoring this channel for auto coaching.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-lg">🟡</span>
+              <span className="text-sm text-[#3e3e3f]">Clarity is installed but auto coaching is not enabled in this channel.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-lg">🔴</span>
+              <span className="text-sm text-[#3e3e3f]">Clarity is not installed in this channel.</span>
+            </div>
+          </div>
+          <CodeBlock label="Usage" code={'/clarity-status'} />
+        </div>
       </div>
     </main>
   );

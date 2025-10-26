@@ -6,9 +6,8 @@ import {
     ReportResult,
     ComprehensiveAnalysisResult
 } from "@/types";
-import { AzureOpenAI } from "openai";
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { ANALYSIS_PROMPT_TEMPLATE, IMPROVEMENT_PROMPT_TEMPLATE, IMPROVEMENT_WITH_CONTEXT_PROMPT_TEMPLATE, REPHRASE_ANALYSIS_PROMPT_TEMPLATE, REPHRASE_WITH_CONTEXT_ANALYSIS_PROMPT_TEMPLATE, PERSONAL_FEEDBACK_PROMPT, REPORT_PROMPT_TEMPLATE, COMPREHENSIVE_ANALYSIS_PROMPT_TEMPLATE } from "@/lib/prompts";
+import Portkey from 'portkey-ai';
+import { PERSONAL_FEEDBACK_ANALYSIS_PROMPT, BASIC_MESSAGE_IMPROVEMENT_PROMPT, CONTEXTUAL_MESSAGE_IMPROVEMENT_PROMPT, BASIC_REPHRASE_ANALYSIS_PROMPT, CONTEXTUAL_REPHRASE_ANALYSIS_PROMPT, PERSONAL_FEEDBACK_GENERATION_PROMPT, AUTO_COACHING_ANALYSIS_PROMPT } from "@/lib/prompts";
 
 export const exampleTask = async (payload: ExampleTaskInput) => {
     console.log('Example task called with payload:', payload);
@@ -24,25 +23,22 @@ export const exampleTask = async (payload: ExampleTaskInput) => {
     };
 };
 
-// ------------- Azure OpenAI client setup ---------------
+// ------------- Portkey client setup ---------------
 
-const openaiClient = new AzureOpenAI({
-    endpoint: process.env.AZURE_API_ENDPOINT || '',
-    apiKey: process.env.AZURE_API_KEY || '',
-    deployment: process.env.AZURE_DEPLOYMENT_NAME || 'gpt-5-mini',
-    apiVersion: process.env.AZURE_API_VERSION || '2024-12-01-preview',
+const portkey = new Portkey({
+    apiKey: process.env.PORTKEY_AI_KEY || '',
 });
 
-const modelName = process.env.AZURE_MODEL_NAME || process.env.AZURE_DEPLOYMENT_NAME || 'gpt-5-mini';
+const modelName = '@azure-openai/gpt-5-mini';
 
-async function chatCompletion(messages: ChatCompletionMessageParam[]): Promise<string> {
-    const response = await openaiClient.chat.completions.create({
+async function chatCompletion(messages: Array<{role: string; content: string}>): Promise<string> {
+    const response = await portkey.chat.completions.create({
         messages,
         model: modelName,
         reasoning_effort: 'low',
         response_format: { type: 'json_object' },
     });
-    return response.choices[0]?.message?.content ?? '';
+    return String(response.choices[0]?.message?.content ?? '');
 }
 
 // ------------------- Auto-coaching logic -------------------
@@ -76,7 +72,7 @@ export const analyzeMessageForFlags = async (
     const categoriesStr = Object.entries(CATEGORY_TO_ID)
         .map(([k, v]) => `${v}: ${k}`)
         .join(', ');
-    const systemPrompt = ANALYSIS_PROMPT_TEMPLATE.replace('{{CATEGORIES}}', categoriesStr);
+    const systemPrompt = PERSONAL_FEEDBACK_ANALYSIS_PROMPT.replace('{{CATEGORIES}}', categoriesStr);
     const history = context.slice(0, 15).join('\n');
     const userPrompt = `CURRENT MESSAGE TO ANALYZE: "${message.replace(/\n/g, ' ')}"\n\nCONVERSATION HISTORY (for context only):\n${history || 'None.'}`;
     const raw = await chatCompletion([
@@ -88,7 +84,7 @@ export const analyzeMessageForFlags = async (
 };
 
 export const generateImprovedMessage = async (message: string, flagType: string): Promise<ImprovedMessageResult> => {
-    const prompt = IMPROVEMENT_PROMPT_TEMPLATE.replace('{{FLAG}}', flagType);
+    const prompt = BASIC_MESSAGE_IMPROVEMENT_PROMPT.replace('{{FLAG}}', flagType);
     const raw = await chatCompletion([
         { role: 'system', content: prompt },
         { role: 'user', content: message },
@@ -98,7 +94,7 @@ export const generateImprovedMessage = async (message: string, flagType: string)
 
 export const generatePersonalFeedback = async (messages: string[]): Promise<PersonalFeedbackResult> => {
     const raw = await chatCompletion([
-        { role: 'system', content: PERSONAL_FEEDBACK_PROMPT },
+        { role: 'system', content: PERSONAL_FEEDBACK_GENERATION_PROMPT },
         { role: 'user', content: messages.slice(-50).join('\n') },
     ]);
     return JSON.parse(raw) as PersonalFeedbackResult;
@@ -106,17 +102,7 @@ export const generatePersonalFeedback = async (messages: string[]): Promise<Pers
 
 // identifyMessageTarget removed - target identification now handled by comprehensiveMessageAnalysis
 
-export const generateReport = async (
-    flaggedInstances: unknown[],
-    period: 'weekly' | 'monthly',
-): Promise<ReportResult> => {
-    const prompt = REPORT_PROMPT_TEMPLATE.replace('{{PERIOD}}', period);
-    const raw = await chatCompletion([
-        { role: 'system', content: prompt },
-        { role: 'user', content: JSON.stringify({ period, flaggedInstances }).slice(0, 6000) },
-    ]);
-    return JSON.parse(raw) as ReportResult;
-};
+// generateReport function removed - unused (replaced by generateAICommunicationReport)
 
 // ------------------- Rephrase-specific functions -------------------
 
@@ -126,7 +112,7 @@ export const analyzeMessageForRephraseWithoutContext = async (
     const categoriesStr = Object.entries(CATEGORY_TO_ID)
         .map(([k, v]) => `${v}: ${k}`)
         .join(', ');
-    const systemPrompt = REPHRASE_ANALYSIS_PROMPT_TEMPLATE.replace('{{CATEGORIES}}', categoriesStr);
+    const systemPrompt = BASIC_REPHRASE_ANALYSIS_PROMPT.replace('{{CATEGORIES}}', categoriesStr);
     const userPrompt = `Message to analyze: "${message.replace(/\n/g, ' ')}"`;
     const raw = await chatCompletion([
         { role: 'system', content: systemPrompt },
@@ -143,7 +129,7 @@ export const analyzeMessageForRephraseWithContext = async (
     const categoriesStr = Object.entries(CATEGORY_TO_ID)
         .map(([k, v]) => `${v}: ${k}`)
         .join(', ');
-    const systemPrompt = REPHRASE_WITH_CONTEXT_ANALYSIS_PROMPT_TEMPLATE.replace('{{CATEGORIES}}', categoriesStr);
+    const systemPrompt = CONTEXTUAL_REPHRASE_ANALYSIS_PROMPT.replace('{{CATEGORIES}}', categoriesStr);
     const history = context.slice(0, 10).join('\n'); // Last 10 messages for context
     const userPrompt = `CURRENT MESSAGE TO ANALYZE: "${message.replace(/\n/g, ' ')}"\n\nCONVERSATION HISTORY (for context only):\n${history || 'None.'}`;
     const raw = await chatCompletion([
@@ -159,7 +145,7 @@ export const generateImprovedMessageWithContext = async (
     flagType: string, 
     context: string[]
 ): Promise<ImprovedMessageResult> => {
-    const prompt = IMPROVEMENT_WITH_CONTEXT_PROMPT_TEMPLATE.replace('{{FLAG}}', flagType);
+    const prompt = CONTEXTUAL_MESSAGE_IMPROVEMENT_PROMPT.replace('{{FLAG}}', flagType);
     const history = context.slice(0, 10).join('\n'); // Last 10 messages for context
     const userPrompt = `MESSAGE TO IMPROVE: "${message}"\n\nCONVERSATION HISTORY (for context):\n${history || 'None.'}`;
     const raw = await chatCompletion([
@@ -200,7 +186,7 @@ export const comprehensiveMessageAnalysis = async (
     const categoriesStr = Object.entries(CATEGORY_TO_ID)
         .map(([k, v]) => `${v}: ${k}`)
         .join(', ');
-    const systemPrompt = COMPREHENSIVE_ANALYSIS_PROMPT_TEMPLATE.replace('{{CATEGORIES}}', categoriesStr);
+    const systemPrompt = AUTO_COACHING_ANALYSIS_PROMPT.replace('{{CATEGORIES}}', categoriesStr);
     const history = conversationHistory.slice(0, 15).join('\n'); // Last 15 messages for context
     const userPrompt = `CURRENT MESSAGE TO ANALYZE: "${message.replace(/\n/g, ' ')}"\n\nCONVERSATION HISTORY (for context only):\n${history || 'None.'}`;
     
