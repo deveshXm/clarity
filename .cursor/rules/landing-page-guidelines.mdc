@@ -19,30 +19,32 @@ Context files to reference:
 - Feature scroller component: [src/app/(public)/components/FeatureScroller.tsx](mdc:src/app/(public)/components/FeatureScroller.tsx)
 - CTA button (gradient) component: [src/app/(public)/components/CTAButton.tsx](mdc:src/app/(public)/components/CTAButton.tsx)
 
-## Do’s
+## Do's
 
 - Use the light-mode route group with Manrope font
-  - Keep `main` background `#FAFAF9` and `min-height: 100svh` per layout.
-  - Ensure `html, body` background is also set to avoid white overscroll.
+  - Background: Gradient from `rose-50` → `amber-50` → `sky-50` (`bg-gradient-to-b from-rose-50 via-amber-50 to-sky-50`)
+  - Keep `min-height: 100svh` per layout.
+  - Ensure `html, body` background matches gradient to avoid white overscroll.
 
-- Keep the background treatment subtle but alive
-  - Animated color bands + visible square grid mesh (48px spacing) with radial fade mask.
-  - Update masks/opacities only; do not replace with heavy imagery.
-
-- Keep brand color usage minimal
-  - Primary accents: sky/cyan family; neutrals for text.
+- Vibrant, warm color palette
+  - Background gradient: rose-50 → amber-50 → sky-50 for warmth and energy
+  - Primary accents: Rose (#E11D48), Amber (#D97706), Emerald (#059669), Sky (#0284C7)
+  - Text: Slate-900 for headings, Slate-700 for body, Slate-500 for secondary
+  - Cards: White/80 with backdrop-blur for modern glass effect
   - CTA uses the approved gradient button (sky→indigo→cyan) with soft elevation.
 
-- Make the hero brand obvious
-  - Highlight the word “Clarity” with the marker-style background (use `.brand-marker`; CSS defined in [globals.css](mdc:src/app/globals.css)).
+- Emotional, engaging messaging
+  - Hero title: "Write in a way that feels kind, clear & connected" with gradient text effect
+  - Use warm, empathetic language that emphasizes psychological safety
+  - Focus on benefits: "Fewer misunderstandings", "Softer tone, same honesty", "Better relationships at work"
+  - Make the value proposition clear and human-centered
 
-- One-feature-at-a-time scroller behavior (critical)
-  - A sticky visual panel shows exactly one feature.
-  - While the section is in view, page scroll is paused; wheel/touch gestures swap features.
-  - Release scroll only at the first/last feature.
-  - Use directional slide (no fade) so the new slide pushes the old slide.
-  - Throttle inputs and require a minimum delta to avoid accidental skips.
-  - Keep large, readable type (title ≥ 32px, desc ≥ 18–20px).
+- Feature presentation
+  - Use 3-column grid layout for feature cards on desktop
+  - Each card: White/80 background with backdrop-blur, rounded corners, subtle shadow
+  - Feature titles: "Rewrite with confidence", "Defuse tension, keep truth", "Grow your communication style"
+  - Each card has colored accent text at bottom (emerald, amber, sky)
+  - Keep large, readable type (title ≥ 20px, desc ≥ 14px)
 
 - Video embedding
   - Use `react-lite-youtube-embed` and the env var `NEXT_PUBLIC_DEMO_VIDEO_ID`; otherwise show the placeholder image.
@@ -53,14 +55,14 @@ Context files to reference:
 - Footer
   - Keep it subtle with Copyright, Help (`/app/help`), Terms (`/terms`), Privacy (`/privacy`).
 
-## Don’ts
+## Don'ts
 
-- Don’t introduce a navbar or a heavy footer on the landing.
-- Don’t add emojis, fake testimonials, or company logos.
-- Don’t add additional brand colors or increase contrast beyond the current palette.
-- Don’t use Mantine primitives directly; never import from `@mantine/core` in (public).
-- Don’t reintroduce traditional two-column feature lists that feel crowded.
-- Don’t add new libraries for scrolling without approval.
+- Don't introduce a heavy navbar - simple header with logo and CTA is sufficient
+- Don't use fake testimonials - use real beta user feedback if available
+- Don't use Mantine primitives directly; never import from `@mantine/core` in (public)
+- Don't add new libraries for scrolling without approval
+- Don't use BackgroundMesh component - replaced with gradient background
+- Don't use overly technical language - keep messaging warm and human-centered
 
 ## Approved/Optional Libraries
 
@@ -74,45 +76,46 @@ Context files to reference:
 
 ## Implementation Notes (current state)
 
-- Background mesh
-  - Square grid created with repeating linear-gradients (48px spacing) and radial mask; diagonal lines removed per request.
-  - Animated color bands drift slowly beneath the grid.
-  - Background container is fixed to prevent visible vertical drift during the pinned scroller.
-  - Implementation in [BackgroundMesh.tsx](mdc:src/app/(public)/components/BackgroundMesh.tsx).
+- Background
+  - Gradient background: `bg-gradient-to-b from-rose-50 via-amber-50 to-sky-50`
+  - Creates warm, inviting atmosphere without heavy visual elements
+  - No BackgroundMesh component needed - gradient provides visual interest
 
-- Feature scroller
-  - Implemented with `gsap` + `ScrollTrigger` using pin-only; horizontal motion is decoupled from scroll and driven by fixed-duration snaps.
-  - Sticky block shows exactly one feature; content vertically centered in the viewport.
-  - Horizontal motion: x-translation of a flex track; push-style slide (no cross-fade) between features.
-  - Slide changes are thresholded and time-based:
-    - Middle slides: 100px cumulative vertical delta triggers a snap to the next/previous slide.
-    - Snap animation has a fixed duration (~320ms) and easing (e.g., `power3.out`) regardless of scroll speed.
-    - Titles/descriptions update at the end of the snap animation.
-  - Edge handling (first/last slide):
-    - Tiny edge-release threshold to avoid accidental pass-through.
-    - After crossing this small threshold in the outward direction, the section immediately releases: we programmatically nudge the window scroll just beyond the pin boundary so no extra user input is required.
-    - A brief arm delay (~160ms) after landing on an edge absorbs inertia so it doesn’t immediately exit on arrival.
-  - Meta layout is responsive:
-    - Mobile (sm and below): show the full image with no overlay; place title/description/counter below the image.
-    - Tablet/Desktop (md and up): use a subtle bottom overlay inside the card that fades in on slide change.
-  - While active, a CSS class hides the scrollbar to avoid vertical scroll feedback.
-  - Implementation in [FeatureScroller.tsx](mdc:src/app/(public)/components/FeatureScroller.tsx). Keep `.feature-card` aspect ratio and `html.features-active` rules in [globals.css](mdc:src/app/globals.css).
+- Header
+  - Simple header with Clarity logo (✨ icon + text) and "Add to Slack" button
+  - Clean, minimal design that doesn't distract from main content
 
-- Image & aspect ratio
-  - Feature card uses a fixed `aspect-ratio: 16/10` across breakpoints to keep layout stable.
-  - Images render with `object-contain` on mobile to avoid side-cropping; switch to `object-cover` on md+ for immersive fill.
-  - Always show the full image on mobile (no overlay covering it).
+- Hero Section
+  - Two-column layout: text content on left, visual element/testimonial on right
+  - Title: Large, bold with gradient text effect on key phrase ("kind, clear & connected")
+  - Subtitle: Warm, empathetic messaging about Clarity's value
+  - Benefit badges: Three colored dots with short benefit statements
+  - CTA button: Uses existing CTAButton component with Slack OAuth
+
+- Feature Cards
+  - 3-column grid on desktop, stacked on mobile
+  - Each card: White/80 background, backdrop-blur, rounded-xl, subtle shadow
+  - Colored accent text at bottom (emerald, amber, sky) for visual hierarchy
+  - Clean, readable typography with clear value propositions
+
+- Live Example Section
+  - Two-column layout: dark theme card (slate-900) showing original message
+  - Light theme card showing improved version with explanations
+  - Side panel: "Why this matters" with warm, human explanation
+  - Uses actual message example to demonstrate value
 
 - Typography
-  - Hero: brand-highlighted “Clarity” in title; responsive clamps.
-  - Feature section uses consistent clamps for hierarchy:
-    - Section title: `clamp(24px, 5.5vw, 36px)`; subtitle: `clamp(14px, 4vw, 20px)`
-    - Mobile meta title: `clamp(20px, 5.5vw, 24px)`; description: `clamp(14px, 4vw, 16px)`; counter small (`text-xs`)
-    - Desktop overlay title: `clamp(20px, 2vw, 28px)`; description: `clamp(14px, 1.6vw, 16px)`
+  - Hero title: `text-4xl md:text-5xl` with gradient text effect
+  - Section titles: `text-3xl` or `text-2xl` for hierarchy
+  - Body text: `text-lg` or `text-sm` depending on context
+  - Use responsive sizing with Tailwind classes
 
 - Button
-  - Gradient, rounded 14px, springy hover lift; keep style consistent across the page.
-  - Use the page-scoped `CTAButton` wrapper (imports Mantine wrapper `Button` from `@/components/ui` and applies the approved gradient): [CTAButton.tsx](mdc:src/app/(public)/components/CTAButton.tsx).
+  - Primary CTA: Use `CTAButton` component with gradient (sky→indigo→cyan)
+  - Rounded corners: `rounded-2xl` (16px) for modern, friendly feel
+  - Springy hover lift effect for interactivity
+  - Header button: Can use standard Button component with rounded-2xl styling
+  - Keep button styles consistent across the page
 
 - Pricing & CTA section (updated)
   - Combined CTA + Pricing as one full-screen section: center-aligned content using `min-h-[100svh]` and flex column.
