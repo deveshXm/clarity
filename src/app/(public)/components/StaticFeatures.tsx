@@ -6,23 +6,23 @@ import Image from "next/image";
 
 const FEATURE_ITEMS = [
   {
-    title: "Auto coaching",
-    desc: "Private suggestions after you send a message—only you can see them.",
+    title: "Automatically rephrase messages",
+    desc: "Automatically rephrase messages you send to come across with more clarity and get your point across.",
     img: "/auto_coaching.png",
     tint: "linear-gradient(180deg, rgba(56,189,248,0.14) 0%, rgba(96,165,250,0.12) 100%)",
     position: "left"
   },
   {
-    title: "Personal feedback",
-    desc: "Friendly insights on your patterns with simple ideas to try next.",
-    img: "/personal_feedback_command.png",
+    title: "Rephrase before you send",
+    desc: "Ask Clarity to rephrase what you are about to send too, in advance of a message.",
+    img: "/rephrase_command.png",
     tint: "linear-gradient(180deg, rgba(99,102,241,0.14) 0%, rgba(34,211,238,0.12) 100%)",
     position: "right"
   },
   {
-    title: "Reports",
-    desc: "Clear weekly or monthly summaries with trends and top examples.",
-    img: "/weekly_report.png",
+    title: "Get feedback over time",
+    desc: "Get feedback on your communication over time, as we help you get better overall.",
+    img: "/personal_feedback_command.png",
     tint: "linear-gradient(180deg, rgba(34,211,238,0.14) 0%, rgba(56,189,248,0.12) 100%)",
     position: "left"
   },
@@ -33,7 +33,7 @@ export default function StaticFeatures() {
     <div className="mx-auto max-w-7xl px-4">
       <div className="text-center mb-16">
         <Title order={2} size="h2" fw={900} style={{ color: "#0F172A", fontSize: "clamp(24px, 5.5vw, 36px)" }}>
-          What Clarity does
+          How Clarity helps you
         </Title>
         <Text size="lg" style={{ color: "#475569", fontSize: "clamp(14px, 4vw, 20px)" }}>
           Three core abilities to improve your communication.
@@ -53,7 +53,7 @@ export default function StaticFeatures() {
             }`}
           >
             {/* Image Section */}
-            <div className="flex-1">
+            <div className="flex-[1.5]">
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 whileInView={{ opacity: 1, scale: 1 }}
@@ -65,8 +65,8 @@ export default function StaticFeatures() {
                   <Image
                     src={item.img}
                     alt={item.title}
-                    width={600}
-                    height={400}
+                    width={800}
+                    height={600}
                     className="w-full h-auto"
                     style={{ maxWidth: '100%', height: 'auto' }}
                   />
