@@ -485,7 +485,7 @@ export const SUBSCRIPTION_TIERS = {
                 name: 'Auto coaching suggestions',
                 description: 'Get instant, private suggestions to improve your messages',
                 included: true,
-                limit: 50,
+                limit: 20,
                 limitLabel: 'Limited auto coaching'
             },
             {

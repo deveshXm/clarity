@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createCheckoutSession } from '@/lib/stripe';
-import { slackUserCollection } from '@/lib/db';
+import { slackUserCollection, workspaceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackUser, STRIPE_PRICE_IDS } from '@/types';
 import { trackEvent, trackError } from '@/lib/posthog';
@@ -47,10 +47,14 @@ export async function GET(request: NextRequest) {
     }
     
     // Create checkout session using MongoDB _id as reference (convert to string)
+    // Fetch workspace to get Slack Team ID for app opening
+    const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+    const slackTeamId = workspace?.workspaceId;
+
     const session = await createCheckoutSession(
       user._id.toString(),
       STRIPE_PRICE_IDS.PRO_MONTHLY,
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success&upgraded=true`,
+      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success&upgraded=true${slackTeamId ? `&openSlack=${slackTeamId}` : ''}`,
       `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=cancelled`
     );
     
@@ -119,11 +123,15 @@ export async function POST(request: NextRequest) {
     // Use provided price ID or default to Pro monthly
     const selectedPriceId = priceId || STRIPE_PRICE_IDS.PRO_MONTHLY;
     
+    // Fetch workspace to get Slack Team ID for app opening
+    const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+    const slackTeamId = workspace?.workspaceId;
+
     // Create checkout session using MongoDB _id as reference (convert to string)
     const session = await createCheckoutSession(
       user._id.toString(),
       selectedPriceId,
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success&upgraded=true`,
+      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success&upgraded=true${slackTeamId ? `&openSlack=${slackTeamId}` : ''}`,
       `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=cancelled`
     );
     

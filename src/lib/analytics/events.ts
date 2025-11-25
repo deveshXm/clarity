@@ -27,6 +27,7 @@ export const EVENTS = {
   FEATURE_MESSAGE_REPLACED: 'feature:message_replaced',
   FEATURE_PERSONAL_FEEDBACK_GENERATED: 'feature:personal_feedback_generated',
   FEATURE_SETTINGS_UPDATED: 'feature:settings_updated',
+  FEATURE_FEEDBACK_SUBMITTED: 'feature:feedback_submitted',
   
   // === USAGE LIMITS ===
   LIMITS_USAGE_LIMIT_REACHED: 'limits:usage_limit_reached',

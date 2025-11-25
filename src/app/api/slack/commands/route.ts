@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, sendDirectMessage, isChannelAccessible, getSlackOAuthUrl, sendOnboardingPromptMessage } from '@/lib/slack';
-import { slackUserCollection, workspaceCollection, botChannelsCollection } from '@/lib/db';
+import { slackUserCollection, workspaceCollection, botChannelsCollection, feedbackCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
 import { generatePersonalFeedback, generateImprovedMessage, analyzeMessageForFlags, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
         console.log('✅ Authenticated user for command:', command, 'User:', userId);
 
         // Check onboarding status for feature commands
-        const requiresOnboarding = ['/clarity-personal-feedback', '/clarity-rephrase', '/clarity-settings'].includes(command);
+        const requiresOnboarding = ['/clarity-personal-feedback', '/clarity-rephrase', '/clarity-settings', '/clarity-feedback'].includes(command);
         if (requiresOnboarding && !appUser.hasCompletedOnboarding) {
             // Track onboarding required event
             trackEvent(userId, EVENTS.LIMITS_ONBOARDING_REQUIRED, {
@@ -179,6 +179,9 @@ export async function POST(request: NextRequest) {
                 break;
             case '/clarity-help':
                 response = await handleClarityHelp();
+                break;
+            case '/clarity-feedback':
+                response = await handleFeedback(text, userId, appUser as unknown as SlackUser);
                 break;
             default:
                 response = {
@@ -918,10 +921,16 @@ async function handleClarityHelp() {
             },
             {
                 type: 'section',
-                text: {
-                    type: 'mrkdwn',
-                    text: '_Configure your AI coach preferences_\n\n`/clarity-settings`'
-                }
+                fields: [
+                    {
+                        type: 'mrkdwn',
+                        text: '_Configure your AI coach preferences_\n\n`/clarity-settings`'
+                    },
+                    {
+                        type: 'mrkdwn',
+                        text: '_Send feedback to the Clarity team_\n\n`/clarity-feedback [your feedback]`'
+                    }
+                ]
             },
             {
                 type: 'divider'
@@ -944,4 +953,61 @@ async function handleClarityHelp() {
             }
         ]
     };
+}
+
+async function handleFeedback(text: string, userId: string, user: SlackUser) {
+    try {
+        if (!text.trim()) {
+            return {
+                text: 'Please provide your feedback. Example: `/clarity-feedback I love this feature!`',
+                response_type: 'ephemeral'
+            };
+        }
+
+        // Store feedback in database
+        await feedbackCollection.insertOne({
+            _id: new ObjectId(),
+            slackId: userId,
+            workspaceId: user.workspaceId,
+            userName: user.name,
+            text: text.trim(),
+            subscriptionTier: user.subscription?.tier || 'FREE',
+            createdAt: new Date()
+        });
+
+        // Track feedback submission in PostHog
+        trackEvent(userId, EVENTS.FEATURE_FEEDBACK_SUBMITTED, {
+            user_name: user.name,
+            workspace_id: user.workspaceId,
+            subscription_tier: user.subscription?.tier || 'FREE',
+            feedback_length: text.trim().length,
+        });
+
+        logInfo('Feedback submitted', {
+            user_id: userId,
+            workspace_id: user.workspaceId,
+            feedback_length: text.trim().length,
+            endpoint: '/api/slack/commands'
+        });
+
+        return {
+            text: '✅ *Thank you for your feedback!*\n\nWe appreciate you taking the time to share your thoughts. Your feedback helps us improve Clarity for everyone.',
+            response_type: 'ephemeral'
+        };
+
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error in feedback command', errorObj, {
+            user_id: userId,
+            operation: 'feedback_command'
+        });
+        trackError(userId, errorObj, {
+            operation: 'feedback_command',
+            context: 'command_processing'
+        });
+        return {
+            text: 'Sorry, I couldn\'t submit your feedback. Please try again later.',
+            response_type: 'ephemeral'
+        };
+    }
 } 

@@ -41,6 +41,13 @@
                 "url": "https://clarity.rocktangle.com/api/slack/commands",
                 "description": "Check if Clarity is installed and monitoring current channel",
                 "should_escape": false
+            },
+            {
+                "command": "/clarity-feedback",
+                "url": "https://clarity.rocktangle.com/api/slack/commands",
+                "description": "Send feedback to the Clarity team",
+                "usage_hint": "[your feedback]",
+                "should_escape": false
             }
         ]
     },

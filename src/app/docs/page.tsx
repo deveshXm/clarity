@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Link, Image } from '@/components/ui';
+import { SlackOpener } from './_components/SlackOpener';
 import {
   Rocket,
   MessageSquare,
@@ -15,6 +16,9 @@ import {
 export default function HelpPage(): React.ReactElement {
   return (
     <main className="mx-auto max-w-[820px] px-6 py-12">
+      <Suspense fallback={null}>
+        <SlackOpener />
+      </Suspense>
       <div className="mb-2 text-sm font-medium text-neutral-500">Get started</div>
       <h1 className="mb-4 text-3xl font-bold leading-tight tracking-tight text-neutral-900">Welcome</h1>
       <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Learn about Clarity and how to get started.</p>

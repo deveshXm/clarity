@@ -1,14 +1,11 @@
 'use client';
 
-import { useState, useTransition, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useTransition, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Title, Button, Stack, Row, Center, Container, Text, Checkbox, SegmentedControl, Card, Skeleton, TextInput } from '@/components/ui';
 import { validateSlackUser, completeSlackOnboarding, getWorkspaceChannels } from '@/lib/server-actions';
 import { SlackChannel, SUBSCRIPTION_TIERS } from '@/types';
 import { usePostHog } from '@/hooks/useAnalytics';
-import { gsap } from 'gsap';
-
-type OnboardingStep = 'frequency' | 'channels' | 'email' | 'payment';
 
 interface SlackUser {
   _id: string;
@@ -24,7 +21,6 @@ interface SlackUser {
 }
 
 export default function OnboardingForm() {
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>('frequency');
   const [analysisFrequency, setAnalysisFrequency] = useState<'weekly' | 'monthly'>('weekly');
   const [availableChannels, setAvailableChannels] = useState<SlackChannel[]>([]);
   const [selectedChannels, setSelectedChannels] = useState<Array<{ id: string; name: string }>>([]);
@@ -35,18 +31,8 @@ export default function OnboardingForm() {
   const [isCompletingSetup, startCompletingSetup] = useTransition();
   const [isValidating, setIsValidating] = useState(true);
   const { identify } = usePostHog();
-  // Transition state (GSAP)
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [outgoingStep, setOutgoingStep] = useState<OnboardingStep | null>(null);
-  const [incomingStep, setIncomingStep] = useState<OnboardingStep | null>(null);
-  const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [isMobile, setIsMobile] = useState(false);
-  const stageRef = useRef<HTMLDivElement | null>(null);
-  const outgoingRef = useRef<HTMLDivElement | null>(null);
-  const incomingRef = useRef<HTMLDivElement | null>(null);
-  // Payment card height equalization
-  const freeCardRef = useRef<HTMLDivElement | null>(null);
-  const proCardRef = useRef<HTMLDivElement | null>(null);
+
   // Fixed rows logic for channels list
   const CHANNEL_ROW_HEIGHT = 44; // px
   const CHANNEL_VISIBLE_ROWS = 5;
@@ -54,6 +40,26 @@ export default function OnboardingForm() {
   
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Fetch channels logic
+  async function fetchChannels(teamId: string) {
+    setIsLoadingChannels(true);
+    try {
+      const result = await getWorkspaceChannels(teamId);
+      if (result.success && result.channels) {
+        // Filter out archived AND private channels
+        setAvailableChannels(result.channels.filter(channel => 
+          !channel.is_archived && !channel.is_private
+        ));
+      } else {
+        console.error('Failed to load channels:', result.error);
+      }
+    } catch (err) {
+      console.error('Channel loading error:', err);
+    } finally {
+      setIsLoadingChannels(false);
+    }
+  }
 
   // Validate user and check onboarding status on component mount
   useEffect(() => {
@@ -68,7 +74,6 @@ export default function OnboardingForm() {
       }
 
       try {
-        // Use server action instead of fetch
         const result = await validateSlackUser(slackUserId, teamId);
 
         if (result.error || !result.user) {
@@ -77,19 +82,16 @@ export default function OnboardingForm() {
           return;
         }
 
-        // Check if onboarding already completed
         if (result.user.hasCompletedOnboarding) {
           console.log('Onboarding already completed');
           router.replace('/docs');
           return;
         }
 
-        // Set user data and initial frequency
         setUser(result.user);
         setAnalysisFrequency(result.user.analysisFrequency || 'weekly');
         setIsValidating(false);
 
-        // Track onboarding start and identify user - simplified identification
         identify(result.user.slackId, {
           name: result.user.name,
           slack_user_id: result.user.slackId,
@@ -97,6 +99,9 @@ export default function OnboardingForm() {
           workspace_id: result.user.workspaceId,
           subscription_tier: result.user.subscription?.tier || 'FREE',
         });
+
+        // Fetch channels immediately after validation
+        void fetchChannels(teamId);
 
       } catch (error) {
         console.error('Error validating user:', error);
@@ -107,78 +112,43 @@ export default function OnboardingForm() {
     validateUser();
   }, [searchParams, router, identify]);
 
-  async function handleFrequencyNext(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setIsLoadingChannels(true);
-    
-    // PostHog autocapture will track form interactions automatically
-    
-    try {
-      // Fetch workspace channels with team ID
-      const teamId = searchParams.get('team');
-      if (!teamId) {
-        setError('Missing team information. Please try again.');
-        return;
-      }
-      // Start showing the channels step immediately (button disabled) while API loads
-      startStepTransition('channels');
+  // Responsive detection for mobile layouts
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 640px)');
+    const handler = (e: MediaQueryListEvent | MediaQueryList) => {
+      const matches = 'matches' in e ? e.matches : (e as MediaQueryList).matches;
+      setIsMobile(matches);
+    };
+    handler(media);
+    media.addEventListener('change', handler as (e: MediaQueryListEvent) => void);
+    // Initial check
+    setIsMobile(media.matches);
+    return () => media.removeEventListener('change', handler as (e: MediaQueryListEvent) => void);
+  }, []);
 
-      const result = await getWorkspaceChannels(teamId);
-      if (result.success && result.channels) {
-        // Filter out archived AND private channels (bots can't join private channels via API)
-        setAvailableChannels(result.channels.filter(channel => 
-          !channel.is_archived && !channel.is_private
-        ));
+  const toggleChannelSelection = (channel: SlackChannel) => {
+    setSelectedChannels(prev => {
+      const isSelected = prev.some(c => c.id === channel.id);
+      if (isSelected) {
+        return prev.filter(c => c.id !== channel.id);
       } else {
-        setError(result.error || 'Failed to load channels. Please try again.');
+        return [...prev, { id: channel.id, name: channel.name }];
       }
-    } catch (err) {
-      setError('Failed to load channels. Please try again.');
-      console.error('Channel loading error:', err);
-    } finally {
-      setIsLoadingChannels(false);
-    }
-  }
+    });
+  };
 
-  function handleChannelsNext(e: React.FormEvent) {
-    e.preventDefault();
+  function validateForm(): boolean {
     setError(null);
-    
-    // PostHog autocapture will track form interactions automatically
-    
-    // Always go to email step next
-    startStepTransition('email');
-  }
-
-  function handleEmailNext(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!userEmail.trim()) {
       setError('Email address is required.');
-      return;
+      return false;
     }
-    
     if (!emailRegex.test(userEmail.trim())) {
       setError('Please enter a valid email address.');
-      return;
+      return false;
     }
-    
-    // PostHog autocapture will track form interactions automatically
-    
-    // Check if user already has PRO subscription - skip payment step
-    const hasProSubscription = user?.subscription?.tier === 'PRO' && user?.subscription?.status === 'active';
-    
-    if (hasProSubscription) {
-      // Skip payment step and complete onboarding directly
-      completeOnboarding();
-    } else {
-      // Move to payment step for FREE users
-      startStepTransition('payment');
-    }
+    return true;
   }
 
   function completeOnboarding() {
@@ -186,7 +156,6 @@ export default function OnboardingForm() {
 
     startCompletingSetup(async () => {
       try {
-        // Use server action instead of fetch
           const result = await completeSlackOnboarding(
             user.slackId,
             user.workspaceId,
@@ -200,12 +169,14 @@ export default function OnboardingForm() {
           throw new Error(result.error);
         }
 
-        // PostHog server-side tracking handles onboarding completion
-
         console.log('Onboarding completed successfully');
         
-        // Redirect to help page
-        router.push('/docs');
+        // Redirect to help page with Slack open trigger
+        // Note: router.push is client-side navigation, it should preserve the query param
+        const teamId = searchParams.get('team');
+        const targetUrl = `/docs${teamId ? `?openSlack=${teamId}` : ''}`;
+        console.log('Redirecting to:', targetUrl);
+        router.push(targetUrl);
       } catch (err) {
         setError('Failed to complete setup. Please try again.');
         console.error('Onboarding error:', err);
@@ -214,19 +185,15 @@ export default function OnboardingForm() {
   }
 
   function handleContinueWithFree() {
-    // PostHog autocapture will track form interactions automatically
-    
-    // Complete onboarding with free plan
+    if (!validateForm()) return;
     completeOnboarding();
   }
 
   async function handleUpgradeToPro() {
     if (!user) return;
-    
-    // PostHog autocapture will track button clicks automatically
+    if (!validateForm()) return;
     
     try {
-      // Create checkout session using the existing API endpoint
       const checkoutUrl = `/api/stripe/checkout?user=${encodeURIComponent(user._id)}`;
       window.location.href = checkoutUrl;
     } catch (error) {
@@ -235,95 +202,7 @@ export default function OnboardingForm() {
     }
   }
 
-  // Run GSAP animation when both panels are mounted (placed before any conditional returns to keep hook order stable)
-  useEffect(() => {
-    if (!isTransitioning || !outgoingRef.current || !incomingRef.current || !stageRef.current) return;
-
-    const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const duration = prefersReduced ? 0.25 : 0.45;
-    const enterStart = direction === 'forward' ? 30 : -30;
-    const exitShift = direction === 'forward' ? -20 : 20;
-    const ease = 'power2.out';
-
-    const ctx = gsap.context(() => {
-      const outEl = outgoingRef.current!;
-      const inEl = incomingRef.current!;
-      const stageEl = stageRef.current!;
-
-      // Disable interaction during transition
-      gsap.set(stageEl, { pointerEvents: 'none' });
-
-      // Panels remain in normal flow; container uses CSS grid to stack them
-
-      const tl = gsap.timeline({ defaults: { duration, ease } });
-      tl.set(inEl, { xPercent: enterStart, opacity: 0, filter: prefersReduced ? 'none' : 'blur(4px)' })
-        .to(outEl, { xPercent: exitShift, opacity: 0, filter: prefersReduced ? 'none' : 'blur(4px)' }, 0)
-        .to(inEl, { xPercent: 0, opacity: 1, filter: prefersReduced ? 'none' : 'blur(0px)' }, 0.05)
-        .add(() => {
-          // Swap panels
-          setCurrentStep(prev => {
-            return (incomingStep as OnboardingStep) || prev;
-          });
-          setIsTransitioning(false);
-          setOutgoingStep(null);
-          setIncomingStep(null);
-          // Re-enable interaction
-          gsap.set(stageEl, { pointerEvents: '' });
-        });
-
-      return () => {
-        tl.kill();
-      };
-    }, stageRef);
-
-    return () => ctx.revert();
-  }, [isTransitioning, direction, incomingStep]);
-
-  // Equalize payment card heights (match landing behavior)
-  useLayoutEffect(() => {
-    if (currentStep !== 'payment') return;
-
-    const updateHeights = () => {
-      const freeEl = freeCardRef.current;
-      const proEl = proCardRef.current;
-      if (!freeEl || !proEl) return;
-
-      // On mobile, stack vertically and let heights be auto
-      if (isMobile) {
-        freeEl.style.minHeight = 'auto';
-        proEl.style.minHeight = 'auto';
-        return;
-      }
-
-      freeEl.style.minHeight = 'auto';
-      proEl.style.minHeight = 'auto';
-
-      const freeH = freeEl.offsetHeight;
-      const proH = proEl.offsetHeight;
-      const maxH = Math.max(freeH, proH);
-
-      freeEl.style.minHeight = `${maxH}px`;
-      proEl.style.minHeight = `${maxH}px`;
-    };
-
-    updateHeights();
-    window.addEventListener('resize', updateHeights, { passive: true } as EventListenerOptions);
-    return () => window.removeEventListener('resize', updateHeights as EventListener);
-  }, [currentStep, isMobile]);
-
-  // Responsive detection for mobile layouts
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 640px)');
-    const handler = (e: MediaQueryListEvent | MediaQueryList) => {
-      const matches = 'matches' in e ? e.matches : (e as MediaQueryList).matches;
-      setIsMobile(matches);
-    };
-    handler(media);
-    media.addEventListener('change', handler as (e: MediaQueryListEvent) => void);
-    return () => media.removeEventListener('change', handler as (e: MediaQueryListEvent) => void);
-  }, []);
-
-  // Show loading while validating user (no cards, lightweight)
+  // Loading state
   if (isValidating) {
     return (
       <Container size="lg" py={64}>
@@ -334,94 +213,55 @@ export default function OnboardingForm() {
     );
   }
 
-  // Don't render anything if user is null (will redirect)
   if (!user) {
     return null;
   }
 
-  // Remove the FrequencySelector wrapper completely
+  const hasProSubscription = user?.subscription?.tier === 'PRO' && user?.subscription?.status === 'active';
 
-  const renderEmailStep = () => (
-    <Stack gap="md" w="100%">
-      <TextInput
-        placeholder="your@email.com"
-        value={userEmail}
-        onChange={(e) => setUserEmail(e.currentTarget.value)}
-        required
-        type="email"
-        size="md"
-        style={{
-          fontSize: 16,
-        }}
-      />
-      <Text size="sm" c="dimmed" style={{ marginTop: 8 }}>
-        Don&apos;t worry, we won&apos;t spam you. We&apos;ll use this to send your communication reports and important product updates.
-      </Text>
+  // --- Render Sections ---
+
+  const renderFrequencySection = () => (
+    <Stack gap="sm">
+      <Stack gap={4}>
+        <Title order={3} size="h3" style={{ color: '#0F172A' }}>Report frequency</Title>
+        <Text size="sm" c="dimmed">How often should we DM your report?</Text>
+      </Stack>
+      <Center py={8}>
+        <SegmentedControl
+          value={analysisFrequency}
+          onChange={(v) => setAnalysisFrequency(v as 'weekly' | 'monthly')}
+          transitionDuration={300}
+          transitionTimingFunction="ease-in-out"
+          data={[
+            { label: 'Weekly', value: 'weekly' },
+            { label: 'Monthly', value: 'monthly' },
+          ]}
+        />
+      </Center>
     </Stack>
   );
 
-  const renderFrequencyStep = () => (
-    <Center>
-      <SegmentedControl
-        value={analysisFrequency}
-        onChange={(v) => setAnalysisFrequency(v as 'weekly' | 'monthly')}
-        transitionDuration={300}
-        transitionTimingFunction="ease-in-out"
-        data={[
-          { label: 'Weekly', value: 'weekly' },
-          { label: 'Monthly', value: 'monthly' },
-        ]}
-      />
-    </Center>
-  );
-
-  // Invitations step removed
-
-  const toggleChannelSelection = (channel: SlackChannel) => {
-    setSelectedChannels(prev => {
-      const isSelected = prev.some(c => c.id === channel.id);
-      if (isSelected) {
-        return prev.filter(c => c.id !== channel.id);
-      } else {
-        return [...prev, { id: channel.id, name: channel.name }];
-      }
-    });
-  };
-
-  const renderChannelsStep = () => {
-    const hasProSubscription = user?.subscription?.tier === 'PRO' && user?.subscription?.status === 'active';
-    
-    return (
-      <Stack gap="md" w="100%">
-        {hasProSubscription && (
-          <Card
-            p="sm"
-            style={{
-              background: 'linear-gradient(92deg, #38BDF8 0%, #60A5FA 50%, #22D3EE 100%)',
-              color: 'white',
-              textAlign: 'center'
-            }}
-          >
-            <Text size="sm" fw={600}>
-              🎉 You already have a PRO subscription! Complete your setup below.
-            </Text>
-          </Card>
-        )}
-        
-        <Stack
-          style={{
-            height: CHANNEL_CONTAINER_HEIGHT,
-            minHeight: CHANNEL_CONTAINER_HEIGHT,
-            maxHeight: CHANNEL_CONTAINER_HEIGHT,
-            overflowY: 'auto',
-            borderRadius: 16,
-            background: 'rgba(255,255,255,0.60)',
-            border: '1px solid rgba(226,232,240,0.70)',
-            padding: 12,
-            boxSizing: 'border-box',
-            flex: `0 0 ${CHANNEL_CONTAINER_HEIGHT}px`
-          }}
-        >
+  const renderChannelsSection = () => (
+    <Stack gap="sm">
+      <Stack gap={4}>
+        <Title order={3} size="h3" style={{ color: '#0F172A' }}>Channels</Title>
+        <Text size="sm" c="dimmed">Choose channels to enable AI coaching</Text>
+      </Stack>
+      
+      <Stack
+        style={{
+          height: CHANNEL_CONTAINER_HEIGHT,
+          minHeight: CHANNEL_CONTAINER_HEIGHT,
+          maxHeight: CHANNEL_CONTAINER_HEIGHT,
+          overflowY: 'auto',
+          borderRadius: 16,
+          background: 'rgba(255,255,255,0.60)',
+          border: '1px solid rgba(226,232,240,0.70)',
+          padding: 12,
+          boxSizing: 'border-box',
+        }}
+      >
         <Stack gap={0}>
           {isLoadingChannels ? (
             Array.from({ length: CHANNEL_VISIBLE_ROWS }).map((_, idx) => (
@@ -430,6 +270,10 @@ export default function OnboardingForm() {
                 <Skeleton height={10} style={{ flex: 1 }} />
               </Row>
             ))
+          ) : availableChannels.length === 0 ? (
+            <Center h="100%">
+              <Text size="sm" c="dimmed">No public channels found</Text>
+            </Center>
           ) : (
             availableChannels.map((channel) => {
               const isSelected = selectedChannels.some(c => c.id === channel.id);
@@ -446,300 +290,258 @@ export default function OnboardingForm() {
             })
           )}
         </Stack>
+      </Stack>
+    </Stack>
+  );
+
+  const renderEmailSection = () => (
+    <Stack gap="sm">
+      <Stack gap={4}>
+        <Title order={3} size="h3" style={{ color: '#0F172A' }}>Email address</Title>
+        <Text size="sm" c="dimmed">Where should we send your reports?</Text>
+      </Stack>
+      <Stack gap="xs">
+        <TextInput
+          placeholder="your@email.com"
+          value={userEmail}
+          onChange={(e) => setUserEmail(e.currentTarget.value)}
+          required
+          type="email"
+          size="md"
+          style={{ fontSize: 16 }}
+        />
+        <Text size="sm" c="dimmed">
+          Don&apos;t worry, we won&apos;t spam you. We&apos;ll use this to send your communication reports and important product updates.
+        </Text>
+      </Stack>
+    </Stack>
+  );
+
+  const renderFooter = () => {
+    if (hasProSubscription) {
+      return (
+        <Stack gap="lg" mt={24}>
+          <Card
+            p="sm"
+            style={{
+              background: 'linear-gradient(92deg, #38BDF8 0%, #60A5FA 50%, #22D3EE 100%)',
+              color: 'white',
+              textAlign: 'center'
+            }}
+          >
+            <Text size="sm" fw={600}>
+              🎉 You already have a PRO subscription!
+            </Text>
+          </Card>
+          <Button 
+            size="lg" 
+            onClick={completeOnboarding}
+            loading={isCompletingSetup}
+          >
+            Complete Setup
+          </Button>
         </Stack>
+      );
+    }
+
+    return (
+      <Stack gap="lg" w="100%" mt={24}>
+        <Stack gap={4} align="center">
+          <Title order={3} size="h3" style={{ color: '#0F172A' }}>Choose your plan</Title>
+          <Text size="sm" c="dimmed">Select the plan that works best for you</Text>
+        </Stack>
+
+        <Center>
+          <Text size="sm" ta="center" style={{ maxWidth: 640, color: '#334155', fontWeight: 600 as unknown as number }}>
+            We never store your chats or any personal information.
+          </Text>
+        </Center>
+        
+        <Row justify="center" gap={isMobile ? 12 : 24} wrap={isMobile ? 'wrap' : 'nowrap'} align="stretch" style={{ width: '100%' }}>
+          {/* Free plan card */}
+          <Card
+            shadow="xl"
+            radius="lg"
+            withBorder
+            p={0}
+            style={{
+              width: isMobile ? '100%' : 320,
+              minWidth: isMobile ? '100%' : 300,
+              maxWidth: isMobile ? '100%' : 320,
+              backgroundColor: 'white',
+              borderColor: 'rgba(2,6,23,0.05)',
+              boxShadow: '0 8px 24px rgba(2,6,23,0.06)',
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            <Stack p={isMobile ? 20 : 24} gap={isMobile ? 'md' : 'lg'} style={{ height: '100%', flex: 1 }}>
+              <Stack gap="lg" style={{ flex: 1 }}>
+                <Row justify="space-between" align="baseline">
+                  <Title order={3} size="h3" fw={900} style={{ color: '#0F172A', fontSize: isMobile ? 22 : 26 }}>
+                    {SUBSCRIPTION_TIERS.FREE.name}
+                  </Title>
+                  <Row align="baseline" gap={4}>
+                    <Title order={2} size="h2" fw={900} style={{ color: '#0F172A', fontSize: isMobile ? 24 : 28 }}>
+                      ${SUBSCRIPTION_TIERS.FREE.price}
+                    </Title>
+                    <Text size="sm" style={{ color: '#94A3B8', fontSize: 14 }}>{SUBSCRIPTION_TIERS.FREE.priceLabel}</Text>
+                  </Row>
+                </Row>
+                <Text size="sm" style={{ color: '#334155', fontSize: isMobile ? 15 : 16, marginBottom: 12 }}>
+                  {SUBSCRIPTION_TIERS.FREE.description}
+                </Text>
+                <Stack style={{ borderTop: '1px solid rgba(2,6,23,0.08)' }} />
+                <Stack gap={8}>
+                  {SUBSCRIPTION_TIERS.FREE.displayFeatures.map((feature, index) => (
+                    <Row key={index} align="center" gap={8} style={{ color: '#0F172A' }}>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
+                        <path d="M7.5 13.5L4.5 10.5" stroke={feature.included ? "#10B981" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
+                        <path d="M7.5 13.5L15.5 5.5" stroke={feature.included ? "#10B981" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      <Text size="sm" style={{ color: '#0F172A' }}>
+                        {feature.limitLabel}
+                      </Text>
+                    </Row>
+                  ))}
+                </Stack>
+              </Stack>
+              <Button
+                size="md"
+                onClick={handleContinueWithFree}
+                loading={isCompletingSetup}
+                style={{
+                  marginTop: isMobile ? 16 : 24,
+                  backgroundColor: '#F8FAFC',
+                  color: '#334155',
+                  border: '1px solid #E2E8F0',
+                  fontWeight: 600
+                }}
+              >
+                Continue with Free
+              </Button>
+            </Stack>
+          </Card>
+
+          {/* Pro plan card */}
+          <Card
+            shadow="xl"
+            radius="lg"
+            p={0}
+            style={{
+              width: isMobile ? '100%' : 320,
+              minWidth: isMobile ? '100%' : 300,
+              maxWidth: isMobile ? '100%' : 320,
+              background: 'linear-gradient(92deg, #38BDF8 0%, #60A5FA 50%, #22D3EE 100%)',
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            <Stack p={isMobile ? 20 : 24} gap={isMobile ? 'md' : 'lg'} style={{ height: '100%', flex: 1 }}>
+              <Stack gap="lg" style={{ flex: 1 }}>
+                <Row justify="space-between" align="baseline">
+                  <Title order={3} size="h3" fw={900} style={{ color: '#FFFFFF', fontSize: isMobile ? 22 : 26 }}>
+                    {SUBSCRIPTION_TIERS.PRO.name}
+                  </Title>
+                  <Row align="baseline" gap={4}>
+                    <Title order={2} size="h2" fw={900} style={{ color: '#FFFFFF', fontSize: isMobile ? 24 : 28 }}>
+                      ${SUBSCRIPTION_TIERS.PRO.price}
+                    </Title>
+                    <Text size="sm" style={{ color: 'rgba(255,255,255,0.95)', fontSize: 14 }}>{SUBSCRIPTION_TIERS.PRO.priceLabel}</Text>
+                  </Row>
+                </Row>
+                <Text size="sm" style={{ color: 'rgba(255,255,255,0.95)', fontSize: isMobile ? 15 : 16, marginBottom: 12 }}>
+                  {SUBSCRIPTION_TIERS.PRO.description}
+                </Text>
+                <Stack style={{ borderTop: '1px solid rgba(255,255,255,0.25)' }} />
+                <Stack gap={8}>
+                  {SUBSCRIPTION_TIERS.PRO.displayFeatures.map((feature, index) => (
+                    <Row key={index} align="center" gap={8} style={{ color: '#FFFFFF' }}>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
+                        <path d="M7.5 13.5L4.5 10.5" stroke={feature.included ? "#FFFFFF" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
+                        <path d="M7.5 13.5L15.5 5.5" stroke={feature.included ? "#FFFFFF" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      <Text size="sm" style={{ color: '#FFFFFF' }}>
+                        {feature.limitLabel}
+                      </Text>
+                    </Row>
+                  ))}
+                </Stack>
+              </Stack>
+              <Center
+                style={{
+                  marginTop: isMobile ? 8 : 8,
+                  background: 'linear-gradient(90deg, rgba(255,255,255,0.14), rgba(255,255,255,0.10))',
+                  color: 'rgba(255,255,255,0.95)',
+                  border: '1px solid rgba(255,255,255,0.6)',
+                  borderRadius: 999,
+                  width: '100%',
+                  padding: isMobile ? '10px 0' : '12px 0',
+                  fontWeight: 800,
+                  letterSpacing: 1
+                }}
+              >
+                MOST POPULAR
+              </Center>
+              <Button
+                size="md"
+                onClick={handleUpgradeToPro}
+                style={{
+                  marginTop: isMobile ? 12 : 16,
+                  background: 'rgba(255,255,255,0.2)',
+                  color: '#FFFFFF',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  fontWeight: 800,
+                  backdropFilter: 'blur(10px)'
+                }}
+              >
+                Upgrade to Pro
+              </Button>
+            </Stack>
+          </Card>
+        </Row>
       </Stack>
     );
   };
 
-  const renderPaymentStep = () => (
-    <Stack gap="lg" w="100%">
-      {/* Privacy note (visible and above plans) */}
-      <Center>
-        <Text size="sm" ta="center" style={{ maxWidth: 640, color: '#334155', fontWeight: 600 as unknown as number }}>
-          We never store your chats or any personal information.
-        </Text>
-      </Center>
-      {/* Pricing cards side by side (match landing style) */}
-      <Row justify="center" gap={isMobile ? 12 : 24} wrap={isMobile ? 'wrap' : 'nowrap'} align="stretch" style={{ width: '100%' }}>
-        {/* Free plan card */}
-        <Card
-          shadow="xl"
-          radius="lg"
-          withBorder
-          p={0}
-          style={{
-            width: isMobile ? '100%' : 320,
-            minWidth: isMobile ? '100%' : 300,
-            maxWidth: isMobile ? '100%' : 320,
-            backgroundColor: 'white',
-            borderColor: 'rgba(2,6,23,0.05)',
-            boxShadow: '0 8px 24px rgba(2,6,23,0.06)',
-            flexShrink: 0
-          }}
-          ref={freeCardRef}
-        >
-          <Stack p={isMobile ? 20 : 24} gap={isMobile ? 'md' : 'lg'} style={{ height: '100%' }}>
-            <Stack gap="lg" style={{ flex: 1 }}>
-              <Row justify="space-between" align="baseline">
-                <Title order={3} size="h3" fw={900} style={{ color: '#0F172A', fontSize: isMobile ? 22 : 26 }}>
-                  {SUBSCRIPTION_TIERS.FREE.name}
-                </Title>
-                <Row align="baseline" gap={4}>
-                  <Title order={2} size="h2" fw={900} style={{ color: '#0F172A', fontSize: isMobile ? 24 : 28 }}>
-                    ${SUBSCRIPTION_TIERS.FREE.price}
-                  </Title>
-                  <Text size="sm" style={{ color: '#94A3B8', fontSize: 14 }}>{SUBSCRIPTION_TIERS.FREE.priceLabel}</Text>
-                </Row>
-              </Row>
-              <Text size="sm" style={{ color: '#334155', fontSize: isMobile ? 15 : 16, marginBottom: 12 }}>
-                {SUBSCRIPTION_TIERS.FREE.description}
-              </Text>
-              <Stack style={{ borderTop: '1px solid rgba(2,6,23,0.08)' }} />
-              <Stack gap={8}>
-                {SUBSCRIPTION_TIERS.FREE.displayFeatures.map((feature, index) => (
-                  <Row key={index} align="center" gap={8} style={{ color: '#0F172A' }}>
-                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-                      <path d="M7.5 13.5L4.5 10.5" stroke={feature.included ? "#10B981" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
-                      <path d="M7.5 13.5L15.5 5.5" stroke={feature.included ? "#10B981" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                    <Text size="sm" style={{ color: '#0F172A' }}>
-                      {feature.limitLabel}
-                    </Text>
-                  </Row>
-                ))}
-              </Stack>
-            </Stack>
-            <Button
-              size="md"
-              onClick={handleContinueWithFree}
-              style={{
-                marginTop: isMobile ? 16 : 24,
-                backgroundColor: '#F8FAFC',
-                color: '#334155',
-                border: '1px solid #E2E8F0',
-                fontWeight: 600
-              }}
-            >
-              Continue with Free
-            </Button>
-          </Stack>
-        </Card>
-
-        {/* Pro plan card */}
-        <Card
-          shadow="xl"
-          radius="lg"
-          p={0}
-          style={{
-            width: isMobile ? '100%' : 320,
-            minWidth: isMobile ? '100%' : 300,
-            maxWidth: isMobile ? '100%' : 320,
-            background: 'linear-gradient(92deg, #38BDF8 0%, #60A5FA 50%, #22D3EE 100%)',
-            flexShrink: 0
-          }}
-          ref={proCardRef}
-        >
-          <Stack p={isMobile ? 20 : 24} gap={isMobile ? 'md' : 'lg'} style={{ height: '100%' }}>
-            <Stack gap="lg" style={{ flex: 1 }}>
-              <Row justify="space-between" align="baseline">
-                <Title order={3} size="h3" fw={900} style={{ color: '#FFFFFF', fontSize: isMobile ? 22 : 26 }}>
-                  {SUBSCRIPTION_TIERS.PRO.name}
-                </Title>
-                <Row align="baseline" gap={4}>
-                  <Title order={2} size="h2" fw={900} style={{ color: '#FFFFFF', fontSize: isMobile ? 24 : 28 }}>
-                    ${SUBSCRIPTION_TIERS.PRO.price}
-                  </Title>
-                  <Text size="sm" style={{ color: 'rgba(255,255,255,0.95)', fontSize: 14 }}>{SUBSCRIPTION_TIERS.PRO.priceLabel}</Text>
-                </Row>
-              </Row>
-              <Text size="sm" style={{ color: 'rgba(255,255,255,0.95)', fontSize: isMobile ? 15 : 16, marginBottom: 12 }}>
-                {SUBSCRIPTION_TIERS.PRO.description}
-              </Text>
-              <Stack style={{ borderTop: '1px solid rgba(255,255,255,0.25)' }} />
-              <Stack gap={8}>
-                {SUBSCRIPTION_TIERS.PRO.displayFeatures.map((feature, index) => (
-                  <Row key={index} align="center" gap={8} style={{ color: '#FFFFFF' }}>
-                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-                      <path d="M7.5 13.5L4.5 10.5" stroke={feature.included ? "#FFFFFF" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
-                      <path d="M7.5 13.5L15.5 5.5" stroke={feature.included ? "#FFFFFF" : "#EF4444"} strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                    <Text size="sm" style={{ color: '#FFFFFF' }}>
-                      {feature.limitLabel}
-                    </Text>
-                  </Row>
-                ))}
-              </Stack>
-            </Stack>
-            {/* Pro badge */}
-            <Center
-              style={{
-                marginTop: isMobile ? 8 : 8,
-                background: 'linear-gradient(90deg, rgba(255,255,255,0.14), rgba(255,255,255,0.10))',
-                color: 'rgba(255,255,255,0.95)',
-                border: '1px solid rgba(255,255,255,0.6)',
-                borderRadius: 999,
-                width: '100%',
-                padding: isMobile ? '10px 0' : '12px 0',
-                fontWeight: 800,
-                letterSpacing: 1
-              }}
-            >
-              MOST POPULAR
-            </Center>
-            <Button
-              size="md"
-              onClick={handleUpgradeToPro}
-              style={{
-                marginTop: isMobile ? 12 : 16,
-                background: 'rgba(255,255,255,0.2)',
-                color: '#FFFFFF',
-                border: '1px solid rgba(255,255,255,0.3)',
-                fontWeight: 800,
-                backdropFilter: 'blur(10px)'
-              }}
-            >
-              Upgrade to Pro
-            </Button>
-          </Stack>
-        </Card>
-      </Row>
-      
-    </Stack>
-  );
-
-  const stepMeta: Record<OnboardingStep, { title: string; subtitle?: string }> = {
-    frequency: { title: 'Report frequency', subtitle: 'How often should we DM your report?' },
-    channels: { title: 'Channels', subtitle: 'Choose channels to enable AI coaching' },
-    email: { title: 'Email address', subtitle: 'Where should we send your reports?' },
-    payment: { title: 'Choose your plan', subtitle: 'Select the plan that works best for you' },
-  };
-
-  const goBack = () => {
-    setError(null);
-    if (currentStep === 'channels') startStepTransition('frequency');
-    if (currentStep === 'email') startStepTransition('channels');
-    if (currentStep === 'payment') startStepTransition('email');
-  };
-
-  const goNext = (e?: React.MouseEvent<HTMLButtonElement>) => {
-    if (e) e.preventDefault();
-    setError(null);
-    if (currentStep === 'frequency') {
-      // reuse existing loader
-      void handleFrequencyNext(new Event('submit') as unknown as React.FormEvent);
-    } else if (currentStep === 'channels') {
-      void handleChannelsNext(new Event('submit') as unknown as React.FormEvent);
-    } else if (currentStep === 'email') {
-      void handleEmailNext(new Event('submit') as unknown as React.FormEvent);
-    }
-    // Payment step doesn't have a "Next" button - it has specific plan buttons
-  };
-
-
-
-  // Helper to perform smooth right-to-left slide transition between steps
-  function startStepTransition(nextStep: OnboardingStep) {
-    if (nextStep === currentStep || isTransitioning) return;
-    const order: Record<OnboardingStep, number> = { frequency: 0, channels: 1, email: 2, payment: 3 };
-    setDirection(order[nextStep] > order[currentStep] ? 'forward' : 'back');
-    setOutgoingStep(currentStep);
-    setIncomingStep(nextStep);
-    setIsTransitioning(true);
-  }
-
-
-  // Panel renderer: header + step content + footer
-  function renderPanel(step: OnboardingStep, disableButtons: boolean) {
-    // Check if user has PRO subscription to determine button label
-    const hasProSubscription = user?.subscription?.tier === 'PRO' && user?.subscription?.status === 'active';
-    const label = step === 'email' && hasProSubscription ? 'Complete Setup' : 'Next';
-    const loading = disableButtons
-      ? false
-      : step === 'frequency'
-        ? isLoadingChannels
-        : step === 'email'
-          ? isCompletingSetup
-          : false;
-
-    return (
-      <Card
-        withBorder={false}
-        shadow="none"
-        padding="lg"
-        style={{ background: 'transparent', boxShadow: 'none', border: 'none' }}
-      >
-        {/* Animated header (title + subtitle) */}
-        <Stack gap={4}>
-          <Title order={2} size="h2" style={{ color: '#0F172A' }}>{stepMeta[step].title}</Title>
-          {stepMeta[step].subtitle && (
-            <Text size="sm" c="dimmed" mt={4}>{stepMeta[step].subtitle}</Text>
-          )}
-        </Stack>
-
-        {/* Step body */}
-        <Stack mt={12}>
-          {step === 'frequency' && renderFrequencyStep()}
-          {step === 'channels' && renderChannelsStep()}
-          {step === 'email' && renderEmailStep()}
-          {step === 'payment' && renderPaymentStep()}
-        </Stack>
-
-        {error && (<Text size="sm" c="red" mt={12} ta="left">{error}</Text>)}
-
-        {/* Footer - only show for non-payment steps */}
-        {step !== 'payment' && (
-          <Stack gap={0} pt={12}>
-            <Row justify="space-between" align="center">
-              <div>
-                {step !== 'frequency' && (
-                  <Button variant="subtle" size="sm" disabled={disableButtons} onClick={disableButtons ? undefined : goBack}>← Back</Button>
-                )}
-              </div>
-              <div>
-                <Button size="md" loading={loading} disabled={disableButtons || isTransitioning || (step === 'channels' && isLoadingChannels)} onClick={disableButtons ? undefined : goNext}>
-                  {label}
-                </Button>
-              </div>
-            </Row>
-          </Stack>
-        )}
-
-        {/* Payment step back button - positioned differently */}
-        {step === 'payment' && (
-          <Center mt={24}>
-            <Button variant="subtle" size="sm" disabled={disableButtons} onClick={disableButtons ? undefined : goBack}>← Back to email</Button>
-          </Center>
-        )}
-      </Card>
-    );
-  }
-
   return (
     <Container px={16} py={isMobile ? 24 : 64} size={isMobile ? 'xs' : 'md'}>
       <Stack
-        gap={0}
+        gap={48} // Increased gap between major sections
         w="100%"
         style={{
-          maxWidth: isMobile ? 420 : 768,
-          position: 'relative',
+          maxWidth: isMobile ? 420 : 800,
           marginInline: 'auto',
-          marginTop: isMobile ? 24 : 'clamp(48px, 20vh, 200px)'
+          marginTop: isMobile ? 24 : 48
         }}
       >
-        {/* Stage: Header + Content + Footer animate together */}
-        <div ref={stageRef} style={{ position: 'relative' }}>
-            {!isTransitioning && (
-            <div>{renderPanel(currentStep, false)}</div>
-            )}
-
-            {isTransitioning && (
-              <div style={{ display: 'grid' }}>
-                <div ref={outgoingRef} style={{ gridArea: '1 / 1' }}>{outgoingStep && renderPanel(outgoingStep, true)}</div>
-                <div ref={incomingRef} style={{ gridArea: '1 / 1' }}>{incomingStep && renderPanel(incomingStep, true)}</div>
-              </div>
-            )}
-          </div>
+        <Stack gap={8} align="center" mb={16}>
+          <Title order={1} size="h1" ta="center" style={{ color: '#0F172A' }}>
+            Configure your assistant
+          </Title>
+          <Text size="lg" c="dimmed" ta="center" style={{ maxWidth: 600 }}>
+            Set up how Clarity works for you. You can change these settings anytime.
+          </Text>
         </Stack>
+
+        <Card withBorder={false} shadow="none" padding="lg" style={{ background: 'transparent' }}>
+          <Stack gap={48}>
+            {renderFrequencySection()}
+            {renderChannelsSection()}
+            {renderEmailSection()}
+          </Stack>
+        </Card>
+
+        {error && (
+          <Center>
+            <Text size="sm" c="red">{error}</Text>
+          </Center>
+        )}
+
+        {renderFooter()}
+      </Stack>
     </Container>
   );
-} 
+}
