@@ -166,6 +166,7 @@ export const botChannelsCollection = db.collection("botChannels")
 export const invitationCollection = db.collection("invitations")
 export const analysisInstanceCollection = db.collection("analysisInstances")
 export const reportCollection = db.collection("reports")
+export const feedbackCollection = db.collection("feedback")
 ```
 
 ### Naming Convention
@@ -230,7 +231,7 @@ SlackUser {
 **Command Handler Tracking:**
 ```typescript
 // Track when users hit onboarding barriers via commands
-const requiresOnboarding = ['/clarity-personal-feedback', '/clarity-rephrase', '/clarity-settings'].includes(command);
+const requiresOnboarding = ['/clarity-personal-feedback', '/clarity-rephrase', '/clarity-settings', '/clarity-feedback'].includes(command);
 if (requiresOnboarding && !appUser.hasCompletedOnboarding) {
   trackEvent(userId, EVENTS.LIMITS_ONBOARDING_REQUIRED, {
     command: command,
@@ -537,6 +538,9 @@ switch (command) {
   case '/clarity-status':  // ✅ NEW: Channel status checking
     response = await handleClarityStatus(userId, channelId, appUser as unknown as SlackUser);
     break;
+  case '/clarity-feedback':  // ✅ NEW: User feedback submission
+    response = await handleFeedback(text, userId, appUser as unknown as SlackUser);
+    break;
 }
 ```
 
@@ -626,6 +630,56 @@ async function handleClarityStatus(userId: string, channelId: string, user: Slac
 - **Bot Installation**: Uses `isChannelAccessible()` to check `botChannelsCollection`
 - **Auto-Coaching Status**: Checks `user.autoCoachingEnabledChannels` array
 - **Visual Indicators**: 🔴 (not installed), 🟡 (not enabled), 🟢 (active)
+
+**Feedback Command Pattern ✅ NEW:**
+```typescript
+// /clarity-feedback [text] - User feedback submission
+async function handleFeedback(text: string, userId: string, user: SlackUser) {
+  if (!text.trim()) {
+    return {
+      text: 'Please provide your feedback. Example: `/clarity-feedback I love this feature!`',
+      response_type: 'ephemeral'
+    };
+  }
+
+  // Store in database
+  await feedbackCollection.insertOne({
+    _id: new ObjectId(),
+    slackId: userId,
+    workspaceId: user.workspaceId,
+    userName: user.name,
+    text: text.trim(),
+    subscriptionTier: user.subscription?.tier || 'FREE',
+    createdAt: new Date()
+  });
+
+  // Track in PostHog
+  trackEvent(userId, EVENTS.FEATURE_FEEDBACK_SUBMITTED, {
+    user_name: user.name,
+    workspace_id: user.workspaceId,
+    subscription_tier: user.subscription?.tier || 'FREE',
+    feedback_length: text.trim().length,
+  });
+
+  return {
+    text: '✅ *Thank you for your feedback!*\n\nWe appreciate you taking the time to share your thoughts.',
+    response_type: 'ephemeral'
+  };
+}
+```
+
+**Feedback Collection Schema:**
+```typescript
+Feedback {
+  _id: ObjectId,
+  slackId: string,         // Slack user ID
+  workspaceId: string,     // References workspace ObjectId
+  userName: string,        // User's display name
+  text: string,            // Feedback content
+  subscriptionTier: string, // FREE or PRO
+  createdAt: Date
+}
+```
 
 ## Query Patterns
 

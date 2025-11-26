@@ -183,6 +183,7 @@ export async function GET(request: NextRequest) {
                         id: existingUser.id, // Keep existing ID
                         email: null, // Reset email to null - user will provide during onboarding
                         name: actualUserName,
+                        slackId: authed_user.id,
                         displayName: actualDisplayName,
                         image: userImage,
                         emailVerified: true,

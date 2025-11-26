@@ -1,0 +1,1 @@
+based on the chat history update the cursor rules
