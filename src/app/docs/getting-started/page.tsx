@@ -1,12 +1,23 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { CodeBlock } from '../_components/CodeBlock';
 import { Image } from '@/components/ui';
+import { PostInstallBanner } from '../_components/PostInstallBanner';
+
+function PostInstallBannerWrapper() {
+  return (
+    <Suspense fallback={null}>
+      <PostInstallBanner />
+    </Suspense>
+  );
+}
 
 export default function GettingStartedPage(): React.ReactElement {
   return (
     <main className="mx-auto max-w-[820px] px-6 py-12">
+      <PostInstallBannerWrapper />
+      
       <div className="mb-2 text-sm font-medium text-neutral-500">Get started</div>
       <h1 className="mb-4 text-3xl font-bold leading-tight tracking-tight text-neutral-900">Quick start</h1>
       <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Add Clarity to Slack, then try a command.</p>

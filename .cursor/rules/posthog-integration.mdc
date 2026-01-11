@@ -31,7 +31,7 @@ import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 trackEvent(userId, EVENTS.API_EVENT_NAME, {
   user_name: user.name,
   workspace_id: user.workspaceId,
-  subscription_tier: user.subscription?.tier || 'FREE',
+  subscription_tier: workspace.subscription?.tier || 'FREE', // Workspace-level subscription
   // Additional context specific to the event
 });
 ```

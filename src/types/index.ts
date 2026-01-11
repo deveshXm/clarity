@@ -31,13 +31,48 @@ export const UpdateUserSchema = UserSchema.partial().omit({ id: true, createdAt:
 
 // SLACK-RELATED SCHEMAS
 
-// Workspace Schema
+// Subscription Schema (defined first for use in Workspace)
+export const SubscriptionSchema = z.object({
+    // Tier and billing info
+    tier: z.enum(['FREE', 'PRO']).default('FREE'),
+    status: z.enum(['active', 'cancelled', 'past_due']).default('active'),
+
+    // Billing cycle (for usage reset)
+    currentPeriodStart: z.coerce.date(),
+    currentPeriodEnd: z.coerce.date(),
+
+    // Stripe integration
+    stripeCustomerId: z.string().optional(),
+    stripeSubscriptionId: z.string().optional(),
+
+    // Usage tracking (resets on billing cycle) - workspace-wide shared limits
+    monthlyUsage: z.object({
+        autoCoaching: z.number().default(0),
+        manualRephrase: z.number().default(0),
+        personalFeedback: z.number().default(0),
+    }),
+
+    // Timestamps
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date(),
+});
+
+// Workspace Schema - Enhanced with admin and subscription (workspace-wide)
 export const WorkspaceSchema = z.object({
     _id: z.string(),
     workspaceId: z.string(), // Slack team ID
     name: z.string(),
     domain: z.string().optional(),
     botToken: z.string(), // Workspace-specific bot token from OAuth
+    botUserId: z.string().optional(), // Bot's Slack user ID (for DM deep links)
+    
+    // Admin & Onboarding
+    adminSlackId: z.string(), // Slack ID of workspace admin (installer)
+    hasCompletedOnboarding: z.boolean().default(false), // Workspace-level onboarding
+    
+    // Workspace-level subscription (shared by all users)
+    subscription: SubscriptionSchema.optional(),
+    
     isActive: z.boolean().default(true), // Track if workspace is active
     createdAt: z.coerce.date(),
     updatedAt: z.coerce.date(),
@@ -54,34 +89,6 @@ export const BotChannelSchema = z.object({
     addedAt: z.coerce.date(),
 });
 
-
-
-// Subscription Schema
-export const SubscriptionSchema = z.object({
-    // Tier and billing info
-    tier: z.enum(['FREE', 'PRO']).default('FREE'),
-    status: z.enum(['active', 'cancelled', 'past_due']).default('active'),
-
-    // Billing cycle (for usage reset)
-    currentPeriodStart: z.coerce.date(),
-    currentPeriodEnd: z.coerce.date(),
-
-    // Stripe integration
-    stripeCustomerId: z.string().optional(),
-    stripeSubscriptionId: z.string().optional(),
-
-    // Usage tracking (resets on billing cycle)
-    monthlyUsage: z.object({
-        autoCoaching: z.number().default(0),
-        manualRephrase: z.number().default(0),
-        personalFeedback: z.number().default(0),
-    }),
-
-    // Timestamps
-    createdAt: z.coerce.date(),
-    updatedAt: z.coerce.date(),
-});
-
 // Communication Scores Schema (stored on Slack user)
 export const CommunicationScoreEntrySchema = z.object({
     score: z.number().min(0).max(100),
@@ -94,22 +101,31 @@ export const CommunicationScoresSchema = z.object({
     monthly: CommunicationScoreEntrySchema.optional(),
 }).optional();
 
-// Slack User Schema (extends base User)
-export const SlackUserSchema = UserSchema.extend({
+// Slack User Schema - Simplified for personal preferences only
+// Subscription and onboarding status are now workspace-level
+export const SlackUserSchema = z.object({
+    _id: z.string(),
     slackId: z.string(),
-    workspaceId: z.string(),
+    workspaceId: z.string(), // References workspace._id
+    email: z.string().email().nullable().optional(), // Fetched from Slack API
+    name: z.string(),
     displayName: z.string(),
-    timezone: z.string().optional(),
+    image: z.string().url().optional(),
     userToken: z.string().optional(), // User's OAuth token for message updating
-    isActive: z.boolean().default(true),
+    
+    // Personal preferences
     analysisFrequency: z.enum(['weekly', 'monthly']).default('weekly'),
     autoCoachingEnabledChannels: z.array(z.string()).default([]), // Channel IDs where user has enabled auto-coaching
-    hasCompletedOnboarding: z.boolean().default(false),
-    subscription: SubscriptionSchema.optional(), // Subscription data
-    communicationScores: CommunicationScoresSchema, // Latest weekly/monthly scores
+    
+    // Communication scores (personal to user)
+    communicationScores: CommunicationScoresSchema,
+    
+    isActive: z.boolean().default(true),
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date(),
 });
 
-export const CreateSlackUserSchema = SlackUserSchema.omit({ _id: true, id: true, createdAt: true, updatedAt: true });
+export const CreateSlackUserSchema = SlackUserSchema.omit({ _id: true, createdAt: true, updatedAt: true });
 
 // Analysis Instance Schema - Multiple flags per message (Privacy-First: No Message Text)
 export const AnalysisInstanceSchema = z.object({
@@ -573,11 +589,12 @@ export const SUBSCRIPTION_TIERS = {
 export type SubscriptionTier = keyof typeof SUBSCRIPTION_TIERS;
 export type SubscriptionFeature = keyof typeof SUBSCRIPTION_TIERS.FREE.monthlyLimits | keyof typeof SUBSCRIPTION_TIERS.FREE.features;
 
-// Subscription Check Result
+// Subscription Check Result - Now based on workspace subscription
 export interface SubscriptionCheckResult {
     allowed: boolean;
     reason?: string;
     upgradeRequired?: boolean;
+    workspace?: Workspace;
     user?: SlackUser;
     remainingUsage?: number;
     resetDate?: Date;

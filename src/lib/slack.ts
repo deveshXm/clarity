@@ -11,7 +11,6 @@ export const slackOAuthConfig = {
     botScopes: [
         'chat:write',   
         'chat:write.public',
-        'chat:write.customize',
         'commands',
         'channels:history',
         'groups:history',
@@ -24,6 +23,7 @@ export const slackOAuthConfig = {
         'mpim:read',
         'im:write',
         'users:read',
+        'users:read.email',
         'app_mentions:read'
     ],
     userScopes: [
@@ -394,6 +394,15 @@ export const sendWelcomeMessage = async (
                         type: "button",
                         text: {
                             type: "plain_text",
+                            text: "✨ Complete Setup"
+                        },
+                        style: "primary",
+                        action_id: "complete_onboarding"
+                    },
+                    {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
                             text: "Documentation"
                         },
                         url: helpUrl,
@@ -407,6 +416,15 @@ export const sendWelcomeMessage = async (
                         },
                         url: contactUrl,
                         action_id: "contact_support"
+                    }
+                ]
+            },
+            {
+                type: "context",
+                elements: [
+                    {
+                        type: "mrkdwn",
+                        text: "👆 Click *Complete Setup* to choose channels and set your preferences"
                     }
                 ]
             }
@@ -968,4 +986,368 @@ export const sendMonthlyReportDM = async (
     return await sendDirectMessage(user.slackId, '', botToken, blocks);
 };
 
- 
+// Open workspace onboarding modal for admin
+export const openOnboardingModal = async (
+    triggerId: string,
+    botToken: string,
+    channels: SlackChannel[]
+): Promise<boolean> => {
+    try {
+        const workspaceSlack = new WebClient(botToken);
+        const baseUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://clarity.rocktangle.com';
+        
+        // Filter to public channels only (bots can auto-join these)
+        const publicChannels = channels.filter(ch => !ch.is_private && !ch.is_archived);
+        
+        const modal = {
+            type: 'modal' as const,
+            callback_id: 'workspace_onboarding_modal',
+            title: {
+                type: 'plain_text' as const,
+                text: 'Setup Clarity'
+            },
+            submit: {
+                type: 'plain_text' as const,
+                text: 'Complete Setup'
+            },
+            close: {
+                type: 'plain_text' as const,
+                text: 'Cancel'
+            },
+            blocks: [
+                {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: '*Welcome to Clarity!* 🎉\n\nLet\'s get your workspace set up. All settings below are optional.'
+                    }
+                },
+                {
+                    type: 'divider'
+                },
+                {
+                    type: 'input',
+                    block_id: 'channels_selection',
+                    optional: true,
+                    label: {
+                        type: 'plain_text',
+                        text: 'Enable Clarity in channels'
+                    },
+                    hint: {
+                        type: 'plain_text',
+                        text: 'Select channels where Clarity will provide auto-coaching. Users can customize their own channels later.'
+                    },
+                    element: {
+                        type: 'multi_static_select',
+                        action_id: 'selected_channels',
+                        placeholder: {
+                            type: 'plain_text',
+                            text: 'Select channels...'
+                        },
+                        options: publicChannels.slice(0, 100).map(channel => ({
+                            text: {
+                                type: 'plain_text',
+                                text: `#${channel.name}`
+                            },
+                            value: JSON.stringify({ id: channel.id, name: channel.name })
+                        }))
+                    }
+                },
+                {
+                    type: 'input',
+                    block_id: 'announcement_channel',
+                    optional: true,
+                    label: {
+                        type: 'plain_text',
+                        text: 'Announce Clarity to your team'
+                    },
+                    hint: {
+                        type: 'plain_text',
+                        text: 'We\'ll post a short message introducing Clarity. Leave empty to skip.'
+                    },
+                    element: {
+                        type: 'static_select',
+                        action_id: 'announcement_channel_select',
+                        placeholder: {
+                            type: 'plain_text',
+                            text: 'Select a channel...'
+                        },
+                        options: publicChannels.slice(0, 100).map(channel => ({
+                            text: {
+                                type: 'plain_text',
+                                text: `#${channel.name}`
+                            },
+                            value: JSON.stringify({ id: channel.id, name: channel.name })
+                        }))
+                    }
+                },
+                {
+                    type: 'divider'
+                },
+                {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: '*Choose your plan*'
+                    }
+                },
+                {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: `*Free Plan* - $0/month\n${SUBSCRIPTION_TIERS.FREE.description}\n• ${SUBSCRIPTION_TIERS.FREE.monthlyLimits.autoCoaching} auto-coaching/mo\n• ${SUBSCRIPTION_TIERS.FREE.monthlyLimits.manualRephrase} manual rephrase/mo`
+                    }
+                },
+                {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: `*Pro Plan* - $${SUBSCRIPTION_TIERS.PRO.price}/month\n${SUBSCRIPTION_TIERS.PRO.description}\n• ${SUBSCRIPTION_TIERS.PRO.monthlyLimits.autoCoaching} auto-coaching/mo\n• ${SUBSCRIPTION_TIERS.PRO.monthlyLimits.manualRephrase} manual rephrase/mo\n• Advanced analytics & reports`
+                    },
+                    accessory: {
+                        type: 'button',
+                        text: {
+                            type: 'plain_text',
+                            text: 'Upgrade to Pro',
+                            emoji: true
+                        },
+                        style: 'primary',
+                        url: `${baseUrl}/api/stripe/checkout?workspace=pending`,
+                        action_id: 'upgrade_to_pro'
+                    }
+                },
+                {
+                    type: 'context',
+                    elements: [
+                        {
+                            type: 'mrkdwn',
+                            text: '💡 You can upgrade anytime using `/clarity-settings`'
+                        }
+                    ]
+                }
+            ]
+        };
+
+        await workspaceSlack.views.open({
+            trigger_id: triggerId,
+            view: modal as Parameters<typeof workspaceSlack.views.open>[0]['view']
+        });
+
+        return true;
+    } catch (error) {
+        console.error('Error opening onboarding modal:', error);
+        return false;
+    }
+};
+
+// Send workspace announcement message
+export const sendWorkspaceAnnouncementMessage = async (
+    channelId: string,
+    botToken: string
+): Promise<boolean> => {
+    try {
+        const workspaceSlack = new WebClient(botToken);
+        const baseUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://clarity.rocktangle.com';
+
+        const blocks = [
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: '*Hi team!* 👋\n\nClarity is now available in this workspace. I\'m your private communication coach - I help you write clearer, more effective messages.'
+                }
+            },
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: '*What I can do:*\n• Give you private suggestions to improve your messages\n• Help you rephrase text to be clearer\n• Send you personal communication insights'
+                }
+            },
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: '*Get started:*\n• Type `/clarity-help` to see all commands\n• Use `/clarity-rephrase [your message]` to improve any text\n• Use `/clarity-settings` to customize your preferences'
+                }
+            },
+            {
+                type: 'context',
+                elements: [
+                    {
+                        type: 'mrkdwn',
+                        text: `🔒 All coaching is private - only you can see my suggestions | <${baseUrl}/docs|Documentation>`
+                    }
+                ]
+            }
+        ];
+
+        // First join the channel if not already a member
+        await joinChannel(channelId, botToken);
+
+        const result = await workspaceSlack.chat.postMessage({
+            channel: channelId,
+            text: 'Hi team! Clarity is now available in this workspace.',
+            blocks
+        });
+
+        return result.ok || false;
+    } catch (error) {
+        console.error('Error sending workspace announcement:', error);
+        return false;
+    }
+};
+
+// Get user info with email from Slack API
+export const getSlackUserInfoWithEmail = async (
+    userId: string,
+    botToken: string
+): Promise<{
+    name: string;
+    displayName: string;
+    email: string | null;
+    image: string | undefined;
+}> => {
+    try {
+        const workspaceSlack = new WebClient(botToken);
+        const userInfo = await workspaceSlack.users.info({ user: userId });
+        
+        if (!userInfo.ok || !userInfo.user) {
+            return {
+                name: 'Slack User',
+                displayName: 'Slack User',
+                email: null,
+                image: undefined
+            };
+        }
+        
+        return {
+            name: userInfo.user.real_name || userInfo.user.name || 'Slack User',
+            displayName: userInfo.user.profile?.display_name || userInfo.user.real_name || userInfo.user.name || 'Slack User',
+            email: userInfo.user.profile?.email || null,
+            image: userInfo.user.profile?.image_72
+        };
+    } catch (error) {
+        console.error('Error fetching user info with email:', error);
+        return {
+            name: 'Slack User',
+            displayName: 'Slack User',
+            email: null,
+            image: undefined
+        };
+    }
+};
+
+// Open admin transfer modal
+export const openAdminTransferModal = async (
+    triggerId: string,
+    botToken: string,
+    currentAdminId: string
+): Promise<boolean> => {
+    try {
+        const workspaceSlack = new WebClient(botToken);
+        
+        const modal = {
+            type: 'modal' as const,
+            callback_id: 'admin_transfer_modal',
+            title: {
+                type: 'plain_text' as const,
+                text: 'Transfer Admin'
+            },
+            submit: {
+                type: 'plain_text' as const,
+                text: 'Transfer'
+            },
+            close: {
+                type: 'plain_text' as const,
+                text: 'Cancel'
+            },
+            blocks: [
+                {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: '*Transfer workspace admin to another user*\n\n⚠️ Once you transfer admin rights, you will no longer be able to manage billing or change the admin.'
+                    }
+                },
+                {
+                    type: 'input',
+                    block_id: 'new_admin_selection',
+                    label: {
+                        type: 'plain_text',
+                        text: 'Select new admin'
+                    },
+                    element: {
+                        type: 'users_select',
+                        action_id: 'new_admin_user',
+                        placeholder: {
+                            type: 'plain_text',
+                            text: 'Select a user...'
+                        }
+                    }
+                },
+                {
+                    type: 'context',
+                    elements: [
+                        {
+                            type: 'mrkdwn',
+                            text: '💡 The new admin will be notified and will have access to billing and workspace settings.'
+                        }
+                    ]
+                }
+            ],
+            private_metadata: JSON.stringify({ currentAdminId })
+        };
+
+        await workspaceSlack.views.open({
+            trigger_id: triggerId,
+            view: modal as Parameters<typeof workspaceSlack.views.open>[0]['view']
+        });
+
+        return true;
+    } catch (error) {
+        console.error('Error opening admin transfer modal:', error);
+        return false;
+    }
+};
+
+// Send admin transfer notification to new admin
+export const sendAdminTransferNotification = async (
+    newAdminId: string,
+    previousAdminName: string,
+    workspaceName: string,
+    botToken: string
+): Promise<boolean> => {
+    try {
+        const blocks = [
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: `*You are now the Clarity admin for ${workspaceName}!* 🎉\n\n${previousAdminName} has transferred admin rights to you.`
+                }
+            },
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: '*As the workspace admin, you can:*\n• Manage billing and subscription\n• Transfer admin rights to someone else\n• Configure workspace-wide settings'
+                }
+            },
+            {
+                type: 'context',
+                elements: [
+                    {
+                        type: 'mrkdwn',
+                        text: '💡 Use `/clarity-settings` to access admin options'
+                    }
+                ]
+            }
+        ];
+
+        return await sendDirectMessage(newAdminId, '', botToken, blocks);
+    } catch (error) {
+        console.error('Error sending admin transfer notification:', error);
+        return false;
+    }
+};

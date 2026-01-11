@@ -33,15 +33,10 @@ if (process.env.NODE_ENV === "development") {
 export const db = client.db(process.env.MONGODB_DB_NAME);
 export default client; 
 
-// Basic collections (for boilerplate)
-export const userCollection = db.collection("user");
-export const accountConfigCollection = db.collection("accountConfig");
-
-// Slack app collections
-export const workspaceCollection = db.collection("workspaces");
-export const slackUserCollection = db.collection("slackUsers");
-export const analysisInstanceCollection = db.collection("analysisInstances");
-export const invitationCollection = db.collection("invitations");
-export const botChannelsCollection = db.collection("botChannels");
-export const reportCollection = db.collection("reports");
-export const feedbackCollection = db.collection("feedback");
+// Workspace-wide app collections
+export const workspaceCollection = db.collection("workspaces"); // Workspace data with subscription
+export const slackUserCollection = db.collection("slackUsers"); // User preferences only
+export const botChannelsCollection = db.collection("botChannels"); // Channels bot is active in
+export const analysisInstanceCollection = db.collection("analysisInstances"); // Message analysis data
+export const reportCollection = db.collection("reports"); // Weekly/monthly reports
+export const feedbackCollection = db.collection("feedback"); // User feedback

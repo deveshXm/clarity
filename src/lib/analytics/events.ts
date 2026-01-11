@@ -28,6 +28,7 @@ export const EVENTS = {
   FEATURE_PERSONAL_FEEDBACK_GENERATED: 'feature:personal_feedback_generated',
   FEATURE_SETTINGS_UPDATED: 'feature:settings_updated',
   FEATURE_FEEDBACK_SUBMITTED: 'feature:feedback_submitted',
+  FEATURE_ADMIN_TRANSFERRED: 'feature:admin_transferred',
   
   // === USAGE LIMITS ===
   LIMITS_USAGE_LIMIT_REACHED: 'limits:usage_limit_reached',

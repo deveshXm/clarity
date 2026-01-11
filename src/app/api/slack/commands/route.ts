@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, fetchConversationHistory, sendDirectMessage, isChannelAccessible, getSlackOAuthUrl, sendOnboardingPromptMessage } from '@/lib/slack';
+import { verifySlackSignature, fetchConversationHistory, sendDirectMessage, isChannelAccessible, getSlackOAuthUrl, openOnboardingModal, getWorkspaceChannels, getSlackUserInfoWithEmail } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection, botChannelsCollection, feedbackCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
 import { generatePersonalFeedback, generateImprovedMessage, analyzeMessageForFlags, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
-import { SlackUser, getTierConfig } from '@/types';
-import { validateUserAccess, incrementUsage, generateUpgradeMessage, generateLimitReachedMessage, generateProLimitReachedMessage } from '@/lib/subscription';
+import { SlackUser, Workspace, getTierConfig } from '@/types';
+import { validateWorkspaceAccess, incrementWorkspaceUsage, generateUpgradeMessage, generateLimitReachedMessage, generateProLimitReachedMessage } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
@@ -42,9 +42,10 @@ export async function POST(request: NextRequest) {
         const text = params.get('text') || '';
         const userId = params.get('user_id');
         const channelId = params.get('channel_id');
-        const triggerId = params.get('trigger_id'); // Added trigger_id
+        const teamId = params.get('team_id');
+        const triggerId = params.get('trigger_id');
         
-        if (!command || !userId || !channelId) {
+        if (!command || !userId || !channelId || !teamId) {
             return NextResponse.json({ 
                 text: 'Invalid command format' 
             }, { status: 400 });
@@ -54,40 +55,30 @@ export async function POST(request: NextRequest) {
             command,
             user_id: userId,
             channel_id: channelId,
+            team_id: teamId,
             has_text: !!text,
             endpoint: '/api/slack/commands'
         });
 
-        // Check if user exists in database (installed via website)
-        const appUser = await slackUserCollection.findOne({
-            slackId: userId,
-            isActive: true
-        });
+        // Step 1: Find workspace by team ID
+        const workspace = await workspaceCollection.findOne({ 
+            workspaceId: teamId, 
+            isActive: true 
+        }) as Workspace | null;
 
-        // Track command received
-        trackEvent(userId, EVENTS.API_SLACK_COMMAND_RECEIVED, {
-            command: command,
-            channel_id: channelId,
-            user_name: appUser?.name || 'Unknown',
-            workspace_id: appUser?.workspaceId || 'Unknown',
-            subscription_tier: appUser?.subscription?.tier || 'FREE',
-            has_text: !!text,
-            text_length: text?.length || 0,
-        });
-
-        if (!appUser) {
-            // User not in database - show authorization message with Slack installation URL
+        if (!workspace) {
+            // Workspace not found - show install message
             const authUrl = getSlackOAuthUrl();
             
             return NextResponse.json({
-                text: 'Hey there! I\'m Clarity, your communication assistant. To get started, please authorize me through our website.',
+                text: 'Clarity needs to be installed in this workspace first.',
                 response_type: 'ephemeral',
                 blocks: [
                     {
                         type: 'section',
                         text: {
                             type: 'mrkdwn',
-                            text: '*Hey there! I\'m Clarity* 👋\n\nI\'m your communication assistant, ready to help you write clearer, kinder messages. To get started, please authorize me through our website.'
+                            text: '*Clarity needs to be installed in this workspace first* 👋\n\nAsk your workspace admin to install Clarity, or install it yourself if you have admin permissions.'
                         }
                     },
                     {
@@ -97,10 +88,10 @@ export async function POST(request: NextRequest) {
                                 type: 'button',
                                 text: {
                                     type: 'plain_text',
-                                    text: 'Authorize Me'
+                                    text: 'Install Clarity'
                                 },
                                 url: authUrl,
-                                action_id: 'authorize_website'
+                                action_id: 'install_clarity'
                             }
                         ]
                     }
@@ -108,53 +99,74 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        console.log('✅ Authenticated user for command:', command, 'User:', userId);
+        // Step 2: Check if user exists, auto-create if not
+        let user = await slackUserCollection.findOne({
+            slackId: userId,
+            workspaceId: String(workspace._id)
+        }) as SlackUser | null;
 
-        // Check onboarding status for feature commands
-        const requiresOnboarding = ['/clarity-personal-feedback', '/clarity-rephrase', '/clarity-settings', '/clarity-feedback'].includes(command);
-        if (requiresOnboarding && !appUser.hasCompletedOnboarding) {
-            // Track onboarding required event
-            trackEvent(userId, EVENTS.LIMITS_ONBOARDING_REQUIRED, {
-                command: command,
-                channel_id: channelId,
-                user_name: appUser.name,
-                workspace_id: appUser.workspaceId,
-                subscription_tier: appUser.subscription?.tier || 'FREE',
+        if (!user) {
+            // Auto-create user with defaults
+            const userInfo = await getSlackUserInfoWithEmail(userId, workspace.botToken);
+            
+            const newUser = {
+                _id: new ObjectId(),
+                slackId: userId,
+                workspaceId: String(workspace._id),
+                email: userInfo.email,
+                name: userInfo.name,
+                displayName: userInfo.displayName,
+                image: userInfo.image,
+                analysisFrequency: 'weekly' as const,
+                autoCoachingEnabledChannels: [],
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+            
+            await slackUserCollection.insertOne(newUser);
+            user = newUser as unknown as SlackUser;
+            
+            logInfo('Auto-created user on first command', {
+                user_id: userId,
+                workspace_id: String(workspace._id),
+                command
             });
+        }
 
-            // Get workspace bot token for onboarding prompt
-            const workspace = await workspaceCollection.findOne({ _id: new ObjectId(appUser.workspaceId) });
+        // Track command received
+        trackEvent(userId, EVENTS.API_SLACK_COMMAND_RECEIVED, {
+            command: command,
+            channel_id: channelId,
+            user_name: user?.name || 'Unknown',
+            workspace_id: String(workspace._id),
+            subscription_tier: workspace.subscription?.tier || 'FREE',
+            has_text: !!text,
+            text_length: text?.length || 0,
+        });
 
-            if (workspace && workspace.botToken) {
-                // Send onboarding prompt in background
-                after(async () => {
-                    try {
-                        await sendOnboardingPromptMessage(userId, workspace.workspaceId, workspace.botToken);
-                        console.log(`✅ Sent onboarding prompt to user ${userId}`);
-                    } catch (error) {
-                        console.error('❌ Failed to send onboarding prompt:', error);
-                    }
-                });
-
-                // Return immediate ephemeral response
+        // Step 3: Check workspace onboarding status
+        const isAdmin = workspace.adminSlackId === userId;
+        
+        if (!workspace.hasCompletedOnboarding) {
+            if (isAdmin && triggerId) {
+                // Admin can complete onboarding - open modal
+                const channels = await getWorkspaceChannels(workspace.botToken);
+                await openOnboardingModal(triggerId, workspace.botToken, channels);
+                
+                // Return empty response to avoid timeout message
+                return new NextResponse('', { status: 200 });
+            } else {
+                // Non-admin user - tell them admin needs to complete setup
                 return NextResponse.json({
-                    text: 'Please complete onboarding to access Clarity features.',
+                    text: 'Clarity setup is not complete yet.',
                     response_type: 'ephemeral',
                     blocks: [
                         {
                             type: 'section',
                             text: {
                                 type: 'mrkdwn',
-                                text: 'Please complete onboarding to access Clarity features.'
-                            },
-                            accessory: {
-                                type: 'button',
-                                text: {
-                                    type: 'plain_text',
-                                    text: 'Complete Onboarding'
-                                },
-                                url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://yourapp.com'}/app/onboarding?user=${userId}&team=${workspace.workspaceId}`,
-                                action_id: 'complete_onboarding_prompt'
+                                text: '*Clarity setup is not complete yet* ⏳\n\nYour workspace admin needs to complete the initial setup before you can use Clarity. Please ask them to run any `/clarity-` command to finish setup.'
                             }
                         }
                     ]
@@ -162,26 +174,26 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Route to appropriate command handler
+        // Step 4: Process command normally (workspace is onboarded)
         let response;
         switch (command) {
             case '/clarity-personal-feedback':
-                response = await handlePersonalFeedback(userId, channelId);
+                response = await handlePersonalFeedback(userId, channelId, workspace, user);
                 break;
             case '/clarity-rephrase':
-                response = await handleRephrase(text, userId, channelId);
+                response = await handleRephrase(text, userId, channelId, workspace, user);
                 break;
             case '/clarity-settings':
-                response = await handleSettings(text, userId, appUser as unknown as SlackUser, triggerId!); // Pass triggerId
+                response = await handleSettings(userId, user, workspace, triggerId!);
                 break;
             case '/clarity-status':
-                response = await handleClarityStatus(userId, channelId, appUser as unknown as SlackUser);
+                response = await handleClarityStatus(userId, channelId, workspace, user);
                 break;
             case '/clarity-help':
                 response = await handleClarityHelp();
                 break;
             case '/clarity-feedback':
-                response = await handleFeedback(text, userId, appUser as unknown as SlackUser);
+                response = await handleFeedback(text, userId, workspace, user);
                 break;
             default:
                 response = {
@@ -191,7 +203,6 @@ export async function POST(request: NextRequest) {
         }
 
         if (response === null) {
-            // Send empty 200 response to suppress Slack ephemeral message
             return new NextResponse('', { status: 200 });
         }
 
@@ -214,60 +225,49 @@ export async function POST(request: NextRequest) {
     }
 }
 
-async function handlePersonalFeedback(userId: string, channelId: string) {
+async function handlePersonalFeedback(userId: string, channelId: string, workspace: Workspace, user: SlackUser) {
     try {
-        // Check subscription access and get user in one call
-        const accessCheck = await validateUserAccess(userId, 'personalFeedback');
+        // Check workspace subscription access
+        const accessCheck = await validateWorkspaceAccess(workspace, 'personalFeedback');
         
         if (!accessCheck.allowed) {
             if (accessCheck.upgradeRequired) {
-                return generateUpgradeMessage('personalFeedback', accessCheck.reason || 'Feature requires upgrade', accessCheck.user?._id);
+                return generateUpgradeMessage('personalFeedback', accessCheck.reason || 'Feature requires upgrade', String(workspace._id));
             }
             
-            // Check if user is PRO (no upgrade needed, show contact us instead)
-            if (accessCheck.user?.subscription?.tier === 'PRO') {
-
+            // Check if workspace is PRO
+            if (workspace.subscription?.tier === 'PRO') {
                 const proConfig = getTierConfig('PRO');
                 return generateProLimitReachedMessage(
                     'personalFeedback',
-                    accessCheck.user.subscription.monthlyUsage.personalFeedback || 0,
+                    workspace.subscription.monthlyUsage.personalFeedback || 0,
                     proConfig.monthlyLimits.personalFeedback,
                     accessCheck.resetDate || new Date()
                 );
             }
             
-            // FREE user limit reached
+            // FREE workspace limit reached
             const freeConfig = getTierConfig('FREE');
             return generateLimitReachedMessage(
                 'personalFeedback',
-                accessCheck.user?.subscription?.monthlyUsage.personalFeedback || 0,
+                workspace.subscription?.monthlyUsage.personalFeedback || 0,
                 freeConfig.monthlyLimits.personalFeedback,
                 accessCheck.resetDate || new Date(),
-                accessCheck.user?._id
+                String(workspace._id)
             );
         }
 
-        const user = accessCheck.user!; // We know it exists from validation
-
-        // Get workspace-specific bot token
-
-        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
-        
-        if (!workspace || !workspace.botToken) {
-            throw new Error('Workspace not found or missing bot token');
-        }
-
-        // Check if bot has access to current channel first
-        const hasChannelAccess = await isChannelAccessible(channelId, user.workspaceId);
+        // Check if bot has access to current channel
+        const hasChannelAccess = await isChannelAccessible(channelId, String(workspace._id));
         
         if (!hasChannelAccess) {
             return {
-                text: '⚠️ *I need to be added to this channel*\n\nPlease add me to this channel so I can analyze your communication patterns. You can add me by mentioning @Clarity or by inviting me to the channel. If the app is already present, try re-inviting me to the channel.',
+                text: '⚠️ *I need to be added to this channel*\n\nPlease add me to this channel so I can analyze your communication patterns.',
                 response_type: 'ephemeral'
             };
         }
 
-        // Schedule background analysis using after()
+        // Schedule background analysis
         after(async () => {
             try {
                 logInfo('Starting background personal feedback analysis', { 
@@ -276,14 +276,13 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
                     operation: 'personal_feedback_analysis'
                 });
                 
-                // Get user's last 40 messages from conversation history using workspace-specific token
                 const conversationHistory = await fetchConversationHistory(channelId, workspace.botToken, undefined, 40);
                 console.log('📚 Fetched conversation history:', conversationHistory.length, 'messages');
                 
                 // Analyze recent messages for relationship context
                 let relationshipInsights: { name: string; issues: string[] }[] = [];
                 try {
-                    const recentMessages = conversationHistory.slice(-10); // Analyze last 10 messages for targets
+                    const recentMessages = conversationHistory.slice(-10);
                     const relationshipMap = new Map<string, string[]>();
                     
                     for (const message of recentMessages) {
@@ -305,260 +304,159 @@ async function handlePersonalFeedback(userId: string, channelId: string) {
                         name,
                         issues
                     }));
-                    
-                    console.log('🎯 Relationship insights found:', relationshipInsights.length);
-                } catch (error) {
-                    const errorObj = error instanceof Error ? error : new Error(String(error));
-                    logError('Error analyzing relationship context', errorObj, { 
-                        user_id: userId,
-                        operation: 'relationship_analysis'
-                    });
-                    trackError(userId, errorObj, { 
-                        operation: 'relationship_analysis',
-                        context: 'personal_feedback'
-                    });
+                } catch (err) {
+                    console.error('Error analyzing relationship context:', err);
                 }
                 
-                // Generate personal feedback
                 const feedback = await generatePersonalFeedback(conversationHistory);
-                logInfo('Generated personal feedback', { 
-                    user_id: userId,
-                    overall_score: feedback.overallScore,
-                    patterns_count: feedback.patterns?.length || 0,
-                    improvements_count: feedback.improvements?.length || 0,
-                    operation: 'personal_feedback_generation'
-                });
-
+                
                 // Track personal feedback generation
                 trackEvent(userId, EVENTS.FEATURE_PERSONAL_FEEDBACK_GENERATED, {
                     user_name: user.name,
-                    workspace_id: user.workspaceId,
+                    workspace_id: String(workspace._id),
                     channel_id: channelId,
                     overall_score: feedback.overallScore,
                     patterns_count: feedback.patterns?.length || 0,
                     improvements_count: feedback.improvements?.length || 0,
-                    strengths_count: feedback.strengths?.length || 0,
-                    recommendations_count: feedback.recommendations?.length || 0,
-                    relationship_insights_count: relationshipInsights.length,
-                    conversation_messages_analyzed: conversationHistory.length,
                 });
                 
-                // Format response for DM with friendly coaching tone
+                // Format response
                 const scoreEmoji = feedback.overallScore >= 8 ? '🟢 You\'re crushing it!' : feedback.overallScore >= 6 ? '🟡 Looking good!' : '🔴 Let\'s level up together!';
-                const responseText = `*Hey there! Here\'s your personal feedback*\n\n` +
-                    `*How you\'re doing: ${feedback.overallScore}/10* ${scoreEmoji}\n\n` +
+                const responseText = `*Hey there! Here's your personal feedback*\n\n` +
+                    `*How you're doing: ${feedback.overallScore}/10* ${scoreEmoji}\n\n` +
                     `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                    
                     `🌟 *You're already great at:*\n` +
                     `${feedback.strengths.slice(0, 3).map(s => `• ${s}`).join('\n')}\n\n` +
-                    
                     `💪 *Let's work on these together:*\n` +
                     `${feedback.improvements.slice(0, 3).map(i => `• ${i}`).join('\n')}\n\n` +
-                    
                     `👀 *I noticed you tend to:*\n` +
                     `${feedback.patterns.slice(0, 3).map(p => 
                         `• Use *${p.type.toLowerCase()}* quite a bit (${p.frequency} times)`
                     ).join('\n')}\n\n` +
-                    
                     (relationshipInsights.length > 0 && 
-                     relationshipInsights.some(insight => insight.name && insight.name !== 'Unknown' && insight.name.trim() !== '') ? 
+                     relationshipInsights.some(insight => insight.name && insight.name !== 'Unknown') ? 
                         `👥 *Relationship insights:*\n` +
                         `${relationshipInsights
-                            .filter(insight => insight.name && insight.name !== 'Unknown' && insight.name.trim() !== '')
+                            .filter(insight => insight.name && insight.name !== 'Unknown')
                             .slice(0, 2)
                             .map(insight => 
                                 `• Work on *${insight.issues.join(', ')}* when messaging *${insight.name}*`
                             ).join('\n')}\n\n` : '') +
-                    
                     `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                    
                     `🎯 *Here's what I'd love to see you try next:*\n` +
                     `${feedback.recommendations.slice(0, 3).map((r, i) => `${i + 1}. ${r}`).join('\n')}\n\n` +
-                    
-                    `💙 _Based on your recent messages in <#${channelId}> • Use \`/settings\` to customize your coaching_`;
+                    `💙 _Based on your recent messages in <#${channelId}> • Use \`/clarity-settings\` to customize your coaching_`;
                 
-                // Send results via DM
                 const dmSent = await sendDirectMessage(userId, responseText, workspace.botToken);
                 
                 if (dmSent) {
-                    console.log('✅ Personal feedback report sent via DM to user:', userId);
-                    
-                    // Track usage after successful processing
-                    await incrementUsage(userId, 'personalFeedback');
-                    console.log('📊 Usage tracked for personalFeedback feature');
-                } else {
-                    console.error('❌ Failed to send personal feedback report via DM to user:', userId);
+                    await incrementWorkspaceUsage(workspace, 'personalFeedback');
                 }
                 
-            } catch (error) {
-                const errorObj = error instanceof Error ? error : new Error(String(error));
-                logError('Error in background personal feedback analysis', errorObj, { 
-                    user_id: userId,
-                    channel_id: channelId,
-                    operation: 'personal_feedback_analysis'
-                });
-                trackError(userId, errorObj, { 
-                    operation: 'personal_feedback_analysis',
-                    context: 'background_processing'
-                });
-                
-                // Send error message via DM if possible
-                try {
-                    await sendDirectMessage(
-                        userId, 
-                        '❌ Sorry, I encountered an error while generating your personal feedback report. Please try again later or contact support if the issue persists.',
-                        workspace.botToken
-                    );
-                } catch (dmError) {
-                    const dmErrorObj = dmError instanceof Error ? dmError : new Error(String(dmError));
-                    logError('Failed to send error message via DM', dmErrorObj, { 
-                        user_id: userId,
-                        operation: 'send_error_dm'
-                    });
-                    trackError(userId, dmErrorObj, { 
-                        operation: 'send_error_dm',
-                        context: 'personal_feedback_error'
-                    });
-                }
+            } catch (err) {
+                console.error('Error in background personal feedback:', err);
+                await sendDirectMessage(
+                    userId, 
+                    '❌ Sorry, I encountered an error while generating your personal feedback report.',
+                    workspace.botToken
+                );
             }
         });
 
-        // Immediately return processing message to avoid timeout
         return {
-            text: '⏳ *Analyzing your communication patterns...*\n\nI\'m reviewing your recent messages to generate your personal feedback report. This may take a few moments.\n\n📬 I\'ll send the detailed analysis to your DMs shortly!',
+            text: '⏳ *Analyzing your communication patterns...*\n\nI\'ll send the detailed analysis to your DMs shortly!',
             response_type: 'ephemeral'
         };
         
     } catch (error) {
-        const errorObj = error instanceof Error ? error : new Error(String(error));
-        logError('Error in personalfeedback command', errorObj, { 
-            user_id: userId,
-            channel_id: channelId,
-            operation: 'personalfeedback_command'
-        });
-        trackError(userId, errorObj, { 
-            operation: 'personalfeedback_command',
-            context: 'command_initialization'
-        });
+        console.error('Error in personalfeedback command:', error);
         return {
-            text: 'Sorry, I couldn&apos;t start your feedback analysis. Please try again later.',
+            text: 'Sorry, I couldn\'t start your feedback analysis. Please try again later.',
             response_type: 'ephemeral'
         };
     }
 }
 
-async function handleRephrase(text: string, userId: string, channelId: string) {
+async function handleRephrase(text: string, userId: string, channelId: string, workspace: Workspace, user: SlackUser) {
     try {
         if (!text.trim()) {
             return {
-                text: 'Please provide a message to rephrase. Example: `/rephrase Can you get this done ASAP?`',
+                text: 'Please provide a message to rephrase. Example: `/clarity-rephrase Can you get this done ASAP?`',
                 response_type: 'ephemeral'
             };
         }
 
-        // Check subscription access and get user in one call
-        const accessCheck = await validateUserAccess(userId, 'manualRephrase');
+        // Check workspace subscription access
+        const accessCheck = await validateWorkspaceAccess(workspace, 'manualRephrase');
         
         if (!accessCheck.allowed) {
             if (accessCheck.upgradeRequired) {
-                return generateUpgradeMessage('manualRephrase', accessCheck.reason || 'Feature requires upgrade', accessCheck.user?._id);
+                return generateUpgradeMessage('manualRephrase', accessCheck.reason || 'Feature requires upgrade', String(workspace._id));
             }
             
-            // Check if user is PRO (no upgrade needed, show contact us instead)
-            if (accessCheck.user?.subscription?.tier === 'PRO') {
+            if (workspace.subscription?.tier === 'PRO') {
                 const proConfig = getTierConfig('PRO');
                 return generateProLimitReachedMessage(
                     'manualRephrase',
-                    accessCheck.user.subscription.monthlyUsage.manualRephrase || 0,
+                    workspace.subscription.monthlyUsage.manualRephrase || 0,
                     proConfig.monthlyLimits.manualRephrase,
                     accessCheck.resetDate || new Date()
                 );
             }
             
-            // FREE user limit reached
             const freeConfig = getTierConfig('FREE');
             return generateLimitReachedMessage(
                 'manualRephrase',
-                accessCheck.user?.subscription?.monthlyUsage.manualRephrase || 0,
+                workspace.subscription?.monthlyUsage.manualRephrase || 0,
                 freeConfig.monthlyLimits.manualRephrase,
                 accessCheck.resetDate || new Date(),
-                accessCheck.user?._id
+                String(workspace._id)
             );
         }
 
-        const user = accessCheck.user!; // We know it exists from validation
-
-        // Get workspace-specific bot token
-
-        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
-        
-        if (!workspace || !workspace.botToken) {
-            throw new Error('Workspace not found or missing bot token');
-        }
-
-        // Schedule background analysis using after()
+        // Schedule background analysis
         after(async () => {
             try {
-                console.log('🔄 Starting background rephrase analysis for user:', userId);
-                
-                // Check if bot has access to the channel for context
-                const hasChannelAccess = await isChannelAccessible(channelId, user.workspaceId);
-                console.log('📋 Bot channel access:', hasChannelAccess);
+                const hasChannelAccess = await isChannelAccessible(channelId, String(workspace._id));
                 
                 let analysisResult;
                 let conversationHistory: string[] = [];
                 
                 if (hasChannelAccess) {
-                    // Bot is in channel - fetch context and use context-aware analysis
-                    console.log('📚 Fetching conversation history for context...');
                     conversationHistory = await fetchConversationHistory(channelId, workspace.botToken, undefined, 10);
                     analysisResult = await analyzeMessageForRephraseWithContext(text, conversationHistory);
-                    console.log('📝 Context-aware analysis complete, found', analysisResult.flags.length, 'issues');
                 } else {
-                    // Bot not in channel - analyze without context
                     analysisResult = await analyzeMessageForRephraseWithoutContext(text);
-                    console.log('📝 Context-free analysis complete, found', analysisResult.flags.length, 'issues');
                 }
                 
-                // Create workspace-specific WebClient
-
                 const workspaceSlack = new WebClient(workspace.botToken);
                 
-                // Track AI analysis completion
                 trackEvent(userId, EVENTS.API_AI_ANALYSIS_COMPLETED, {
                     user_name: user.name,
-                    workspace_id: user.workspaceId,
+                    workspace_id: String(workspace._id),
                     channel_id: channelId,
                     message_length: text.length,
                     analysis_type: 'manual_rephrase',
                     flags_found: analysisResult.flags.length,
                     has_context: hasChannelAccess,
-                    context_messages: conversationHistory.length,
                 });
 
                 if (analysisResult.flags.length === 0) {
-                    // Send ephemeral message for messages that don't need improvement
                     await workspaceSlack.chat.postEphemeral({
                         channel: channelId,
                         user: userId,
-                        text: `✅ *Your message looks great!*\n\n*Original:* "${text}"\n\nNo significant communication issues detected. Your message is clear and professional! 🎉\n\n🔒 _Only you can see this message_`
+                        text: `✅ *Your message looks great!*\n\n*Original:* "${text}"\n\nNo significant communication issues detected. 🎉`
                     });
                 } else {
-                    // Generate improved version for the first flag found
                     const primaryFlag = analysisResult.flags[0];
                     let improvedMessage;
                     
                     if (hasChannelAccess && conversationHistory.length > 0) {
-                        // Use context-aware improvement
                         improvedMessage = await generateImprovedMessageWithContext(text, primaryFlag.type, conversationHistory);
-                        console.log('💡 Generated context-aware improved message');
                     } else {
-                        // Use context-free improvement
                         improvedMessage = await generateImprovedMessage(text, primaryFlag.type);
-                        console.log('💡 Generated context-free improved message');
                     }
                     
-                    // Send ephemeral message with improved suggestion
                     await workspaceSlack.chat.postEphemeral({
                         channel: channelId,
                         user: userId,
@@ -566,65 +464,26 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
                     });
                 }
                 
-                console.log('✅ Rephrase results sent as ephemeral message to user:', userId);
+                await incrementWorkspaceUsage(workspace, 'manualRephrase');
                 
-                // Track usage after successful processing
-                await incrementUsage(userId, 'manualRephrase');
-                console.log('📊 Usage tracked for manualRephrase feature');
-                
-            } catch (error) {
-                const errorObj = error instanceof Error ? error : new Error(String(error));
-                logError('Error in background rephrase analysis', errorObj, { 
-                    user_id: userId,
-                    channel_id: channelId,
-                    operation: 'rephrase_analysis'
+            } catch (err) {
+                console.error('Error in background rephrase:', err);
+                const workspaceSlack = new WebClient(workspace.botToken);
+                await workspaceSlack.chat.postEphemeral({
+                    channel: channelId,
+                    user: userId,
+                    text: '❌ Sorry, I encountered an error while rephrasing your message.'
                 });
-                trackError(userId, errorObj, { 
-                    operation: 'rephrase_analysis',
-                    context: 'background_processing'
-                });
-                
-                // Send error message as ephemeral if possible
-                try {
-                    const workspaceSlack = new WebClient(workspace.botToken);
-                    
-                    await workspaceSlack.chat.postEphemeral({
-                        channel: channelId,
-                        user: userId,
-                        text: '❌ Sorry, I encountered an error while rephrasing your message. Please try again later or contact support if the issue persists.'
-                    });
-                } catch (ephemeralError) {
-                    const ephemeralErrorObj = ephemeralError instanceof Error ? ephemeralError : new Error(String(ephemeralError));
-                    logError('Failed to send error message as ephemeral', ephemeralErrorObj, { 
-                        user_id: userId,
-                        channel_id: channelId,
-                        operation: 'send_ephemeral_error'
-                    });
-                    trackError(userId, ephemeralErrorObj, { 
-                        operation: 'send_ephemeral_error',
-                        context: 'rephrase_error'
-                    });
-                }
             }
         });
 
-        // Immediately return processing message to avoid timeout
         return {
-            text: '⏳ *Analyzing and rephrasing your message...*\n\nI\'ll show you the improved version with an option to send it shortly!',
+            text: '⏳ *Analyzing and rephrasing your message...*',
             response_type: 'ephemeral'
         };
         
     } catch (error) {
-        const errorObj = error instanceof Error ? error : new Error(String(error));
-        logError('Error in rephrase command', errorObj, { 
-            user_id: userId,
-            channel_id: channelId,
-            operation: 'rephrase_command'
-        });
-        trackError(userId, errorObj, { 
-            operation: 'rephrase_command',
-            context: 'command_initialization'
-        });
+        console.error('Error in rephrase command:', error);
         return {
             text: 'Sorry, I couldn\'t start rephrasing your message. Please try again later.',
             response_type: 'ephemeral'
@@ -632,46 +491,67 @@ async function handleRephrase(text: string, userId: string, channelId: string) {
     }
 }
 
-async function handleSettings(text: string, userId: string, user: SlackUser, triggerId: string) {
+async function handleSettings(userId: string, user: SlackUser, workspace: Workspace, triggerId: string) {
     try {
-        // Get workspace bot token for this user
-
-        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        const isAdmin = workspace.adminSlackId === userId;
         
-        if (!workspace || !workspace.botToken) {
-            return {
-                text: 'Error: Workspace configuration not found.',
-                response_type: 'ephemeral'
-            };
-        }
-
-        // Get channels where bot is active for this workspace
+        // Get channels where bot is active
         const botChannels = await botChannelsCollection.find({
-            workspaceId: user.workspaceId
+            workspaceId: String(workspace._id)
         }).toArray();
 
-        // Create workspace-specific WebClient
         const workspaceSlack = new WebClient(workspace.botToken);
 
-        // Get subscription info for billing section
-        const subscription = user.subscription || {
+        // Get subscription info
+        const subscription = workspace.subscription || {
             tier: 'FREE' as const,
             status: 'active' as const
         };
         const tierConfig = getTierConfig(subscription.tier);
         
-        // Determine billing section content
-        const isPaidUser = subscription.tier === 'PRO' && subscription.stripeCustomerId;
-        const billingUrl = isPaidUser 
-            ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/portal?user=${encodeURIComponent(user._id)}`
-            : `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?user=${encodeURIComponent(user._id)}`;
-        
-        const billingButtonText = isPaidUser ? 'Manage Billing' : 'Upgrade to Pro';
-        const subscriptionStatusText = isPaidUser 
-            ? `*Current Plan:* ${tierConfig.name} - $${tierConfig.price}/month (${subscription.status})`
-            : `*Current Plan:* ${tierConfig.name} (${subscription.status})`;
+        // Build billing section (admin only)
+        const billingBlocks = isAdmin ? [
+            {
+                type: 'divider'
+            },
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: `*Billing & Subscription* (Admin only)\n*Current Plan:* ${tierConfig.name} - ${subscription.tier === 'PRO' ? `$${tierConfig.price}/month` : 'Free'} (${subscription.status})`
+                },
+                accessory: {
+                    type: 'button',
+                    text: {
+                        type: 'plain_text',
+                        text: subscription.tier === 'PRO' && subscription.stripeCustomerId ? 'Manage Billing' : 'Upgrade to Pro',
+                        emoji: true
+                    },
+                    ...(subscription.tier !== 'PRO' ? { style: 'primary' } : {}),
+                    url: subscription.tier === 'PRO' && subscription.stripeCustomerId
+                        ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/portal?workspace=${encodeURIComponent(String(workspace._id))}`
+                        : `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?workspace=${encodeURIComponent(String(workspace._id))}`,
+                    action_id: 'billing_action'
+                }
+            },
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: '*Transfer Admin*\nTransfer workspace admin rights to another user.'
+                },
+                accessory: {
+                    type: 'button',
+                    text: {
+                        type: 'plain_text',
+                        text: 'Change Admin',
+                        emoji: true
+                    },
+                    action_id: 'transfer_admin'
+                }
+            }
+        ] : [];
 
-        // Create modal view with radio buttons, toggle, and billing section
         const modal = {
             type: 'modal' as const,
             callback_id: 'settings_modal',
@@ -695,33 +575,15 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                         type: 'radio_buttons',
                         action_id: 'frequency_radio',
                         initial_option: user.analysisFrequency === 'weekly' ? {
-                            text: {
-                                type: 'plain_text',
-                                text: 'Weekly'
-                            },
+                            text: { type: 'plain_text', text: 'Weekly' },
                             value: 'weekly'
                         } : {
-                            text: {
-                                type: 'plain_text', 
-                                text: 'Monthly'
-                            },
+                            text: { type: 'plain_text', text: 'Monthly' },
                             value: 'monthly'
                         },
                         options: [
-                            {
-                                text: {
-                                    type: 'plain_text',
-                                    text: 'Weekly'
-                                },
-                                value: 'weekly'
-                            },
-                            {
-                                text: {
-                                    type: 'plain_text',
-                                    text: 'Monthly'
-                                },
-                                value: 'monthly'
-                            }
+                            { text: { type: 'plain_text', text: 'Weekly' }, value: 'weekly' },
+                            { text: { type: 'plain_text', text: 'Monthly' }, value: 'monthly' }
                         ]
                     }
                 },
@@ -730,76 +592,43 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
                     block_id: 'auto_coaching_channels_section',
                     text: {
                         type: 'mrkdwn',
-                        text: '*Auto Coaching Channels*\nCheck channels where you want to enable automatic coaching:'
+                        text: '*Auto Coaching Channels*\nSelect channels where you want automatic coaching:'
                     },
-                    accessory: {
+                    accessory: botChannels.length > 0 ? {
                         type: 'checkboxes',
                         action_id: 'channel_checkboxes',
                         ...((() => {
                             const enabledChannels = botChannels
-                                .filter(channel => user.autoCoachingEnabledChannels.includes(channel.channelId))
+                                .filter(channel => user.autoCoachingEnabledChannels?.includes(channel.channelId))
                                 .map(channel => ({
-                                    text: {
-                                        type: 'plain_text',
-                                        text: `#${channel.channelName}`
-                                    },
+                                    text: { type: 'plain_text', text: `#${channel.channelName}` },
                                     value: channel.channelId
                                 }));
-                            
-                            // Only include initial_options if there are enabled channels
                             return enabledChannels.length > 0 ? { initial_options: enabledChannels } : {};
                         })()),
                         options: botChannels.map(channel => ({
-                            text: {
-                                type: 'plain_text',
-                                text: `#${channel.channelName}`
-                            },
+                            text: { type: 'plain_text', text: `#${channel.channelName}` },
                             value: channel.channelId
                         }))
-                    }
+                    } : undefined
                 },
                 {
                     type: 'context',
                     elements: [
                         {
                             type: 'mrkdwn',
-                            text: '🔒 All coaching is private to you. You can still use `/clarity-rephrase [your message]` manually in any channel.'
+                            text: '🔒 All coaching is private to you. You can use `/clarity-rephrase` in any channel.'
                         }
                     ]
                 },
-                {
-                    type: 'divider'
-                },
-                {
-                    type: 'section',
-                    text: {
-                        type: 'mrkdwn',
-                        text: `*Billing & Subscription*\n${subscriptionStatusText}`
-                    },
-                    accessory: {
-                        type: 'button',
-                        text: {
-                            type: 'plain_text',
-                            text: billingButtonText,
-                            emoji: true
-                        },
-                        ...(isPaidUser ? {} : { style: 'primary' }),
-                        url: billingUrl,
-                        action_id: 'billing_action'
-                    }
-                }
-            ]
+                ...billingBlocks
+            ],
+            private_metadata: JSON.stringify({ 
+                workspaceId: String(workspace._id),
+                isAdmin 
+            })
         };
 
-        // Track settings modal opened
-        trackEvent(userId, EVENTS.API_SLACK_INTERACTIVE_RECEIVED, {
-            user_name: user.name,
-            workspace_id: user.workspaceId,
-            interaction_type: 'settings_modal_opened',
-            subscription_tier: subscription.tier,
-        });
-
-        // Open the modal
         workspaceSlack.views.open({
             trigger_id: triggerId,
             view: modal as Parameters<typeof workspaceSlack.views.open>[0]['view']
@@ -807,19 +636,10 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
             console.error('Failed to open settings modal:', err);
         });
 
-        // Respond immediately to Slack to avoid operation_timeout
         return null;
         
     } catch (error) {
-        const errorObj = error instanceof Error ? error : new Error(String(error));
-        logError('Error in settings command', errorObj, { 
-            user_id: userId,
-            operation: 'settings_command'
-        });
-        trackError(userId, errorObj, { 
-            operation: 'settings_command',
-            context: 'command_processing'
-        });
+        console.error('Error in settings command:', error);
         return {
             text: 'Sorry, I couldn\'t process your settings request. Please try again.',
             response_type: 'ephemeral'
@@ -827,9 +647,8 @@ async function handleSettings(text: string, userId: string, user: SlackUser, tri
     }
 }
 
-async function handleClarityStatus(userId: string, channelId: string, user: SlackUser) {
+async function handleClarityStatus(userId: string, channelId: string, workspace: Workspace, user: SlackUser) {
     try {
-        // Check if command was invoked in a channel (C for public, G for private) vs DM (D)
         if (!channelId.startsWith('C') && !channelId.startsWith('G')) {
             return {
                 text: 'Please use this command in a channel to check Clarity\'s status.',
@@ -837,43 +656,31 @@ async function handleClarityStatus(userId: string, channelId: string, user: Slac
             };
         }
 
-        // Check if bot is installed in this channel
-        const isChannelActive = await isChannelAccessible(channelId, user.workspaceId);
+        const isChannelActive = await isChannelAccessible(channelId, String(workspace._id));
         
         if (!isChannelActive) {
             return {
-                text: '🔴 Clarity is not installed in this channel.',
+                text: '🔴 Clarity is not active in this channel.',
                 response_type: 'ephemeral'
             };
         }
 
-        // Check if auto coaching is enabled for this channel
-        const isAutoCoachingEnabled = user.autoCoachingEnabledChannels.includes(channelId);
+        const isAutoCoachingEnabled = user.autoCoachingEnabledChannels?.includes(channelId);
         
         if (!isAutoCoachingEnabled) {
             return {
-                text: '🟡 Clarity is installed but auto coaching is not enabled in this channel.',
+                text: '🟡 Clarity is in this channel but auto coaching is not enabled for you. Use `/clarity-settings` to enable it.',
                 response_type: 'ephemeral'
             };
         }
 
-        // Bot is installed and auto coaching is enabled
         return {
-            text: '🟢 Clarity is installed and monitoring this channel for auto coaching.',
+            text: '🟢 Clarity is active and auto coaching is enabled for you in this channel.',
             response_type: 'ephemeral'
         };
 
     } catch (error) {
-        const errorObj = error instanceof Error ? error : new Error(String(error));
-        logError('Error in status command', errorObj, { 
-            user_id: userId,
-            channel_id: channelId,
-            operation: 'status_command'
-        });
-        trackError(userId, errorObj, { 
-            operation: 'status_command',
-            context: 'command_processing'
-        });
+        console.error('Error in status command:', error);
         return {
             text: 'Sorry, I couldn\'t check the status. Please try again later.',
             response_type: 'ephemeral'
@@ -888,21 +695,18 @@ async function handleClarityHelp() {
         blocks: [
             {
                 type: 'header',
-                text: {
-                    type: 'plain_text',
-                    text: 'Clarity Help'
-                }
+                text: { type: 'plain_text', text: 'Clarity Help' }
             },
             {
                 type: 'section',
                 fields: [
                     {
                         type: 'mrkdwn',
-                        text: '_Show all available Clarity commands and features_\n\n`/clarity-help`'
+                        text: '_Show all available commands_\n\n`/clarity-help`'
                     },
                     {
                         type: 'mrkdwn',
-                        text: '_Rephrase your original text for clarity or variation_\n\n`/clarity-rephrase [your text]`'
+                        text: '_Rephrase your text_\n\n`/clarity-rephrase [your text]`'
                     }
                 ]
             },
@@ -911,11 +715,11 @@ async function handleClarityHelp() {
                 fields: [
                     {
                         type: 'mrkdwn',
-                        text: '_Get analysis of your recent communication patterns_\n\n`/clarity-personal-feedback`'
+                        text: '_Get communication insights_\n\n`/clarity-personal-feedback`'
                     },
                     {
                         type: 'mrkdwn',
-                        text: '_Check Clarity\'s status in current channel_\n\n`/clarity-status`'
+                        text: '_Check Clarity\'s status_\n\n`/clarity-status`'
                     }
                 ]
             },
@@ -924,11 +728,11 @@ async function handleClarityHelp() {
                 fields: [
                     {
                         type: 'mrkdwn',
-                        text: '_Configure your AI coach preferences_\n\n`/clarity-settings`'
+                        text: '_Customize your preferences_\n\n`/clarity-settings`'
                     },
                     {
                         type: 'mrkdwn',
-                        text: '_Send feedback to the Clarity team_\n\n`/clarity-feedback [your feedback]`'
+                        text: '_Send us feedback_\n\n`/clarity-feedback [your feedback]`'
                     }
                 ]
             },
@@ -940,11 +744,7 @@ async function handleClarityHelp() {
                 elements: [
                     {
                         type: 'button',
-                        text: {
-                            type: 'plain_text',
-                            text: 'Need more help?',
-                            emoji: true
-                        },
+                        text: { type: 'plain_text', text: 'Documentation', emoji: true },
                         style: 'primary',
                         url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs`,
                         action_id: 'view_help_guide'
@@ -955,7 +755,7 @@ async function handleClarityHelp() {
     };
 }
 
-async function handleFeedback(text: string, userId: string, user: SlackUser) {
+async function handleFeedback(text: string, userId: string, workspace: Workspace, user: SlackUser) {
     try {
         if (!text.trim()) {
             return {
@@ -964,50 +764,33 @@ async function handleFeedback(text: string, userId: string, user: SlackUser) {
             };
         }
 
-        // Store feedback in database
         await feedbackCollection.insertOne({
             _id: new ObjectId(),
             slackId: userId,
-            workspaceId: user.workspaceId,
+            workspaceId: String(workspace._id),
             userName: user.name,
             text: text.trim(),
-            subscriptionTier: user.subscription?.tier || 'FREE',
+            subscriptionTier: workspace.subscription?.tier || 'FREE',
             createdAt: new Date()
         });
 
-        // Track feedback submission in PostHog
         trackEvent(userId, EVENTS.FEATURE_FEEDBACK_SUBMITTED, {
             user_name: user.name,
-            workspace_id: user.workspaceId,
-            subscription_tier: user.subscription?.tier || 'FREE',
+            workspace_id: String(workspace._id),
+            subscription_tier: workspace.subscription?.tier || 'FREE',
             feedback_length: text.trim().length,
-        });
-
-        logInfo('Feedback submitted', {
-            user_id: userId,
-            workspace_id: user.workspaceId,
-            feedback_length: text.trim().length,
-            endpoint: '/api/slack/commands'
         });
 
         return {
-            text: '✅ *Thank you for your feedback!*\n\nWe appreciate you taking the time to share your thoughts. Your feedback helps us improve Clarity for everyone.',
+            text: '✅ *Thank you for your feedback!*\n\nWe appreciate you taking the time to share your thoughts.',
             response_type: 'ephemeral'
         };
 
     } catch (error) {
-        const errorObj = error instanceof Error ? error : new Error(String(error));
-        logError('Error in feedback command', errorObj, {
-            user_id: userId,
-            operation: 'feedback_command'
-        });
-        trackError(userId, errorObj, {
-            operation: 'feedback_command',
-            context: 'command_processing'
-        });
+        console.error('Error in feedback command:', error);
         return {
             text: 'Sorry, I couldn\'t submit your feedback. Please try again later.',
             response_type: 'ephemeral'
         };
     }
-} 
+}

@@ -2,7 +2,7 @@
 
 import React, { Suspense } from 'react';
 import { Link, Image } from '@/components/ui';
-import { SlackOpener } from './_components/SlackOpener';
+import { PostInstallBanner } from './_components/PostInstallBanner';
 import {
   Rocket,
   MessageSquare,
@@ -17,7 +17,7 @@ export default function HelpPage(): React.ReactElement {
   return (
     <main className="mx-auto max-w-[820px] px-6 py-12">
       <Suspense fallback={null}>
-        <SlackOpener />
+        <PostInstallBanner />
       </Suspense>
       <div className="mb-2 text-sm font-medium text-neutral-500">Get started</div>
       <h1 className="mb-4 text-3xl font-bold leading-tight tracking-tight text-neutral-900">Welcome</h1>

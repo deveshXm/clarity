@@ -74,6 +74,7 @@
                 "mpim:read",
                 "im:write",
                 "users:read",
+                "users:read.email",
                 "app_mentions:read"
             ]
         }

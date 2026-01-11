@@ -1,30 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPortalSession } from '@/lib/stripe';
-import { slackUserCollection } from '@/lib/db';
+import { workspaceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
-import { SlackUser } from '@/types';
+import { Workspace } from '@/types';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('user');
+    const workspaceId = searchParams.get('workspace');
     
-    if (!userId) {
+    if (!workspaceId) {
       return NextResponse.json({ 
-        error: 'Missing user parameter' 
+        error: 'Missing workspace parameter' 
       }, { status: 400 });
     }
     
-    // Get user with subscription info using MongoDB _id
-
-    const user = await slackUserCollection.findOne({ 
-      _id: new ObjectId(userId)
-    }) as SlackUser | null;
+    // Get workspace with subscription info using MongoDB _id
+    const workspace = await workspaceCollection.findOne({ 
+      _id: new ObjectId(workspaceId)
+    }) as Workspace | null;
     
-    if (!user?.subscription?.stripeCustomerId) {
+    if (!workspace?.subscription?.stripeCustomerId) {
       return NextResponse.json({ 
         error: 'No active subscription found' 
       }, { status: 404 });
@@ -32,22 +31,22 @@ export async function GET(request: NextRequest) {
     
     // Create portal session
     const session = await createPortalSession(
-      user.subscription.stripeCustomerId,
+      workspace.subscription.stripeCustomerId,
       `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?tab=subscription`
     );
     
     // Track portal access
-    trackEvent(user.slackId, EVENTS.API_SUBSCRIPTION_PORTAL_ACCESSED, {
-      user_name: user.name,
-      workspace_id: user.workspaceId,
-      customer_id: user.subscription.stripeCustomerId,
-      subscription_tier: user.subscription.tier,
-      subscription_status: user.subscription.status,
+    trackEvent(workspace.adminSlackId, EVENTS.API_SUBSCRIPTION_PORTAL_ACCESSED, {
+      workspace_id: String(workspace._id),
+      workspace_name: workspace.name,
+      customer_id: workspace.subscription.stripeCustomerId,
+      subscription_tier: workspace.subscription.tier,
+      subscription_status: workspace.subscription.status,
     });
 
     logInfo('Stripe portal session created (GET)', { 
-      user_id: userId,
-      customer_id: user.subscription.stripeCustomerId,
+      workspace_id: workspaceId,
+      customer_id: workspace.subscription.stripeCustomerId,
       endpoint: '/api/stripe/portal'
     });
 
@@ -56,12 +55,12 @@ export async function GET(request: NextRequest) {
     
   } catch (error) {
     const errorObj = error instanceof Error ? error : new Error(String(error));
-    const userId = new URL(request.url).searchParams.get('user');
+    const workspaceId = new URL(request.url).searchParams.get('workspace');
     logError('Stripe portal error (GET)', errorObj, { 
       endpoint: '/api/stripe/portal',
-      user_id: userId
+      workspace_id: workspaceId
     });
-    trackError(userId || 'anonymous', errorObj, { 
+    trackError(workspaceId || 'anonymous', errorObj, { 
       endpoint: '/api/stripe/portal',
       operation: 'create_portal_session_get',
       category: ERROR_CATEGORIES.SERVER
@@ -75,21 +74,20 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId } = body;
+    const { workspaceId } = body;
     
-    if (!userId) {
+    if (!workspaceId) {
       return NextResponse.json({ 
-        error: 'Missing userId' 
+        error: 'Missing workspaceId' 
       }, { status: 400 });
     }
     
-    // Get user with subscription info using MongoDB _id
-
-    const user = await slackUserCollection.findOne({ 
-      _id: new ObjectId(userId)
-    }) as SlackUser | null;
+    // Get workspace with subscription info using MongoDB _id
+    const workspace = await workspaceCollection.findOne({ 
+      _id: new ObjectId(workspaceId)
+    }) as Workspace | null;
     
-    if (!user?.subscription?.stripeCustomerId) {
+    if (!workspace?.subscription?.stripeCustomerId) {
       return NextResponse.json({ 
         error: 'No active subscription found' 
       }, { status: 404 });
@@ -97,13 +95,13 @@ export async function POST(request: NextRequest) {
     
     // Create portal session
     const session = await createPortalSession(
-      user.subscription.stripeCustomerId,
+      workspace.subscription.stripeCustomerId,
       `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?tab=subscription`
     );
     
     logInfo('Stripe portal session created (POST)', { 
-      user_id: userId,
-      customer_id: user.subscription.stripeCustomerId,
+      workspace_id: workspaceId,
+      customer_id: workspace.subscription.stripeCustomerId,
       endpoint: '/api/stripe/portal'
     });
 
@@ -113,18 +111,18 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     const errorObj = error instanceof Error ? error : new Error(String(error));
-    let userId = 'anonymous';
+    let workspaceId = 'anonymous';
     try {
       const body = await request.json();
-      userId = body.userId || 'anonymous';
+      workspaceId = body.workspaceId || 'anonymous';
     } catch {
       // Body already consumed or invalid
     }
     logError('Stripe portal error (POST)', errorObj, { 
       endpoint: '/api/stripe/portal',
-      user_id: userId
+      workspace_id: workspaceId
     });
-    trackError(userId, errorObj, { 
+    trackError(workspaceId, errorObj, { 
       endpoint: '/api/stripe/portal',
       operation: 'create_portal_session_post'
     });

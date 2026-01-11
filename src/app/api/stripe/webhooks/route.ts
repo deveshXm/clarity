@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
-import { updateSubscription, resetMonthlyUsage, needsBillingReset } from '@/lib/subscription';
-import { slackUserCollection, workspaceCollection } from '@/lib/db';
+import { updateWorkspaceSubscription, resetWorkspaceMonthlyUsage, workspaceNeedsBillingReset } from '@/lib/subscription';
+import { workspaceCollection, slackUserCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
-import { SlackUser } from '@/types';
+import { Workspace, SlackUser } from '@/types';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
@@ -99,17 +99,18 @@ export async function POST(request: NextRequest) {
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log('✅ Checkout completed for session:', session.id);
   
-  const userId = session.client_reference_id || session.metadata?.userId;
-  if (!userId) {
-    console.error('No user ID found in checkout session');
+  // client_reference_id is the workspace MongoDB _id
+  const workspaceId = session.client_reference_id || session.metadata?.workspaceId;
+  if (!workspaceId) {
+    console.error('No workspace ID found in checkout session');
     return;
   }
   
   const customerId = session.customer as string;
   
-  // Update user with Stripe customer ID using MongoDB ObjectId
-  await slackUserCollection.updateOne(
-    { _id: new ObjectId(userId) },
+  // Update workspace with Stripe customer ID using MongoDB ObjectId
+  await workspaceCollection.updateOne(
+    { _id: new ObjectId(workspaceId) },
     {
       $set: {
         'subscription.stripeCustomerId': customerId,
@@ -118,10 +119,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
   );
   
-  console.log('💳 Updated user with Stripe customer ID:', customerId);
+  console.log('💳 Updated workspace with Stripe customer ID:', customerId);
   
-  // For users with existing subscriptions, we need to fetch and sync their subscription
-  // since they might have been redirected to customer portal and no subscription webhook was sent
+  // For workspaces with existing subscriptions, sync their subscription
   try {
     const customer = await stripe.customers.retrieve(customerId, {
       expand: ['subscriptions']
@@ -131,7 +131,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const subscriptions = customerData.subscriptions as { data: Stripe.Subscription[] };
     
     if (subscriptions && subscriptions.data && subscriptions.data.length > 0) {
-      // Find active subscription
       const activeSubscription = subscriptions.data.find(sub => sub.status === 'active');
       
       if (activeSubscription) {
@@ -145,11 +144,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       customer_id: customerId,
       operation: 'sync_existing_subscription'
     });
-    trackError('anonymous', errorObj, { 
-      operation: 'sync_existing_subscription',
-      context: 'checkout_session_completed'
-    });
-    // Don't fail the entire webhook - this is a best-effort sync
   }
 }
 
@@ -158,24 +152,23 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
   
   const customerId = subscription.customer as string;
   
-  // Find user by Stripe customer ID
-  const user = await slackUserCollection.findOne({
+  // Find workspace by Stripe customer ID
+  const workspace = await workspaceCollection.findOne({
     'subscription.stripeCustomerId': customerId
-  }) as SlackUser | null;
+  }) as Workspace | null;
   
-  if (!user) {
-    console.error('User not found for customer ID:', customerId);
+  if (!workspace) {
+    console.error('Workspace not found for customer ID:', customerId);
     return;
   }
   
   // Determine tier based on subscription status
   const tier = subscription.status === 'active' ? 'PRO' : 'FREE';
+  const previousTier = workspace.subscription?.tier || 'FREE';
   
-  // Update user subscription
-  // Note: current_period_start and current_period_end exist on the subscription object at runtime
-  // but may not be in TypeScript definitions. We access them safely.
+  // Update workspace subscription
   const subscriptionData = subscription as unknown as Record<string, unknown>;
-  await updateSubscription(user.slackId, {
+  await updateWorkspaceSubscription(String(workspace._id), {
     tier: tier,
     status: subscription.status as 'active' | 'cancelled' | 'past_due',
     currentPeriodStart: new Date((subscriptionData.current_period_start as number) * 1000),
@@ -186,27 +179,30 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
   
   // Reset usage counters if subscription became active
   if (subscription.status === 'active') {
-    await resetMonthlyUsage(user.slackId);
+    await resetWorkspaceMonthlyUsage(String(workspace._id));
     console.log('🔄 Reset usage counters for new billing period');
     
-    // Send Pro subscription welcome message only for new subscriptions
-    // Check if this is a new subscription by verifying previous tier was FREE
-    const previousTier = user.subscription?.tier || 'FREE';
+    // Send Pro subscription welcome message only for new upgrades
     if (tier === 'PRO' && previousTier === 'FREE') {
-      const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
-      if (workspace?.botToken) {
-        await sendProSubscriptionNotification(user, workspace.botToken);
+      // Find admin user to send notification
+      const adminUser = await slackUserCollection.findOne({
+        slackId: workspace.adminSlackId,
+        workspaceId: String(workspace._id)
+      }) as SlackUser | null;
+      
+      if (adminUser && workspace.botToken) {
+        await sendProSubscriptionNotification(adminUser, workspace.botToken);
         
         logInfo('Pro subscription notification sent', { 
-          user_id: user.slackId,
-          workspace_id: user.workspaceId,
+          workspace_id: String(workspace._id),
+          admin_id: workspace.adminSlackId,
           operation: 'pro_subscription_notification'
         });
       }
     }
   }
   
-  console.log(`✅ Updated user ${user.slackId} to ${tier} tier`);
+  console.log(`✅ Updated workspace ${workspace.name} to ${tier} tier`);
 }
 
 async function handleSubscriptionCancellation(subscription: Stripe.Subscription) {
@@ -214,53 +210,56 @@ async function handleSubscriptionCancellation(subscription: Stripe.Subscription)
   
   const customerId = subscription.customer as string;
   
-  // Find user by Stripe customer ID
-  const user = await slackUserCollection.findOne({
+  // Find workspace by Stripe customer ID
+  const workspace = await workspaceCollection.findOne({
     'subscription.stripeCustomerId': customerId
-  }) as SlackUser | null;
+  }) as Workspace | null;
   
-  if (!user) {
-    console.error('User not found for customer ID:', customerId);
+  if (!workspace) {
+    console.error('Workspace not found for customer ID:', customerId);
     return;
   }
   
-  // Downgrade user to FREE tier
-  await updateSubscription(user.slackId, {
+  // Downgrade workspace to FREE tier
+  await updateWorkspaceSubscription(String(workspace._id), {
     tier: 'FREE',
     status: 'cancelled',
     updatedAt: new Date(),
   });
   
-  // Send subscription cancellation message
-  const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
-  if (workspace?.botToken) {
-    await sendSubscriptionCancellationNotification(user, workspace.botToken);
+  // Find admin user to send notification
+  const adminUser = await slackUserCollection.findOne({
+    slackId: workspace.adminSlackId,
+    workspaceId: String(workspace._id)
+  }) as SlackUser | null;
+  
+  if (adminUser && workspace.botToken) {
+    await sendSubscriptionCancellationNotification(adminUser, workspace.botToken);
     
     logInfo('Subscription cancellation notification sent', { 
-      user_id: user.slackId,
-      workspace_id: user.workspaceId,
+      workspace_id: String(workspace._id),
+      admin_id: workspace.adminSlackId,
       operation: 'subscription_cancellation_notification'
     });
   }
   
-  console.log(`✅ Downgraded user ${user.slackId} to FREE tier`);
+  console.log(`✅ Downgraded workspace ${workspace.name} to FREE tier`);
 }
 
 async function handleCustomerUpdated(customer: Stripe.Customer) {
   console.log('👤 Customer updated:', customer.id);
   
-  // Find user by Stripe customer ID
-  const user = await slackUserCollection.findOne({
+  // Find workspace by Stripe customer ID
+  const workspace = await workspaceCollection.findOne({
     'subscription.stripeCustomerId': customer.id
-  }) as SlackUser | null;
+  }) as Workspace | null;
   
-  if (!user) {
-    console.log('User not found for customer ID:', customer.id);
+  if (!workspace) {
+    console.log('Workspace not found for customer ID:', customer.id);
     return;
   }
   
-  // This event might be triggered when user accesses customer portal
-  // We should check if they have an active subscription and sync it
+  // Sync active subscription
   try {
     const customerWithSubs = await stripe.customers.retrieve(customer.id, {
       expand: ['subscriptions']
@@ -270,7 +269,6 @@ async function handleCustomerUpdated(customer: Stripe.Customer) {
     const subscriptions = customerData.subscriptions as { data: Stripe.Subscription[] };
     
     if (subscriptions && subscriptions.data && subscriptions.data.length > 0) {
-      // Find active subscription
       const activeSubscription = subscriptions.data.find(sub => sub.status === 'active');
       
       if (activeSubscription) {
@@ -284,17 +282,12 @@ async function handleCustomerUpdated(customer: Stripe.Customer) {
       customer_id: customer.id,
       operation: 'sync_subscription_customer_update'
     });
-    trackError('anonymous', errorObj, { 
-      operation: 'sync_subscription_customer_update',
-      context: 'customer_updated'
-    });
   }
 }
 
 async function handlePaymentSuccess(invoice: Stripe.Invoice) {
   console.log('💰 Payment succeeded for invoice:', invoice.id);
   
-  // Access subscription property safely - it exists at runtime
   const invoiceData = invoice as unknown as Record<string, unknown>;
   const subscriptionId = invoiceData.subscription as string;
   if (!subscriptionId) {
@@ -305,21 +298,21 @@ async function handlePaymentSuccess(invoice: Stripe.Invoice) {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   const customerId = subscription.customer as string;
   
-  // Find user by Stripe customer ID
-  const user = await slackUserCollection.findOne({
+  // Find workspace by Stripe customer ID
+  const workspace = await workspaceCollection.findOne({
     'subscription.stripeCustomerId': customerId
-  }) as SlackUser | null;
+  }) as Workspace | null;
   
-  if (!user) {
-    console.error('User not found for customer ID:', customerId);
+  if (!workspace) {
+    console.error('Workspace not found for customer ID:', customerId);
     return;
   }
   
   // Update billing period and reset usage if it's a new period
-  const needsReset = await needsBillingReset(user.slackId);
+  const needsReset = await workspaceNeedsBillingReset(String(workspace._id));
   
   const subscriptionData = subscription as unknown as Record<string, unknown>;
-  await updateSubscription(user.slackId, {
+  await updateWorkspaceSubscription(String(workspace._id), {
     currentPeriodStart: new Date((subscriptionData.current_period_start as number) * 1000),
     currentPeriodEnd: new Date((subscriptionData.current_period_end as number) * 1000),
     status: 'active',
@@ -327,17 +320,16 @@ async function handlePaymentSuccess(invoice: Stripe.Invoice) {
   });
   
   if (needsReset) {
-    await resetMonthlyUsage(user.slackId);
+    await resetWorkspaceMonthlyUsage(String(workspace._id));
     console.log('🔄 Reset usage counters for new billing period');
   }
   
-  console.log(`✅ Payment processed for user ${user.slackId}`);
+  console.log(`✅ Payment processed for workspace ${workspace.name}`);
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
   console.log('💸 Payment failed for invoice:', invoice.id);
   
-  // Access subscription property safely - it exists at runtime
   const invoiceData = invoice as unknown as Record<string, unknown>;
   const subscriptionId = invoiceData.subscription as string;
   if (!subscriptionId) {
@@ -348,23 +340,21 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   const customerId = subscription.customer as string;
   
-  // Find user by Stripe customer ID
-  const user = await slackUserCollection.findOne({
+  // Find workspace by Stripe customer ID
+  const workspace = await workspaceCollection.findOne({
     'subscription.stripeCustomerId': customerId
-  }) as SlackUser | null;
+  }) as Workspace | null;
   
-  if (!user) {
-    console.error('User not found for customer ID:', customerId);
+  if (!workspace) {
+    console.error('Workspace not found for customer ID:', customerId);
     return;
   }
   
   // Update subscription status
-  await updateSubscription(user.slackId, {
+  await updateWorkspaceSubscription(String(workspace._id), {
     status: 'past_due',
     updatedAt: new Date(),
   });
   
-  console.log(`⚠️ Marked user ${user.slackId} subscription as past_due`);
+  console.log(`⚠️ Marked workspace ${workspace.name} subscription as past_due`);
 }
-
-

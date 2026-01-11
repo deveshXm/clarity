@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature } from '@/lib/slack';
-import { slackUserCollection, workspaceCollection } from '@/lib/db';
+import { verifySlackSignature, sendWorkspaceAnnouncementMessage, joinChannel, sendAdminTransferNotification, openAdminTransferModal, resolveSlackUserName, getWorkspaceChannels, openOnboardingModal, sendDirectMessage } from '@/lib/slack';
+import { slackUserCollection, workspaceCollection, botChannelsCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
+import { Workspace } from '@/types';
+
 // Define types inline for now
 interface SlackInteractivePayload {
   type: string;
@@ -13,8 +15,10 @@ interface SlackInteractivePayload {
   actions: Array<{ action_id: string; value: string; type: string }>;
   channel: { id: string; name: string };
   message: { ts: string };
+  trigger_id?: string;
   view?: {
     callback_id?: string;
+    private_metadata?: string;
     state?: {
       values?: {
         [blockId: string]: {
@@ -26,6 +30,7 @@ interface SlackInteractivePayload {
               text: { type: string; text: string };
               value: string;
             }>;
+            selected_user?: string;
           };
         };
       };
@@ -95,11 +100,19 @@ export async function POST(request: NextRequest) {
                 return await handleSendImprovedMessage(payload, action);
             } else if (action.action_id === 'keep_original_message') {
                 return await handleKeepOriginalMessage();
+            } else if (action.action_id === 'transfer_admin') {
+                return await handleTransferAdminAction(payload);
+            } else if (action.action_id === 'complete_onboarding') {
+                return await handleCompleteOnboardingAction(payload);
             }
         } else if (payload.type === 'view_submission') {
             // Handle modal form submissions
             if (payload.view?.callback_id === 'settings_modal') {
                 return await handleSettingsSubmission(payload);
+            } else if (payload.view?.callback_id === 'workspace_onboarding_modal') {
+                return await handleOnboardingSubmission(payload);
+            } else if (payload.view?.callback_id === 'admin_transfer_modal') {
+                return await handleAdminTransferSubmission(payload);
             }
         }
         
@@ -153,7 +166,6 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         }
         
         // Create user-specific WebClient to update their own message
-
         const userSlack = new WebClient(appUser.userToken);
         
         // Update the original message with improved text
@@ -174,14 +186,14 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         console.log('✅ Message update successful');
         
         // Track successful message replacement
-        const userDoc = await slackUserCollection.findOne({ slackId: user });
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(appUser.workspaceId) });
         trackEvent(user, EVENTS.API_MESSAGE_REPLACED, {
-            user_name: userDoc?.name || 'Unknown',
-            workspace_id: userDoc?.workspaceId || 'Unknown',
+            user_name: appUser.name || 'Unknown',
+            workspace_id: appUser.workspaceId || 'Unknown',
             channel_id: channel,
             original_length: original_text.length,
             improved_length: improved_text.length,
-            subscription_tier: userDoc?.subscription?.tier || 'FREE',
+            subscription_tier: workspace?.subscription?.tier || 'FREE',
         });
         
         // Update the ephemeral message to show success
@@ -201,7 +213,7 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
                     elements: [
                         {
                             type: "mrkdwn",
-                            text: "💡 *Tip: Use `/settings` to adjust coaching preferences*"
+                            text: "💡 *Tip: Use `/clarity-settings` to adjust coaching preferences*"
                         }
                     ]
                 }
@@ -254,7 +266,6 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         }
         
         // Get workspace bot token
-
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(appUser.workspaceId) });
         if (!workspace || !workspace.botToken) {
             console.error('❌ Workspace not found or missing bot token for user:', userId);
@@ -265,7 +276,6 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         }
         
         // Create workspace-specific WebClient
-
         const workspaceSlack = new WebClient(workspace.botToken);
         
         // Post the improved message as the user (using bot with custom username)
@@ -344,12 +354,118 @@ async function handleKeepOriginalMessage() {
                 elements: [
                     {
                         type: "mrkdwn",
-                        text: "💡 *Tip: Use `/personalfeedback` to get your overall communication analysis*"
+                        text: "💡 *Tip: Use `/clarity-personal-feedback` to get your overall communication analysis*"
                     }
                 ]
             }
         ]
     });
+}
+
+async function handleTransferAdminAction(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const triggerId = payload.trigger_id;
+        
+        if (!userId || !triggerId) {
+            return NextResponse.json({ text: 'Missing required data' });
+        }
+        
+        // Get user's workspace
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) {
+            return NextResponse.json({ text: 'User not found' });
+        }
+        
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) }) as Workspace | null;
+        if (!workspace) {
+            return NextResponse.json({ text: 'Workspace not found' });
+        }
+        
+        // Verify user is admin
+        if (workspace.adminSlackId !== userId) {
+            return NextResponse.json({ text: 'Only the workspace admin can transfer admin rights.' });
+        }
+        
+        // Open admin transfer modal
+        await openAdminTransferModal(triggerId, workspace.botToken, userId);
+        
+        // Return empty response to close the current interaction
+        return new NextResponse('', { status: 200 });
+        
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error handling transfer admin action', errorObj, {
+            user_id: payload.user?.id
+        });
+        return NextResponse.json({ text: 'Error opening admin transfer modal' });
+    }
+}
+
+async function handleCompleteOnboardingAction(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const triggerId = payload.trigger_id;
+        
+        if (!userId || !triggerId) {
+            return NextResponse.json({ text: 'Missing required data' });
+        }
+        
+        // Get user's workspace
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) {
+            return NextResponse.json({ text: 'User not found. Please try again.' });
+        }
+        
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) }) as Workspace | null;
+        if (!workspace) {
+            return NextResponse.json({ text: 'Workspace not found' });
+        }
+        
+        // Verify user is admin
+        if (workspace.adminSlackId !== userId) {
+            // Send helpful message to non-admin
+            await sendDirectMessage(
+                userId,
+                `Only the workspace admin can complete the setup. Please ask <@${workspace.adminSlackId}> to complete the Clarity setup first.`,
+                workspace.botToken
+            );
+            return new NextResponse('', { status: 200 });
+        }
+        
+        // Check if already onboarded
+        if (workspace.hasCompletedOnboarding) {
+            await sendDirectMessage(
+                userId,
+                'Setup has already been completed! Use `/clarity-settings` to change your preferences.',
+                workspace.botToken
+            );
+            return new NextResponse('', { status: 200 });
+        }
+        
+        // Fetch channels and open onboarding modal
+        const channels = await getWorkspaceChannels(workspace.botToken);
+        await openOnboardingModal(triggerId, workspace.botToken, channels);
+        
+        logInfo('Onboarding modal opened from welcome message', {
+            user_id: userId,
+            workspace_id: String(workspace._id)
+        });
+        
+        return new NextResponse('', { status: 200 });
+        
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error handling complete onboarding action', errorObj, {
+            user_id: payload.user?.id
+        });
+        trackError(payload.user?.id || 'anonymous', errorObj, {
+            endpoint: '/api/slack/interactive',
+            operation: 'complete_onboarding',
+            category: ERROR_CATEGORIES.SERVER
+        });
+        return NextResponse.json({ text: 'Error opening setup modal. Please try `/clarity-settings` instead.' });
+    }
 }
 
 async function handleSettingsSubmission(payload: SlackInteractivePayload) {
@@ -406,7 +522,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
             });
         }
         
-        // Get all available channels for this user's workspace
+        // Get workspace
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
         if (!workspace) {
             console.error('Workspace not found for user:', userId);
@@ -421,7 +537,6 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
             });
         }
         
-        // No need to calculate disabled channels - we directly use enabled channels
         console.log('✅ Settings updated:', {
             frequency: selectedValue,
             enabledChannels: enabledChannelIds.length,
@@ -473,7 +588,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                         workspace_id: userDoc.workspaceId,
                         analysis_frequency: selectedValue,
                         auto_coaching_enabled_channels_count: enabledChannelIds.length,
-                        subscription_tier: userDoc.subscription?.tier || 'FREE',
+                        subscription_tier: workspace?.subscription?.tier || 'FREE',
                     });
                 }
             } catch (err) {
@@ -551,4 +666,319 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
             }
         });
     }
-} 
+}
+
+async function handleOnboardingSubmission(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const view = payload.view;
+        
+        if (!userId || !view) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { channels_selection: 'Missing required data' }
+            });
+        }
+        
+        // Get user's workspace
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        
+        // Find workspace by admin
+        const workspace = await workspaceCollection.findOne({ 
+            adminSlackId: userId, 
+            isActive: true 
+        }) as Workspace | null;
+        
+        if (!workspace) {
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'workspace_onboarding_modal',
+                    title: { type: 'plain_text', text: 'Setup Clarity' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Workspace not found or you are not the admin.' } }]
+                }
+            });
+        }
+        
+        // Extract selected channels
+        const channelsValue = view.state?.values?.channels_selection?.selected_channels?.selected_options;
+        const selectedChannels: Array<{ id: string; name: string }> = channelsValue 
+            ? channelsValue.map((opt: { value: string }) => JSON.parse(opt.value))
+            : [];
+        
+        // Extract announcement channel
+        const announcementValue = view.state?.values?.announcement_channel?.announcement_channel_select?.selected_option?.value;
+        const announcementChannel = announcementValue ? JSON.parse(announcementValue) : null;
+        
+        logInfo('Workspace onboarding submission', {
+            admin_user_id: userId,
+            workspace_id: String(workspace._id),
+            selected_channels: selectedChannels.length,
+            announcement_channel: announcementChannel?.name || null
+        });
+        
+        // Process in background
+        after(async () => {
+            try {
+                // Join bot to selected channels
+                for (const channel of selectedChannels) {
+                    const joined = await joinChannel(channel.id, workspace.botToken);
+                    if (joined) {
+                        // Add to botChannelsCollection
+                        const existingChannel = await botChannelsCollection.findOne({
+                            workspaceId: String(workspace._id),
+                            channelId: channel.id
+                        });
+                        
+                        if (!existingChannel) {
+                            await botChannelsCollection.insertOne({
+                                _id: new ObjectId(),
+                                workspaceId: String(workspace._id),
+                                channelId: channel.id,
+                                channelName: channel.name,
+                                addedAt: new Date()
+                            });
+                        }
+                    }
+                }
+                
+                // Mark workspace as onboarded
+                await workspaceCollection.updateOne(
+                    { _id: new ObjectId(String(workspace._id)) },
+                    { 
+                        $set: { 
+                            hasCompletedOnboarding: true,
+                            updatedAt: new Date()
+                        } 
+                    }
+                );
+                
+                // If user doesn't exist yet, create them
+                if (!user) {
+                    await slackUserCollection.insertOne({
+                        _id: new ObjectId(),
+                        slackId: userId,
+                        workspaceId: String(workspace._id),
+                        name: payload.user.name,
+                        displayName: payload.user.name,
+                        analysisFrequency: 'weekly',
+                        autoCoachingEnabledChannels: selectedChannels.map(c => c.id),
+                        isActive: true,
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    });
+                } else {
+                    // Update admin's auto-coaching channels
+                    await slackUserCollection.updateOne(
+                        { slackId: userId },
+                        { 
+                            $set: { 
+                                autoCoachingEnabledChannels: selectedChannels.map(c => c.id),
+                                updatedAt: new Date()
+                            } 
+                        }
+                    );
+                }
+                
+                // Send announcement message if channel selected
+                if (announcementChannel) {
+                    await sendWorkspaceAnnouncementMessage(announcementChannel.id, workspace.botToken);
+                }
+                
+                // Track onboarding completion
+                trackEvent(userId, EVENTS.ONBOARDING_COMPLETED, {
+                    workspace_id: String(workspace._id),
+                    channels_selected: selectedChannels.length,
+                    announcement_sent: !!announcementChannel,
+                    subscription_tier: workspace.subscription?.tier || 'FREE'
+                });
+                
+            } catch (err) {
+                const errorObj = err instanceof Error ? err : new Error(String(err));
+                logError('Error in onboarding background processing', errorObj, {
+                    user_id: userId,
+                    workspace_id: String(workspace._id)
+                });
+            }
+        });
+        
+        // Return success view
+        return NextResponse.json({
+            response_action: 'update',
+            view: {
+                type: 'modal',
+                callback_id: 'workspace_onboarding_modal',
+                title: { type: 'plain_text', text: 'Setup Complete!' },
+                blocks: [
+                    {
+                        type: 'section',
+                        text: {
+                            type: 'mrkdwn',
+                            text: '🎉 *Clarity is now set up for your workspace!*\n\nEveryone in your workspace can now use Clarity commands.'
+                        }
+                    },
+                    {
+                        type: 'section',
+                        text: {
+                            type: 'mrkdwn',
+                            text: '*Getting started:*\n• `/clarity-help` - See all commands\n• `/clarity-rephrase [text]` - Improve any message\n• `/clarity-settings` - Customize preferences'
+                        }
+                    },
+                    {
+                        type: 'context',
+                        elements: [
+                            {
+                                type: 'mrkdwn',
+                                text: '💡 Tip: Share `/clarity-help` with your team to get everyone started!'
+                            }
+                        ]
+                    }
+                ]
+            }
+        });
+        
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error handling onboarding submission', errorObj, {
+            user_id: payload.user?.id
+        });
+        return NextResponse.json({
+            response_action: 'update',
+            view: {
+                type: 'modal',
+                callback_id: 'workspace_onboarding_modal',
+                title: { type: 'plain_text', text: 'Setup Clarity' },
+                blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Something went wrong. Please try again.' } }]
+            }
+        });
+    }
+}
+
+async function handleAdminTransferSubmission(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const view = payload.view;
+        
+        if (!userId || !view) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { new_admin_selection: 'Missing required data' }
+            });
+        }
+        
+        // Parse private metadata to get current admin
+        const metadata = view.private_metadata ? JSON.parse(view.private_metadata) : {};
+        const currentAdminId = metadata.currentAdminId;
+        
+        // Get new admin from selection
+        const newAdminId = view.state?.values?.new_admin_selection?.new_admin_user?.selected_user;
+        
+        if (!newAdminId) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { new_admin_selection: 'Please select a user' }
+            });
+        }
+        
+        if (newAdminId === currentAdminId) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { new_admin_selection: 'New admin must be different from current admin' }
+            });
+        }
+        
+        // Find workspace where current user is admin
+        const workspace = await workspaceCollection.findOne({ 
+            adminSlackId: userId, 
+            isActive: true 
+        }) as Workspace | null;
+        
+        if (!workspace) {
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'admin_transfer_modal',
+                    title: { type: 'plain_text', text: 'Transfer Admin' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ You are not the admin of this workspace.' } }]
+                }
+            });
+        }
+        
+        // Update workspace admin
+        await workspaceCollection.updateOne(
+            { _id: new ObjectId(String(workspace._id)) },
+            { 
+                $set: { 
+                    adminSlackId: newAdminId,
+                    updatedAt: new Date()
+                } 
+            }
+        );
+        
+        // Send notification to new admin in background
+        after(async () => {
+            try {
+                // Get previous admin's name
+                const previousAdminName = await resolveSlackUserName(userId, workspace.botToken);
+                
+                await sendAdminTransferNotification(
+                    newAdminId,
+                    previousAdminName,
+                    workspace.name,
+                    workspace.botToken
+                );
+                
+                trackEvent(userId, EVENTS.FEATURE_ADMIN_TRANSFERRED, {
+                    workspace_id: String(workspace._id),
+                    new_admin_id: newAdminId,
+                    previous_admin_id: userId
+                });
+            } catch (err) {
+                const errorObj = err instanceof Error ? err : new Error(String(err));
+                logError('Error sending admin transfer notification', errorObj);
+            }
+        });
+        
+        logInfo('Admin transferred', {
+            workspace_id: String(workspace._id),
+            previous_admin: userId,
+            new_admin: newAdminId
+        });
+        
+        // Return success view
+        return NextResponse.json({
+            response_action: 'update',
+            view: {
+                type: 'modal',
+                callback_id: 'admin_transfer_modal',
+                title: { type: 'plain_text', text: 'Transfer Complete' },
+                blocks: [
+                    {
+                        type: 'section',
+                        text: {
+                            type: 'mrkdwn',
+                            text: '✅ *Admin rights transferred successfully!*\n\nThe new admin has been notified and now has access to billing and workspace settings.\n\nYou no longer have admin access.'
+                        }
+                    }
+                ]
+            }
+        });
+        
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error handling admin transfer submission', errorObj, {
+            user_id: payload.user?.id
+        });
+        return NextResponse.json({
+            response_action: 'update',
+            view: {
+                type: 'modal',
+                callback_id: 'admin_transfer_modal',
+                title: { type: 'plain_text', text: 'Transfer Admin' },
+                blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Something went wrong. Please try again.' } }]
+            }
+        });
+    }
+}

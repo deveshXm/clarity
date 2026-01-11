@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible } from '@/lib/slack';
+import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible, getSlackUserInfoWithEmail } from '@/lib/slack';
 import { workspaceCollection, slackUserCollection, botChannelsCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackEventSchema, Workspace, SlackUser } from '@/types';
 import { comprehensiveMessageAnalysis } from '@/lib/ai';
-import { validateUserAccess, incrementUsage } from '@/lib/subscription';
+import { validateWorkspaceAccess, incrementWorkspaceUsage } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logSlackEvent } from '@/lib/logger';
@@ -57,11 +57,9 @@ export async function POST(request: NextRequest) {
                 console.log('🗑️ App uninstall event received:', JSON.stringify(event, null, 2));
                 console.log('🗑️ Full event data:', JSON.stringify(eventData, null, 2));
                 
-                // The team ID might be in the event itself or in the parent eventData
                 const teamId = event.team_id || eventData.team_id;
                 console.log('🗑️ Extracted team ID:', teamId);
                 
-                // Process uninstall in background
                 after(async () => {
                     try {
                         await handleAppUninstall(teamId);
@@ -75,13 +73,9 @@ export async function POST(request: NextRequest) {
             // Handle tokens revoked event (fallback for app uninstall)
             if (event.type === 'tokens_revoked') {
                 console.log('🔑 Tokens revoked event received:', JSON.stringify(event, null, 2));
-                console.log('🔑 Full event data:', JSON.stringify(eventData, null, 2));
                 
-                // The team ID might be in the event itself or in the parent eventData
                 const teamId = event.team_id || eventData.team_id;
-                console.log('🔑 Extracted team ID:', teamId);
                 
-                // Process token revocation (same as uninstall) in background
                 after(async () => {
                     try {
                         await handleAppUninstall(teamId);
@@ -124,22 +118,19 @@ export async function POST(request: NextRequest) {
             if (event.type === 'message' && (event.channel_type === 'channel' || event.channel_type === 'group')) {
                 console.log('🚀 Scheduling background processing for message event');
                 
-                // Process message event in background to prevent Slack timeout and duplicate events
                 after(async () => {
                     try {
                         console.log('🔄 Starting background message processing...');
-                        
-                        await handleMessageEvent(event);
+                        await handleMessageEvent(event, eventData.team_id);
                         console.log('✅ Background message processing completed');
                     } catch (error) {
                         console.error('❌ Background message processing error:', error);
-                        // Don't throw - we've already responded to Slack
                     }
                 });
             }
         }
         
-        // Return immediate response to Slack to prevent timeouts and duplicate events
+        // Return immediate response to Slack
         console.log('⚡ Sending immediate response to Slack');
         return NextResponse.json({ ok: true });
         
@@ -149,7 +140,7 @@ export async function POST(request: NextRequest) {
     }
 }
 
-async function handleMessageEvent(event: Record<string, unknown>) {
+async function handleMessageEvent(event: Record<string, unknown>, teamId: string) {
     try {
         logSlackEvent('message_received', {
             user: event.user,
@@ -162,62 +153,84 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         // Skip bot messages and system messages
         if (event.bot_id || event.subtype) {
-
             return;
         }
         
         // Only process new messages - skip updated/old messages
-        const messageTimestamp = parseFloat(event.ts as string) * 1000; // Convert to milliseconds
+        const messageTimestamp = parseFloat(event.ts as string) * 1000;
         const currentTime = Date.now();
         const timeDifference = currentTime - messageTimestamp;
         
-        // If message is older than 10 seconds, it's likely an updated message or old event
         if (timeDifference > 10000) {
-
             return;
         }
-        
-
 
         // Validate event data
         const validatedEvent = SlackEventSchema.parse(event);
         
-        // Check subscription access and get user in one call
-        const accessCheck = await validateUserAccess(validatedEvent.user, 'autoCoaching');
+        // Find workspace first
+        const workspace = await workspaceCollection.findOne({ 
+            workspaceId: teamId, 
+            isActive: true 
+        }) as Workspace | null;
+        
+        if (!workspace) {
+            console.log('⏭️ Workspace not found or inactive, skipping');
+            return;
+        }
+        
+        // Check if workspace has completed onboarding
+        if (!workspace.hasCompletedOnboarding) {
+            console.log('⏭️ Workspace has not completed onboarding, skipping auto coaching');
+            return;
+        }
+        
+        // Check workspace subscription access
+        const accessCheck = await validateWorkspaceAccess(workspace, 'autoCoaching');
         
         if (!accessCheck.allowed) {
-            // Track event processed but skipped
             trackEvent(validatedEvent.user, EVENTS.API_SLACK_EVENT_PROCESSED, {
                 event_type: 'message',
                 channel_id: validatedEvent.channel,
                 processed: false,
                 skip_reason: 'access_denied',
-                subscription_tier: accessCheck.user?.subscription?.tier || 'FREE',
+                subscription_tier: workspace.subscription?.tier || 'FREE',
             });
             return;
         }
         
-                const user = accessCheck.user!; // We know it exists from validation
-
-        // Check if user has completed onboarding
-        if (!user.hasCompletedOnboarding) {
-            console.log('⏭️ User has not completed onboarding, skipping auto coaching');
-
-            // Track onboarding required event for auto coaching
-            trackEvent(validatedEvent.user, EVENTS.LIMITS_ONBOARDING_REQUIRED, {
-                command: 'auto_coaching', // Special identifier for auto coaching
-                channel_id: validatedEvent.channel,
-                user_name: user.name,
-                workspace_id: user.workspaceId,
-                subscription_tier: user.subscription?.tier || 'FREE',
-                message_length: validatedEvent.text.length,
-            });
-
-            return;
+        // Find or create user
+        let user = await slackUserCollection.findOne({
+            slackId: validatedEvent.user,
+            workspaceId: String(workspace._id)
+        }) as SlackUser | null;
+        
+        // Auto-create user if not exists
+        if (!user) {
+            const userInfo = await getSlackUserInfoWithEmail(validatedEvent.user, workspace.botToken);
+            
+            const newUser = {
+                _id: new ObjectId(),
+                slackId: validatedEvent.user,
+                workspaceId: String(workspace._id),
+                email: userInfo.email,
+                name: userInfo.name,
+                displayName: userInfo.displayName,
+                image: userInfo.image,
+                analysisFrequency: 'weekly' as const,
+                autoCoachingEnabledChannels: [],
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+            
+            await slackUserCollection.insertOne(newUser);
+            user = newUser as unknown as SlackUser;
+            console.log('🆕 Auto-created user on message event:', validatedEvent.user);
         }
 
         // Check if bot is active in this channel
-        const isChannelActive = await isChannelAccessible(validatedEvent.channel, user.workspaceId);
+        const isChannelActive = await isChannelAccessible(validatedEvent.channel, String(workspace._id));
         if (!isChannelActive) {
             console.log('⏭️ Bot not active in this channel, skipping analysis');
             return;
@@ -226,7 +239,6 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         console.log('🤖 Bot is active in channel, checking user preferences...');
         
         // Check if user has auto-coaching enabled for this specific channel
-        // Default behavior: disabled (empty array = coaching disabled in all channels)
         if (!user.autoCoachingEnabledChannels.includes(validatedEvent.channel)) {
             console.log('⏭️ Auto-coaching not enabled for this channel, skipping analysis');
             return;
@@ -234,18 +246,9 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         console.log('✅ Auto-coaching enabled for this channel, proceeding with analysis');
         
-        // Get workspace bot token for API calls
-        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
-        if (!workspace || !workspace.botToken) {
-            console.error('❌ Workspace not found or missing bot token for user:', user.slackId);
-            return;
-        }
-        
-        // OPTIMIZED: Single comprehensive AI analysis (replaces 4 separate AI calls)
+        // Comprehensive AI analysis
         console.log('🔍 Starting comprehensive message analysis...');
         
-        // Always fetch conversation history for better context
-        console.log('📚 Fetching conversation history for context...');
         const conversationHistory = await fetchConversationHistory(
             validatedEvent.channel,
             workspace.botToken,
@@ -255,7 +258,6 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         
         console.log('Fetched conversation history:', conversationHistory.length, 'messages');
         
-        // Single AI call for all analysis steps
         const analysis = await comprehensiveMessageAnalysis(
             validatedEvent.text,
             conversationHistory
@@ -274,7 +276,7 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         // Track AI analysis completion
         trackEvent(validatedEvent.user, EVENTS.API_AI_ANALYSIS_COMPLETED, {
             user_name: user.name,
-            workspace_id: user.workspaceId,
+            workspace_id: String(workspace._id),
             channel_id: validatedEvent.channel,
             message_length: validatedEvent.text.length,
             analysis_type: 'auto_coaching',
@@ -285,6 +287,7 @@ async function handleMessageEvent(event: Record<string, unknown>) {
             has_improvement: !!analysis.improvedMessage,
             context_messages: conversationHistory.length,
             primary_issue: analysis.reasoning.primaryIssue,
+            subscription_tier: workspace.subscription?.tier || 'FREE',
         });
         
         // If no coaching needed, exit early
@@ -292,9 +295,6 @@ async function handleMessageEvent(event: Record<string, unknown>) {
             return;
         }
         
-
-        
-        // Use the improved message from comprehensive analysis
         if (!analysis.improvedMessage) {
             console.log('❌ No improved message generated, skipping feedback');
             return;
@@ -373,64 +373,61 @@ async function handleMessageEvent(event: Record<string, unknown>) {
         const success = await sendEphemeralMessage(
             validatedEvent.channel,
             validatedEvent.user,
-            "Clarity", // Fallback text
-            workspace.botToken, // Workspace-specific bot token
-            [], // Legacy attachments (empty)
-            blocks // Block Kit blocks
+            "Clarity",
+            workspace.botToken,
+            [],
+            blocks
         );
         
         if (success) {
             console.log('✅ Ephemeral feedback sent successfully');
             
-                    // 🆕 NEW: Save analysis instance with multiple flags and target IDs (Privacy-First: No Message Text)
-        const instanceData = {
-            _id: new ObjectId(),
-            userId: user._id, // Store as ObjectId directly
-            workspaceId: user.workspaceId,
-            channelId: validatedEvent.channel,
-            messageTs: validatedEvent.ts,
-            flagIds: analysis.flags.map(f => f.typeId), // 🎯 Multiple flags
-            targetIds: analysis.targetIds || [], // 🎯 Multiple target user IDs
-            issueDescription: analysis.issueDescription, // AI-extracted issue description (no confidential content)
-            createdAt: new Date(),
-            aiMetadata: {
-                primaryFlagId: primaryFlag.typeId,
-                confidence: primaryFlag.confidence,
-                reasoning: analysis.reasoning.whyNeedsCoaching,
-                suggestedTone: analysis.reasoning.primaryIssue,
-            },
-        };
-        
-        console.log('💾 Storing analysis instance:', {
-            issueDescription: instanceData.issueDescription,
-            flagIds: instanceData.flagIds,
-            targetIds: instanceData.targetIds
-        });
-        
-        await analysisInstanceCollection.insertOne(instanceData);
+            // Save analysis instance
+            const instanceData = {
+                _id: new ObjectId(),
+                userId: user._id,
+                workspaceId: String(workspace._id),
+                channelId: validatedEvent.channel,
+                messageTs: validatedEvent.ts,
+                flagIds: analysis.flags.map(f => f.typeId),
+                targetIds: analysis.targetIds || [],
+                issueDescription: analysis.issueDescription,
+                createdAt: new Date(),
+                aiMetadata: {
+                    primaryFlagId: primaryFlag.typeId,
+                    confidence: primaryFlag.confidence,
+                    reasoning: analysis.reasoning.whyNeedsCoaching,
+                    suggestedTone: analysis.reasoning.primaryIssue,
+                },
+            };
+            
+            console.log('💾 Storing analysis instance:', {
+                issueDescription: instanceData.issueDescription,
+                flagIds: instanceData.flagIds,
+                targetIds: instanceData.targetIds
+            });
+            
+            await analysisInstanceCollection.insertOne(instanceData);
 
-        // Track successful auto coaching trigger (only when message is actually sent)
-        trackEvent(user.slackId, EVENTS.FEATURE_AUTO_COACHING_TRIGGERED, {
-            user_name: user.name,
-            workspace_id: user.workspaceId,
-            channel_id: validatedEvent.channel,
-            flags_found: analysis.flags.map(f => f.type),
-            primary_issue: analysis.reasoning.primaryIssue,
-            has_targets: analysis.targetIds && analysis.targetIds.length > 0,
-            target_count: analysis.targetIds ? analysis.targetIds.length : 0,
-            message_length: validatedEvent.text.length,
-            subscription_tier: user.subscription?.tier || 'FREE',
-        });
+            // Track successful auto coaching trigger
+            trackEvent(user.slackId, EVENTS.FEATURE_AUTO_COACHING_TRIGGERED, {
+                user_name: user.name,
+                workspace_id: String(workspace._id),
+                channel_id: validatedEvent.channel,
+                flags_found: analysis.flags.map(f => f.type),
+                primary_issue: analysis.reasoning.primaryIssue,
+                has_targets: analysis.targetIds && analysis.targetIds.length > 0,
+                target_count: analysis.targetIds ? analysis.targetIds.length : 0,
+                message_length: validatedEvent.text.length,
+                subscription_tier: workspace.subscription?.tier || 'FREE',
+            });
 
-        // Track usage after successful auto-coaching
-        await incrementUsage(validatedEvent.user, 'autoCoaching');
+            // Track usage at workspace level
+            await incrementWorkspaceUsage(workspace, 'autoCoaching');
             console.log('📊 Usage tracked for autoCoaching feature');
         } else {
             console.error('❌ Failed to send ephemeral feedback');
         }
-        
-        // TODO: Phase 5 - Store analysis instance in database
-        // TODO: Phase 6 - Update user's communication patterns for reporting
         
     } catch (error) {
         console.error('Error handling message event:', error);
@@ -451,20 +448,10 @@ async function handleAppUninstall(teamId: string) {
         
         if (!workspace) {
             console.log('⚠️ Workspace not found for team:', teamId);
-            console.log('🔍 Searching all workspaces to debug...');
-            
-            // Debug: List all workspaces to see what we have
-            const allWorkspaces = await workspaceCollection.find({}).toArray();
-            console.log('📋 All workspaces:', allWorkspaces.map(w => ({ 
-                id: w._id, 
-                workspaceId: w.workspaceId, 
-                name: w.name 
-            })));
             return;
         }
         
-        // Deactivate all users in this workspace instead of deleting them
-        // This preserves their subscription, usage history, and settings
+        // Deactivate all users in this workspace
         const result = await slackUserCollection.updateMany(
             { workspaceId: workspace._id.toString() },
             { 
@@ -477,14 +464,14 @@ async function handleAppUninstall(teamId: string) {
         
         console.log(`🔄 Deactivated ${result.modifiedCount} users from workspace ${teamId}`);
         
-        // Clean up botChannels collection - remove all channels for this workspace
+        // Clean up botChannels collection
         const channelResult = await botChannelsCollection.deleteMany({
             workspaceId: workspace._id.toString()
         });
         
         console.log(`🔄 Removed ${channelResult.deletedCount} channels from botChannels collection for workspace ${teamId}`);
         
-        // Deactivate the workspace as well (but keep the record)
+        // Deactivate the workspace
         await workspaceCollection.updateOne(
             { workspaceId: teamId },
             { 
@@ -605,7 +592,7 @@ async function handleBotLeftChannel(event: Record<string, unknown>, teamId: stri
             return;
         }
         
-        // Remove channel from database (no need to verify bot user since channel_left/group_left events are only sent to the bot itself)
+        // Remove channel from database
         const result = await botChannelsCollection.deleteOne({
             channelId,
             workspaceId: workspace._id.toString()
@@ -624,11 +611,10 @@ async function handleBotLeftChannel(event: Record<string, unknown>, teamId: stri
 
 async function notifyUsersAboutNewChannelMonitoring(workspace: Workspace, channelId: string, channelName: string) {
     try {
-        // Find all active users in this workspace who have completed onboarding
+        // Find all active users in this workspace
         const workspaceUsers = await slackUserCollection.find({
-            workspaceId: workspace._id.toString(),
-            isActive: true,
-            hasCompletedOnboarding: true
+            workspaceId: String(workspace._id),
+            isActive: true
         }).toArray();
 
         if (workspaceUsers.length === 0) {
@@ -661,4 +647,4 @@ async function notifyUsersAboutNewChannelMonitoring(workspace: Workspace, channe
     } catch (error) {
         console.error('Error notifying users about new channel monitoring:', error);
     }
-} 
+}

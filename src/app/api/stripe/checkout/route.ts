@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createCheckoutSession } from '@/lib/stripe';
-import { slackUserCollection, workspaceCollection } from '@/lib/db';
+import { workspaceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
-import { SlackUser, STRIPE_PRICE_IDS } from '@/types';
+import { Workspace, STRIPE_PRICE_IDS } from '@/types';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
@@ -10,34 +10,32 @@ import { logError, logInfo } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('user');
+    const workspaceId = searchParams.get('workspace');
     
-    if (!userId) {
-      logError('Missing user parameter in checkout request');
+    if (!workspaceId) {
+      logError('Missing workspace parameter in checkout request');
       return NextResponse.json({ 
-        error: 'Missing user parameter' 
+        error: 'Missing workspace parameter' 
       }, { status: 400 });
     }
     
-    // Get user info for customer creation using MongoDB _id
-    const user = await slackUserCollection.findOne({ 
-      _id: new ObjectId(userId)
-    }) as SlackUser | null;
+    // Get workspace info for customer creation using MongoDB _id
+    const workspace = await workspaceCollection.findOne({ 
+      _id: new ObjectId(workspaceId)
+    }) as Workspace | null;
     
-    if (!user) {
-      logError('User not found for checkout', undefined, { user_id: userId });
+    if (!workspace) {
+      logError('Workspace not found for checkout', undefined, { workspace_id: workspaceId });
       return NextResponse.json({ 
-        error: 'User not found' 
+        error: 'Workspace not found' 
       }, { status: 404 });
     }
     
-    // Note: Upgrade tracking handled by checkout session creation event
-    
-    // Check if user already has Pro subscription
-    if (user.subscription?.tier === 'PRO' && user.subscription?.status === 'active') {
-      logInfo('User already has Pro subscription', { 
-        user_id: user.slackId,
-        subscription_status: user.subscription.status,
+    // Check if workspace already has Pro subscription
+    if (workspace.subscription?.tier === 'PRO' && workspace.subscription?.status === 'active') {
+      logInfo('Workspace already has Pro subscription', { 
+        workspace_id: workspace.workspaceId,
+        subscription_status: workspace.subscription.status,
         endpoint: '/api/stripe/checkout'
       });
       
@@ -46,30 +44,26 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // Create checkout session using MongoDB _id as reference (convert to string)
-    // Fetch workspace to get Slack Team ID for app opening
-    const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
-    const slackTeamId = workspace?.workspaceId;
-
+    // Create checkout session using workspace MongoDB _id as reference
     const session = await createCheckoutSession(
-      user._id.toString(),
+      String(workspace._id),
       STRIPE_PRICE_IDS.PRO_MONTHLY,
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success&upgraded=true${slackTeamId ? `&openSlack=${slackTeamId}` : ''}`,
+      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success&upgraded=true&openSlack=${workspace.workspaceId}`,
       `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=cancelled`
     );
     
     // Track checkout session creation
-    trackEvent(user.slackId, EVENTS.API_SUBSCRIPTION_CHECKOUT_CREATED, {
-      user_name: user.name,
-      workspace_id: user.workspaceId,
+    trackEvent(workspace.adminSlackId, EVENTS.API_SUBSCRIPTION_CHECKOUT_CREATED, {
+      workspace_id: String(workspace._id),
+      workspace_name: workspace.name,
       session_id: session.id,
       price_id: STRIPE_PRICE_IDS.PRO_MONTHLY,
-      amount: 499, // $4.99.00 in cents
-      subscription_tier: user.subscription?.tier || 'FREE',
+      amount: 499, // $4.99 in cents
+      subscription_tier: workspace.subscription?.tier || 'FREE',
     });
     
     logInfo('Stripe checkout session created', { 
-      user_id: user.slackId,
+      workspace_id: workspace.workspaceId,
       session_id: session.id,
       price_id: STRIPE_PRICE_IDS.PRO_MONTHLY,
       endpoint: '/api/stripe/checkout'
@@ -80,14 +74,14 @@ export async function GET(request: NextRequest) {
     
   } catch (error) {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('user');
+    const workspaceId = searchParams.get('workspace');
     
     logError('Stripe checkout error', error instanceof Error ? error : new Error(String(error)), {
-      user_id: userId,
+      workspace_id: workspaceId,
       endpoint: '/api/stripe/checkout'
     });
     
-    trackError(userId || 'anonymous', error instanceof Error ? error : new Error(String(error)), {
+    trackError(workspaceId || 'anonymous', error instanceof Error ? error : new Error(String(error)), {
       endpoint: '/api/stripe/checkout',
       category: ERROR_CATEGORIES.SERVER,
     });
@@ -101,37 +95,33 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, priceId } = body;
+    const { workspaceId, priceId } = body;
     
-    if (!userId) {
+    if (!workspaceId) {
       return NextResponse.json({ 
-        error: 'Missing userId' 
+        error: 'Missing workspaceId' 
       }, { status: 400 });
     }
     
-    // Get user info using MongoDB _id
-    const user = await slackUserCollection.findOne({ 
-      _id: new ObjectId(userId)
-    }) as SlackUser | null;
+    // Get workspace info using MongoDB _id
+    const workspace = await workspaceCollection.findOne({ 
+      _id: new ObjectId(workspaceId)
+    }) as Workspace | null;
     
-    if (!user) {
+    if (!workspace) {
       return NextResponse.json({ 
-        error: 'User not found' 
+        error: 'Workspace not found' 
       }, { status: 404 });
     }
     
     // Use provided price ID or default to Pro monthly
     const selectedPriceId = priceId || STRIPE_PRICE_IDS.PRO_MONTHLY;
     
-    // Fetch workspace to get Slack Team ID for app opening
-    const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
-    const slackTeamId = workspace?.workspaceId;
-
-    // Create checkout session using MongoDB _id as reference (convert to string)
+    // Create checkout session using workspace MongoDB _id as reference
     const session = await createCheckoutSession(
-      user._id.toString(),
+      String(workspace._id),
       selectedPriceId,
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success&upgraded=true${slackTeamId ? `&openSlack=${slackTeamId}` : ''}`,
+      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=success&upgraded=true&openSlack=${workspace.workspaceId}`,
       `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?payment=cancelled`
     );
     

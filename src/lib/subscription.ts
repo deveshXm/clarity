@@ -1,6 +1,7 @@
-import { slackUserCollection } from '@/lib/db';
+import { workspaceCollection } from '@/lib/db';
+import { ObjectId } from 'mongodb';
 import { 
-  SlackUser, 
+  Workspace,
   Subscription, 
   SubscriptionFeature, 
   SubscriptionCheckResult,
@@ -10,237 +11,226 @@ import {
 } from '@/types';
 
 /**
- * Comprehensive subscription validation - fetches user once and validates all features
+ * Comprehensive workspace subscription validation
  * This is the main method to use in command handlers
  */
-export async function validateUserAccess(
-  userId: string, 
+export async function validateWorkspaceAccess(
+  workspace: Workspace, 
   feature: SubscriptionFeature
 ): Promise<SubscriptionCheckResult> {
   'use server';
-    try {
-      // Fetch user once with subscription data
-      const user = await slackUserCollection.findOne({ 
-        slackId: userId, 
-        isActive: true 
-      }) as SlackUser | null;
-      
-      if (!user) {
-        return { 
-          allowed: false, 
-          reason: 'User not found or inactive' 
+  try {
+    // Initialize subscription if missing
+    if (!workspace.subscription) {
+      const subscription = await initializeWorkspaceSubscription(String(workspace._id));
+      workspace.subscription = subscription;
+    }
+    
+    const subscription = workspace.subscription!;
+    const tierConfig = getTierConfig(subscription.tier);
+    
+    // Check if it's a paid-only feature
+    if (isPaidFeature(feature)) {
+      if (!tierConfig.features[feature]) {
+        return {
+          allowed: false,
+          reason: `Feature requires Pro subscription`,
+          upgradeRequired: true,
+          workspace
         };
       }
-      
-      // Initialize subscription if missing (for existing users)
-      if (!user.subscription) {
-        const subscription = await initializeSubscription(userId);
-        user.subscription = subscription;
-      }
-      
-      const subscription = user.subscription!;
-      const tierConfig = getTierConfig(subscription.tier);
-      
-      // Check if it's a paid-only feature
-      if (isPaidFeature(feature)) {
-        if (!tierConfig.features[feature]) {
-          return {
-            allowed: false,
-            reason: `Feature requires Pro subscription`,
-            upgradeRequired: true,
-            user
-          };
-        }
-      }
-      
-      // Check rate limits for usage-based features
-      if (isRateLimitedFeature(feature)) {
-        const limit = tierConfig.monthlyLimits[feature];
-        const currentUsage = subscription.monthlyUsage[feature] || 0;
-        if (currentUsage >= limit) {
-          return {
-            allowed: false,
-            reason: `Monthly limit reached (${currentUsage}/${limit})`,
-            upgradeRequired: subscription.tier === 'FREE', // Only FREE users need upgrade
-            user,
-            remainingUsage: 0,
-            resetDate: subscription.currentPeriodEnd
-          };
-        }
-        
+    }
+    
+    // Check rate limits for usage-based features
+    if (isRateLimitedFeature(feature)) {
+      const limit = tierConfig.monthlyLimits[feature];
+      const currentUsage = subscription.monthlyUsage[feature] || 0;
+      if (currentUsage >= limit) {
         return {
-          allowed: true,
-          user,
-          remainingUsage: limit - currentUsage,
+          allowed: false,
+          reason: `Monthly limit reached (${currentUsage}/${limit})`,
+          upgradeRequired: subscription.tier === 'FREE', // Only FREE workspaces need upgrade
+          workspace,
+          remainingUsage: 0,
           resetDate: subscription.currentPeriodEnd
         };
       }
       
-      return { 
-        allowed: true, 
-        user,
-        remainingUsage: -1 // Unlimited
-      };
-      
-    } catch (error) {
-      console.error('Subscription validation error:', error);
-      return { 
-        allowed: false, 
-        reason: 'Subscription validation failed' 
+      return {
+        allowed: true,
+        workspace,
+        remainingUsage: limit - currentUsage,
+        resetDate: subscription.currentPeriodEnd
       };
     }
-}
-
-/**
- * Initialize subscription for existing users (migration helper)
- */
-export async function initializeSubscription(userId: string): Promise<Subscription> {
-  'use server';
-    const now = new Date();
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
     
-    const subscription: Subscription = {
-      tier: 'FREE',
-      status: 'active',
-      currentPeriodStart: now,
-      currentPeriodEnd: nextMonth,
-      monthlyUsage: {
-        autoCoaching: 0,
-        manualRephrase: 0,
-        personalFeedback: 0,
-      },
-      createdAt: now,
-      updatedAt: now,
+    return { 
+      allowed: true, 
+      workspace,
+      remainingUsage: -1 // Unlimited
     };
     
-    // Update user with subscription
-    await slackUserCollection.updateOne(
-      { slackId: userId },
-      {
-        $set: {
-          subscription,
-          updatedAt: now
-        }
-      }
-    );
-    
-    return subscription;
+  } catch (error) {
+    console.error('Subscription validation error:', error);
+    return { 
+      allowed: false, 
+      reason: 'Subscription validation failed' 
+    };
+  }
 }
 
 /**
- * Increment usage counter after successful feature use
+ * Initialize subscription for workspace (migration helper)
  */
-export async function incrementUsage(userId: string, feature: SubscriptionFeature): Promise<void> {
+export async function initializeWorkspaceSubscription(workspaceId: string): Promise<Subscription> {
   'use server';
-    if (!isRateLimitedFeature(feature)) {
-      return; // No tracking needed for unlimited features
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  
+  const subscription: Subscription = {
+    tier: 'FREE',
+    status: 'active',
+    currentPeriodStart: now,
+    currentPeriodEnd: nextMonth,
+    monthlyUsage: {
+      autoCoaching: 0,
+      manualRephrase: 0,
+      personalFeedback: 0,
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
+  
+  // Update workspace with subscription
+  await workspaceCollection.updateOne(
+    { _id: new ObjectId(workspaceId) },
+    {
+      $set: {
+        subscription,
+        updatedAt: now
+      }
     }
-    
-    await slackUserCollection.updateOne(
-      { slackId: userId },
-      { 
-        $inc: { [`subscription.monthlyUsage.${feature}`]: 1 },
-        $set: { 'subscription.updatedAt': new Date() }
-      }
-    );
+  );
+  
+  return subscription;
 }
 
 /**
- * Reset monthly usage (called by billing cycle webhook)
+ * Increment workspace usage counter after successful feature use
  */
-export async function resetMonthlyUsage(userId: string): Promise<void> {
+export async function incrementWorkspaceUsage(workspace: Workspace, feature: SubscriptionFeature): Promise<void> {
   'use server';
-    await slackUserCollection.updateOne(
-      { slackId: userId },
-      {
-        $set: {
-          'subscription.monthlyUsage': {
-            autoCoaching: 0,
-            manualRephrase: 0,
-            personalFeedback: 0,
-          },
-          'subscription.updatedAt': new Date()
-        }
-      }
-    );
+  if (!isRateLimitedFeature(feature)) {
+    return; // No tracking needed for unlimited features
+  }
+  
+  await workspaceCollection.updateOne(
+    { _id: new ObjectId(String(workspace._id)) },
+    { 
+      $inc: { [`subscription.monthlyUsage.${feature}`]: 1 },
+      $set: { 'subscription.updatedAt': new Date() }
+    }
+  );
 }
 
 /**
- * Update user subscription tier (called by Stripe webhooks)
+ * Reset workspace monthly usage (called by billing cycle webhook)
  */
-export async function updateSubscription(
-  userId: string,
+export async function resetWorkspaceMonthlyUsage(workspaceId: string): Promise<void> {
+  'use server';
+  await workspaceCollection.updateOne(
+    { _id: new ObjectId(workspaceId) },
+    {
+      $set: {
+        'subscription.monthlyUsage': {
+          autoCoaching: 0,
+          manualRephrase: 0,
+          personalFeedback: 0,
+        },
+        'subscription.updatedAt': new Date()
+      }
+    }
+  );
+}
+
+/**
+ * Update workspace subscription (called by Stripe webhooks)
+ */
+export async function updateWorkspaceSubscription(
+  workspaceId: string,
   updates: Partial<Subscription>
 ): Promise<void> {
   'use server';
-    const updateData: Record<string, unknown> = {};
-    
-    Object.entries(updates).forEach(([key, value]) => {
-      updateData[`subscription.${key}`] = value;
-    });
-    
-    updateData['subscription.updatedAt'] = new Date();
-    
-    await slackUserCollection.updateOne(
-      { slackId: userId },
-      { $set: updateData }
-    );
+  const updateData: Record<string, unknown> = {};
+  
+  Object.entries(updates).forEach(([key, value]) => {
+    updateData[`subscription.${key}`] = value;
+  });
+  
+  updateData['subscription.updatedAt'] = new Date();
+  
+  await workspaceCollection.updateOne(
+    { _id: new ObjectId(workspaceId) },
+    { $set: updateData }
+  );
 }
 
 /**
- * Get user's current subscription status and usage
+ * Get workspace's current subscription status and usage
  */
-export async function getSubscriptionStatus(userId: string): Promise<{
+export async function getWorkspaceSubscriptionStatus(workspaceId: string): Promise<{
   subscription: Subscription | null;
   usage: Record<string, { current: number; limit: number; remaining: number }>;
 } | null> {
   'use server';
-    const user = await slackUserCollection.findOne({ 
-      slackId: userId, 
-      isActive: true 
-    }) as SlackUser | null;
-    
-    if (!user?.subscription) {
-      return null;
-    }
-    
-    const tierConfig = getTierConfig(user.subscription.tier);
-    const usage: Record<string, { current: number; limit: number; remaining: number }> = {};
-    
-    // Calculate usage stats for rate-limited features
-    Object.entries(tierConfig.monthlyLimits).forEach(([feature, limit]) => {
-      const current = user.subscription!.monthlyUsage[feature as keyof typeof user.subscription.monthlyUsage] || 0;
-      usage[feature] = {
-        current,
-        limit: limit,
-        remaining: Math.max(0, limit - current)
-      };
-    });
-    
-    return {
-      subscription: user.subscription,
-      usage
+  const workspace = await workspaceCollection.findOne({ 
+    _id: new ObjectId(workspaceId), 
+    isActive: true 
+  }) as Workspace | null;
+  
+  if (!workspace?.subscription) {
+    return null;
+  }
+  
+  const tierConfig = getTierConfig(workspace.subscription.tier);
+  const usage: Record<string, { current: number; limit: number; remaining: number }> = {};
+  
+  // Calculate usage stats for rate-limited features
+  Object.entries(tierConfig.monthlyLimits).forEach(([feature, limit]) => {
+    const current = workspace.subscription!.monthlyUsage[feature as keyof typeof workspace.subscription.monthlyUsage] || 0;
+    usage[feature] = {
+      current,
+      limit: limit,
+      remaining: Math.max(0, limit - current)
     };
+  });
+  
+  return {
+    subscription: workspace.subscription,
+    usage
+  };
 }
 
 /**
- * Check if user needs billing period reset (helper for webhooks)
+ * Check if workspace needs billing period reset (helper for webhooks)
  */
-export async function needsBillingReset(userId: string): Promise<boolean> {
+export async function workspaceNeedsBillingReset(workspaceId: string): Promise<boolean> {
   'use server';
-    const user = await slackUserCollection.findOne({ slackId: userId }) as SlackUser | null;
-    
-    if (!user?.subscription) {
-      return false;
-    }
-    
-    const now = new Date();
-    return now >= user.subscription.currentPeriodEnd;
+  const workspace = await workspaceCollection.findOne({ 
+    _id: new ObjectId(workspaceId) 
+  }) as Workspace | null;
+  
+  if (!workspace?.subscription) {
+    return false;
+  }
+  
+  const now = new Date();
+  return now >= workspace.subscription.currentPeriodEnd;
 }
 
 // Helper functions for generating user-friendly messages
 
-export function generateUpgradeMessage(feature: SubscriptionFeature, reason: string, userMongoId?: string): object {
+export function generateUpgradeMessage(feature: SubscriptionFeature, reason: string, workspaceId?: string): object {
   const featureNames: Record<SubscriptionFeature, string> = {
     autoCoaching: 'Auto Coaching',
     manualRephrase: 'Manual Rephrase',
@@ -250,8 +240,8 @@ export function generateUpgradeMessage(feature: SubscriptionFeature, reason: str
   };
   
   const featureName = featureNames[feature] || feature;
-  const checkoutUrl = userMongoId 
-    ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?user=${encodeURIComponent(userMongoId)}`
+  const checkoutUrl = workspaceId 
+    ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?workspace=${encodeURIComponent(workspaceId)}`
     : `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?tab=pricing`;
   
   const proConfig = getTierConfig('PRO');
@@ -292,7 +282,7 @@ export function generateLimitReachedMessage(
   currentUsage: number, 
   limit: number, 
   resetDate: Date,
-  userMongoId?: string
+  workspaceId?: string
 ): object {
   const featureNames: Record<SubscriptionFeature, string> = {
     autoCoaching: 'Auto Coaching',
@@ -308,8 +298,8 @@ export function generateLimitReachedMessage(
     day: 'numeric' 
   });
   
-  const checkoutUrl = userMongoId 
-    ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?user=${encodeURIComponent(userMongoId)}`
+  const checkoutUrl = workspaceId 
+    ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?workspace=${encodeURIComponent(workspaceId)}`
     : `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs?tab=pricing`;
   
   return {
@@ -320,7 +310,7 @@ export function generateLimitReachedMessage(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `📊 *Monthly Limit Reached*\n\nYou've used all ${limit} ${featureName} requests this month.\n\n*Usage resets:* ${resetDateStr}`
+          text: `📊 *Monthly Limit Reached*\n\nYour workspace has used all ${limit} ${featureName} requests this month.\n\n*Usage resets:* ${resetDateStr}`
         }
       },
       {
@@ -376,7 +366,7 @@ export function generateProLimitReachedMessage(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `📊 *Pro Monthly Limit Reached*\n\nYou've used all ${limit} ${featureName} requests this month.\n\n*Usage resets:* ${resetDateStr}\n\nNeed more? We offer custom pricing for high-volume usage.`
+          text: `📊 *Pro Monthly Limit Reached*\n\nYour workspace has used all ${limit} ${featureName} requests this month.\n\n*Usage resets:* ${resetDateStr}\n\nNeed more? We offer custom pricing for high-volume usage.`
         }
       },
       {

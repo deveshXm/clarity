@@ -20,8 +20,6 @@ export async function GET(request: NextRequest) {
         endpoint: '/api/auth/slack/callback'
     });
 
-
-
     // Track OAuth start (server-side for reliability)
     trackEvent('anonymous', EVENTS.AUTH_SLACK_OAUTH_STARTED, {
         has_code: !!code,
@@ -48,7 +46,7 @@ export async function GET(request: NextRequest) {
         const oauthResponse = await exchangeOAuthCode(code);
         console.log('OAuth response:', JSON.stringify(oauthResponse, null, 2));
         
-        // Basic validation without Zod
+        // Basic validation
         if (!oauthResponse.ok) {
             console.error('Slack OAuth failed:', oauthResponse);
             return NextResponse.redirect(new URL('/?error=oauth_failed', request.url));
@@ -62,64 +60,25 @@ export async function GET(request: NextRequest) {
 
         // Extract workspace and user information
         const { team, authed_user } = oauthResponse;
+        const botClient = new WebClient(oauthResponse.access_token);
         
-        // Create or update workspace (store bot token)
-        const workspaceData = {
-            workspaceId: team.id,
-            name: team.name,
-            domain: team.name?.toLowerCase().replace(/\s+/g, '-') || 'unknown',
-            botToken: oauthResponse.access_token, // Store workspace-specific bot token
-            isActive: true // Reactivate workspace on install
-        };
-
-        const existingWorkspace = await workspaceCollection.findOne({ workspaceId: team.id });
-        let workspaceObjectId: ObjectId;
-
-        if (existingWorkspace) {
-            // Update existing workspace
-            await workspaceCollection.updateOne(
-                { workspaceId: team.id },
-                { 
-                    $set: { 
-                        ...workspaceData, 
-                        updatedAt: new Date() 
-                    } 
-                }
-            );
-            workspaceObjectId = existingWorkspace._id;
-        } else {
-            // Create new workspace
-            const workspaceResult = await workspaceCollection.insertOne({
-                _id: new ObjectId(),
-                ...workspaceData,
-                isActive: true, // Ensure new workspaces are active
-                createdAt: new Date(),
-                updatedAt: new Date()
-            });
-            workspaceObjectId = workspaceResult.insertedId;
-        }
-
-        // Get actual user information using bot token (no identity scopes needed)
-        let actualUserName = 'Slack User';
-        let actualDisplayName = 'Slack User';
-        let userImage = undefined;
+        // Get actual user information (name, email)
+        let adminUserName = 'Slack User';
+        let adminEmail: string | null = null;
         
         try {
-
-            const botClient = new WebClient(oauthResponse.access_token);
             const userInfo = await botClient.users.info({ user: authed_user.id });
             
             if (userInfo.ok && userInfo.user) {
-                actualUserName = userInfo.user.real_name || userInfo.user.name || 'Slack User';
-                actualDisplayName = userInfo.user.profile?.display_name || userInfo.user.real_name || userInfo.user.name || 'Slack User';
-                userImage = userInfo.user.profile?.image_72; // Profile image
+                adminUserName = userInfo.user.real_name || userInfo.user.name || 'Slack User';
+                // Get email from Slack (requires users:read.email scope)
+                adminEmail = userInfo.user.profile?.email || null;
             }
-        } catch (error) {
-            console.log('Could not fetch user info, using defaults:', error);
-            // Fall back to placeholder values - don't fail the OAuth flow
+        } catch (err) {
+            console.log('Could not fetch user info, using defaults:', err);
         }
 
-        // Initialize default subscription for new users
+        // Initialize default subscription for workspace (FREE tier)
         const now = new Date();
         const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
         
@@ -128,6 +87,8 @@ export async function GET(request: NextRequest) {
             status: 'active' as const,
             currentPeriodStart: now,
             currentPeriodEnd: nextMonth,
+            stripeCustomerId: undefined as string | undefined,
+            stripeSubscriptionId: undefined as string | undefined,
             monthlyUsage: {
                 autoCoaching: 0,
                 manualRephrase: 0,
@@ -137,126 +98,134 @@ export async function GET(request: NextRequest) {
             updatedAt: now,
         };
 
-        // Check if user already exists
-        const existingUser = await slackUserCollection.findOne({ 
-            slackId: authed_user.id, 
-            workspaceId: workspaceObjectId.toString() 
-        });
+        // Check if workspace already exists
+        const existingWorkspace = await workspaceCollection.findOne({ workspaceId: team.id });
+        let workspaceObjectId: ObjectId;
+        let isNewWorkspace = false;
 
-        let isNewUser = false;
-        
-        if (existingUser) {
-            // User exists - overwrite all values except subscription usage data
-            logInfo('Reactivating existing user and overwriting all values except usage', { 
-                slack_user_id: authed_user.id,
-                workspace_id: workspaceObjectId.toString()
-            });
+        if (existingWorkspace) {
+            // Update existing workspace - preserve subscription if exists
+            const existingSubscription = existingWorkspace.subscription as typeof defaultSubscription | undefined;
+            const preservedUsage = existingSubscription?.monthlyUsage || defaultSubscription.monthlyUsage;
             
-            // Preserve existing subscription usage data
-            const existingSubscription = (existingUser as Record<string, unknown>).subscription as Record<string, unknown> | undefined;
-            const preservedUsage = existingSubscription?.monthlyUsage || {
-                autoCoaching: 0,
-                manualRephrase: 0,
-                personalFeedback: 0,
-            };
-            
-            // Create updated subscription with preserved usage but fresh subscription data
             const updatedSubscription = {
                 ...defaultSubscription,
-                // Preserve usage data
                 monthlyUsage: preservedUsage,
-                // Preserve subscription tier and status if they exist
                 tier: existingSubscription?.tier || 'FREE',
                 status: existingSubscription?.status || 'active',
                 stripeCustomerId: existingSubscription?.stripeCustomerId,
                 stripeSubscriptionId: existingSubscription?.stripeSubscriptionId,
-                // Update billing period dates
                 currentPeriodStart: existingSubscription?.currentPeriodStart || now,
                 currentPeriodEnd: existingSubscription?.currentPeriodEnd || nextMonth,
             };
             
+            await workspaceCollection.updateOne(
+                { workspaceId: team.id },
+                { 
+                    $set: { 
+                        name: team.name,
+                        domain: team.name?.toLowerCase().replace(/\s+/g, '-') || 'unknown',
+                        botToken: oauthResponse.access_token,
+                        botUserId: oauthResponse.bot_user_id,
+                        adminSlackId: authed_user.id, // Update admin to current installer
+                        hasCompletedOnboarding: existingWorkspace.hasCompletedOnboarding || false, // Preserve if already completed
+                        subscription: updatedSubscription,
+                        isActive: true,
+                        updatedAt: new Date()
+                    } 
+                }
+            );
+            workspaceObjectId = existingWorkspace._id as ObjectId;
+            
+            logInfo('Updated existing workspace', { 
+                workspace_id: team.id,
+                admin_slack_id: authed_user.id
+            });
+        } else {
+            // Create new workspace with admin and subscription
+            isNewWorkspace = true;
+            const workspaceResult = await workspaceCollection.insertOne({
+                _id: new ObjectId(),
+                workspaceId: team.id,
+                name: team.name,
+                domain: team.name?.toLowerCase().replace(/\s+/g, '-') || 'unknown',
+                botToken: oauthResponse.access_token,
+                botUserId: oauthResponse.bot_user_id,
+                adminSlackId: authed_user.id, // Installer becomes admin
+                hasCompletedOnboarding: false, // Workspace needs onboarding
+                subscription: defaultSubscription,
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+            workspaceObjectId = workspaceResult.insertedId;
+            
+            logInfo('Created new workspace', { 
+                workspace_id: team.id,
+                admin_slack_id: authed_user.id,
+                admin_name: adminUserName
+            });
+        }
+
+        // Create or update admin user in slackUserCollection
+        const existingUser = await slackUserCollection.findOne({
+            slackId: authed_user.id,
+            workspaceId: workspaceObjectId.toString()
+        });
+
+        if (!existingUser) {
+            // Create admin user
+            await slackUserCollection.insertOne({
+                _id: new ObjectId(),
+                slackId: authed_user.id,
+                workspaceId: workspaceObjectId.toString(),
+                email: adminEmail,
+                name: adminUserName,
+                displayName: adminUserName,
+                analysisFrequency: 'weekly' as const,
+                autoCoachingEnabledChannels: [],
+                isAdmin: true,
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+            
+            logInfo('Created admin user', {
+                slack_id: authed_user.id,
+                workspace_id: workspaceObjectId.toString(),
+                name: adminUserName
+            });
+        } else {
+            // Update existing user to ensure admin status
             await slackUserCollection.updateOne(
                 { slackId: authed_user.id, workspaceId: workspaceObjectId.toString() },
                 { 
                     $set: { 
-                        // Overwrite ALL fields except usage
-                        id: existingUser.id, // Keep existing ID
-                        email: null, // Reset email to null - user will provide during onboarding
-                        name: actualUserName,
-                        slackId: authed_user.id,
-                        displayName: actualDisplayName,
-                        image: userImage,
-                        emailVerified: true,
-                        timezone: 'America/New_York', // Reset to default
-                        isActive: true, // Reactivate user
-                        analysisFrequency: 'weekly', // Reset to default
-                        autoCoachingDisabledChannels: [], // Reset channel preferences
-                        hasCompletedOnboarding: false, // Reset onboarding - user needs to go through it again
-                        userToken: authed_user.access_token, // Update user token
-                        subscription: updatedSubscription, // Updated subscription with preserved usage
+                        isAdmin: true,
+                        isActive: true,
                         updatedAt: new Date()
-                    }
+                    } 
                 }
             );
             
-            // Identify returning user - simplified identification
-            identifyUser(authed_user.id, {
-                name: actualUserName,
-                slack_user_id: authed_user.id,
-                mongodb_id: existingUser._id.toString(),
-                workspace_id: workspaceObjectId.toString(),
-                workspace_name: team.name,
-                is_returning_user: true,
-                is_reinstall: true,
-                subscription_tier: updatedSubscription.tier,
-                usage_preserved: true,
-            });
-            
-        } else {
-            // New user - create with default subscription
-            isNewUser = true;
-            logInfo('Creating new user', { 
-                slack_user_id: authed_user.id,
-                workspace_id: workspaceObjectId.toString(),
-                workspace_name: team.name
-            });
-            
-            const newUserData = {
-                _id: new ObjectId(),
-                id: new ObjectId().toString(),
-                slackId: authed_user.id,
-                workspaceId: workspaceObjectId.toString(),
-                email: null, // User will provide email during onboarding
-                name: actualUserName,
-                displayName: actualDisplayName,
-                image: userImage,
-                emailVerified: true,
-                timezone: 'America/New_York', // Default timezone
-                isActive: true,
-                analysisFrequency: 'weekly',
-                autoCoachingEnabledChannels: [], // Start with empty array - auto-coaching disabled by default until channels are explicitly enabled
-                hasCompletedOnboarding: false,
-                userToken: authed_user.access_token,
-                subscription: defaultSubscription,
-                createdAt: new Date(),
-                updatedAt: new Date()
-            };
-
-            await slackUserCollection.insertOne(newUserData);
-            
-            // Identify new user - simplified identification
-            identifyUser(authed_user.id, {
-                name: actualUserName,
-                slack_user_id: authed_user.id,
-                mongodb_id: newUserData._id.toString(),
-                workspace_id: workspaceObjectId.toString(),
-                workspace_name: team.name,
-                is_new_user: true,
-                subscription_tier: 'FREE',
+            logInfo('Updated existing user as admin', {
+                slack_id: authed_user.id,
+                workspace_id: workspaceObjectId.toString()
             });
         }
 
-        // Send welcome message to the user
+        // Identify admin user in analytics
+        identifyUser(authed_user.id, {
+            name: adminUserName,
+            email: adminEmail,
+            slack_user_id: authed_user.id,
+            workspace_id: workspaceObjectId.toString(),
+            workspace_name: team.name,
+            is_workspace_admin: true,
+            is_new_workspace: isNewWorkspace,
+        });
+
+        // Send welcome message to the admin
         try {
             const welcomeMessageSent = await sendWelcomeMessage(
                 authed_user.id,
@@ -269,34 +238,35 @@ export async function GET(request: NextRequest) {
             } else {
                 logError('Failed to send welcome message', undefined, { slack_user_id: authed_user.id });
             }
-        } catch (error) {
-            logError('Error sending welcome message', error instanceof Error ? error : new Error(String(error)), {
+        } catch (err) {
+            logError('Error sending welcome message', err instanceof Error ? err : new Error(String(err)), {
                 slack_user_id: authed_user.id
             });
-            // Don't fail the OAuth flow if welcome message fails - just log it
         }
 
-        // Track successful OAuth completion (server-side for reliability)
+        // Track successful OAuth completion
         trackEvent(authed_user.id, EVENTS.AUTH_SLACK_OAUTH_COMPLETED, {
             workspace_id: workspaceObjectId.toString(),
             workspace_name: team.name,
-            is_new_user: isNewUser,
-            is_new_workspace: !existingWorkspace,
-            is_reinstall: existingUser && !isNewUser, // Track if this is a reinstallation
+            is_new_workspace: isNewWorkspace,
+            is_workspace_admin: true,
+            admin_email: adminEmail,
         });
 
-        // Simply redirect to onboarding with user context - no session needed
-        logInfo('OAuth callback successful', { 
+        // Redirect to docs page instead of onboarding webpage
+        // Admin will complete onboarding via Slack modal when they try a command
+        logInfo('OAuth callback successful - redirecting to docs', { 
             slack_user_id: authed_user.id,
             workspace_id: workspaceObjectId.toString(),
-            is_new_user: isNewUser,
+            is_new_workspace: isNewWorkspace,
             workspace_name: team.name
         });
         
-        const onboardingUrl = new URL(process.env.NEXT_PUBLIC_BETTER_AUTH_URL! + '/app/onboarding', request.url);
-        onboardingUrl.searchParams.set('user', authed_user.id);
-        onboardingUrl.searchParams.set('team', team.id);
-        return NextResponse.redirect(onboardingUrl);
+        const docsUrl = new URL(process.env.NEXT_PUBLIC_BETTER_AUTH_URL! + '/docs/getting-started', request.url);
+        docsUrl.searchParams.set('installed', 'true');
+        docsUrl.searchParams.set('openSlack', team.id);
+        docsUrl.searchParams.set('botId', oauthResponse.bot_user_id);
+        return NextResponse.redirect(docsUrl);
 
     } catch (error) {
         logError('Slack OAuth callback error', error instanceof Error ? error : new Error(String(error)), {
@@ -312,4 +282,4 @@ export async function GET(request: NextRequest) {
         
         return NextResponse.redirect(new URL('/?error=callback_error', request.url));
     }
-} 
+}
