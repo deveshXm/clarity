@@ -35,6 +35,7 @@ Workspace {
   name: string,
   domain?: string,
   botToken: string,              // Workspace-specific bot token from OAuth
+  botUserId?: string,            // Bot's Slack user ID (for DM deep links)
   isActive: boolean,
   adminSlackId?: string,         // Slack ID of workspace admin (installer)
   hasCompletedOnboarding: boolean, // Workspace onboarding status
@@ -96,7 +97,7 @@ Subscription {
 ## Key Patterns
 
 ### Workspace-Level vs User-Level Data
-- **Workspace-Level**: `botToken`, `subscription`, `adminSlackId`, `stripeCustomerId`
+- **Workspace-Level**: `botToken`, `botUserId`, `subscription`, `adminSlackId`, `stripeCustomerId`
 - **User-Level**: `analysisFrequency`, `autoCoachingEnabledChannels`, `isAdmin`, `communicationScores`
 
 ### Admin Role Management
@@ -223,11 +224,12 @@ const urlParam = String(workspace._id);
 ## User Lifecycle Management
 
 ### Install/Reinstall Flow
-- Create/update workspace with `botToken` and `adminSlackId`
+- Create/update workspace with `botToken`, `botUserId`, and `adminSlackId`
 - Create admin user in `slackUserCollection` with `isAdmin: true` during OAuth callback
 - Set `isActive: true` on workspace and user
 - Preserve monthly usage data (prevent gaming limits)
 - Send welcome DM with "Complete Setup" button
+- Redirect to docs with deep link params (`openSlack`, `botId`)
 
 ### Uninstall Flow
 - Set `isActive: false` on workspace and all users

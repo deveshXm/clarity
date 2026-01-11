@@ -38,6 +38,14 @@ Onboarding is now done entirely within Slack using modals, not via external webp
 - Opens onboarding modal for channel selection and preferences
 - Non-admin clicking button gets message to ask admin
 
+### Post-Install Deep Link Flow ✅ NEW
+- **OAuth redirect**: After install, redirect to `/docs/getting-started?installed=true&openSlack={teamId}&botId={botUserId}`
+- **PostInstallBanner component**: Shows on docs page after installation
+- **Auto-opens Slack**: Uses `slack://user?team={teamId}&id={botUserId}` to open bot DM directly
+- **Fallback options**: "Open Slack" button + "Open in browser" link
+- **Steps shown**: Clear 3-step guide to complete setup in Slack
+- **Component location**: [src/app/docs/_components/PostInstallBanner.tsx](mdc:src/app/docs/_components/PostInstallBanner.tsx)
+
 ## Modal Structure
 
 ```typescript
@@ -125,10 +133,11 @@ if (callbackId === 'onboarding_modal') {
 
 ## Key Principles
 
-### No External Webpages
-- ❌ Don't redirect to `/app/onboarding`
+### No External Webpages for Onboarding
+- ❌ Don't redirect to `/app/onboarding` for actual onboarding
 - ✅ Open Slack modal via `views.open`
 - ✅ Handle all logic in interactive handler
+- ✅ Docs page shows PostInstallBanner to guide user back to Slack
 
 ### Email Collection
 - ❌ Don't ask for email in modal

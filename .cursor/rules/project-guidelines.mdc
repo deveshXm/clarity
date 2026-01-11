@@ -87,25 +87,27 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **Server Actions**: Database operations in [src/lib/server-actions.ts](mdc:src/lib/server-actions.ts)
 
 ### Key Collections
-- **workspaceCollection**: Workspace data with `botToken`, `adminSlackId`, `subscription`, `hasCompletedOnboarding`
+- **workspaceCollection**: Workspace data with `botToken`, `botUserId`, `adminSlackId`, `subscription`, `hasCompletedOnboarding`
 - **slackUserCollection**: User data with preferences, `isAdmin` flag, no subscription (workspace-level)
 - **botChannelsCollection**: Tracks channels where bot is active
 - **analysisInstanceCollection**: Stores message analysis results
 - **reportCollection**: Generated communication reports
 
 ### Workspace vs User Data
-- **Workspace-Level**: `botToken`, `subscription`, `adminSlackId`, `hasCompletedOnboarding`, `stripeCustomerId`
+- **Workspace-Level**: `botToken`, `botUserId`, `subscription`, `adminSlackId`, `hasCompletedOnboarding`, `stripeCustomerId`
 - **User-Level**: `analysisFrequency`, `autoCoachingEnabledChannels`, `isAdmin`, `communicationScores`
 
 ## Slack Integration Architecture ✅ WORKSPACE-WIDE
 
 ### Installation Flow
 1. **User clicks Install**: OAuth redirects to Slack
-2. **OAuth Callback**: Creates/updates workspace with `botToken`, sets installer as `adminSlackId`
+2. **OAuth Callback**: Creates/updates workspace with `botToken`, `botUserId`, sets installer as `adminSlackId`
 3. **Admin User Created**: Installer created in `slackUserCollection` with `isAdmin: true` during OAuth
 4. **Welcome DM**: Sent to installer with "Complete Setup" button, docs link, and contact info
-5. **Complete Setup Button**: Admin clicks to open onboarding modal for channel selection
-6. **Auto-Create Users**: Other (non-admin) users created on first command interaction
+5. **Redirect to Docs**: User redirected to `/docs/getting-started?installed=true&openSlack={teamId}&botId={botUserId}`
+6. **PostInstallBanner**: Auto-opens Slack DM with bot using `slack://user?team={teamId}&id={botUserId}`
+7. **Complete Setup Button**: Admin clicks button in welcome DM to open onboarding modal
+8. **Auto-Create Users**: Other (non-admin) users created on first command interaction
 
 ### Admin Role Management
 - **First Installer**: Becomes workspace admin (`adminSlackId` on workspace)

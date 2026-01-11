@@ -116,7 +116,7 @@ export function FlagCountBarChart({ flags }: { flags: Array<{ id: number; name: 
 			legend: { position: 'bottom' as const, labels: { boxWidth: 10, boxHeight: 10 } },
 			tooltip: {
 				callbacks: {
-					label: (ctx: TooltipItem<'bar'>) => `${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%`
+					label: (ctx: TooltipItem<'bar'>) => `${ctx.dataset.label}: ${(ctx.parsed.x ?? 0).toFixed(1)}%`
 				}
 			}
 		},
