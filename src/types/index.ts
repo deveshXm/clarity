@@ -475,7 +475,7 @@ export type CreateAccountConfigInput = z.infer<typeof CreateAccountConfigSchema>
 export type UpdateAccountConfigInput = z.infer<typeof UpdateAccountConfigSchema>;
 
 // Example Task (for boilerplate)
-export type ExampleTaskType = (typeof ExampleTaskTypeSchema)['Enum'];
+export type ExampleTaskType = z.infer<typeof ExampleTaskTypeSchema>;
 export type ExampleTaskInput = z.infer<typeof ExampleTaskInputSchema>;
 
 // SUBSCRIPTION SYSTEM TYPES & CONFIG
