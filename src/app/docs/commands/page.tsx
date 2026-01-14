@@ -20,20 +20,15 @@ export default function CommandsPage(): React.ReactElement {
       <h2 id="core-commands" className="mb-4 text-xl font-semibold leading-tight text-neutral-900">Core commands</h2>
       <div className="space-y-8">
         <div>
-          <div className="mb-2 text-base font-semibold text-blue-700">/clarity-personal-feedback</div>
-          <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Get personal feedback based on your recent messages.</p>
-          <CodeBlock label="Usage" code={'/clarity-personal-feedback'} />
-        </div>
-        <div>
           <div className="mb-2 text-base font-semibold text-blue-700">/clarity-rephrase [message]</div>
           <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Get a kinder, clearer version of your message.</p>
           <CodeBlock label="Usage" code={'/clarity-rephrase Can you get this done ASAP?'} />
         </div>
         <div>
           <div className="mb-2 text-base font-semibold text-blue-700">/clarity-settings</div>
-          <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Opens a settings modal to change report frequency and auto‑coaching preferences.</p>
+          <p className="mb-4 text-sm leading-loose text-[#3e3e3f]">Opens a settings modal to manage coaching flags and auto‑coaching preferences.</p>
           <div className="mb-4 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm">
-            <Image src="/settings_modal_command.png" alt="Settings modal showing report frequency and auto coaching options" width={600} height={400} className="h-auto w-full rounded-lg border border-neutral-200/60" />
+            <Image src="/settings_modal_command.png" alt="Settings modal showing coaching flags and auto coaching options" width={600} height={400} className="h-auto w-full rounded-lg border border-neutral-200/60" />
           </div>
           <CodeBlock label="Usage" code={'/clarity-settings'} />
         </div>

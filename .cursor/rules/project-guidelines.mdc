@@ -88,14 +88,14 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 
 ### Key Collections
 - **workspaceCollection**: Workspace data with `botToken`, `botUserId`, `adminSlackId`, `subscription`, `hasCompletedOnboarding`
-- **slackUserCollection**: User data with preferences, `isAdmin` flag, no subscription (workspace-level)
+- **slackUserCollection**: User data with preferences, `isAdmin` flag, `coachingFlags`
 - **botChannelsCollection**: Tracks channels where bot is active
 - **analysisInstanceCollection**: Stores message analysis results
-- **reportCollection**: Generated communication reports
+- **feedbackCollection**: User feedback submissions
 
 ### Workspace vs User Data
 - **Workspace-Level**: `botToken`, `botUserId`, `subscription`, `adminSlackId`, `hasCompletedOnboarding`, `stripeCustomerId`
-- **User-Level**: `analysisFrequency`, `autoCoachingEnabledChannels`, `isAdmin`, `communicationScores`
+- **User-Level**: `autoCoachingEnabledChannels`, `coachingFlags`, `isAdmin`
 
 ## Slack Integration Architecture ✅ WORKSPACE-WIDE
 
@@ -140,12 +140,14 @@ export const SUBSCRIPTION_TIERS = {
   FREE: {
     name: 'Free',
     price: 0,
-    monthlyLimits: { autoCoaching: 50, manualRephrase: 50, personalFeedback: 5 }
+    monthlyLimits: { autoCoaching: 20, manualRephrase: 50 },
+    features: { customFlags: false }
   },
   PRO: {
     name: 'Pro', 
-    price: 1000, // $10/month in cents
-    monthlyLimits: { autoCoaching: 1000, manualRephrase: 1000, personalFeedback: 100 }
+    price: 499, // $4.99/month in cents
+    monthlyLimits: { autoCoaching: 200, manualRephrase: 200 },
+    features: { customFlags: true }
   }
 } as const;
 ```
@@ -176,8 +178,7 @@ export const SUBSCRIPTION_TIERS = {
 ## Slack Commands Available
 - `/clarity-help` - Show help and available commands
 - `/clarity-rephrase [text]` - Rephrase message for clarity
-- `/clarity-personal-feedback` - Get communication feedback
-- `/clarity-settings` - Open settings modal
+- `/clarity-settings` - Open settings modal (manage coaching flags & channels)
 - `/clarity-status` - Check bot status in channel
 - `/clarity-feedback [text]` - Submit feedback
 
@@ -221,4 +222,3 @@ export const SUBSCRIPTION_TIERS = {
 ### Pages
 - **Public**: [src/app/(public)/](mdc:src/app/(public)/) - Landing page
 - **Docs**: [src/app/docs/](mdc:src/app/docs/) - Help documentation
-- **Reports**: [src/app/reports/](mdc:src/app/reports/) - Weekly/monthly report pages

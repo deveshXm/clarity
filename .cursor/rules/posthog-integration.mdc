@@ -61,8 +61,8 @@ trackError(userId || 'anonymous', errorObj, {
 
 ### Feature Usage (Business Intelligence)
 - `FEATURE_AUTO_COACHING_TRIGGERED` - Only when messages actually sent
-- `FEATURE_PERSONAL_FEEDBACK_GENERATED` - With scores and metrics
 - `FEATURE_SETTINGS_UPDATED` - With preference changes
+- `FEATURE_COACHING_FLAGS_UPDATED` - Flag create/edit/delete actions
 
 ### Onboarding Flow
 - `ONBOARDING_USER_VALIDATED` - User validation with context

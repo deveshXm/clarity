@@ -92,7 +92,6 @@ export async function GET(request: NextRequest) {
             monthlyUsage: {
                 autoCoaching: 0,
                 manualRephrase: 0,
-                personalFeedback: 0,
             },
             createdAt: now,
             updatedAt: now,
@@ -174,6 +173,9 @@ export async function GET(request: NextRequest) {
         });
 
         if (!existingUser) {
+            // Import DEFAULT_COACHING_FLAGS inline to avoid circular deps
+            const { DEFAULT_COACHING_FLAGS } = await import('@/types');
+            
             // Create admin user
             await slackUserCollection.insertOne({
                 _id: new ObjectId(),
@@ -182,8 +184,8 @@ export async function GET(request: NextRequest) {
                 email: adminEmail,
                 name: adminUserName,
                 displayName: adminUserName,
-                analysisFrequency: 'weekly' as const,
                 autoCoachingEnabledChannels: [],
+                coachingFlags: [...DEFAULT_COACHING_FLAGS],
                 isAdmin: true,
                 isActive: true,
                 createdAt: new Date(),

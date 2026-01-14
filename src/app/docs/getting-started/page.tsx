@@ -33,17 +33,17 @@ export default function GettingStartedPage(): React.ReactElement {
         <li>Replace your message with one click.</li>
       </ol>
       <div className="mb-8">
-        <CodeBlock label="Try in Slack" code={'/personalfeedback'} />
+        <CodeBlock label="Try in Slack" code={'/clarity-rephrase Can you get this done ASAP?'} />
       </div>
 
       <h2 id="quick-setup" className="mb-4 text-xl font-semibold leading-tight text-neutral-900">Quick setup</h2>
       <ol className="mb-10 list-decimal space-y-3 pl-5 text-sm leading-loose text-[#3e3e3f]">
         <li>Add to Slack → Authorize</li>
-        <li>Type <code className="rounded bg-neutral-100 px-1 py-0.5">/personalfeedback</code> in any channel</li>
-        <li>Try <code className="rounded bg-neutral-100 px-1 py-0.5">/rephrase</code> on your next message</li>
+        <li>Type <code className="rounded bg-neutral-100 px-1 py-0.5">/clarity-rephrase</code> with any message</li>
+        <li>Use <code className="rounded bg-neutral-100 px-1 py-0.5">/clarity-settings</code> to customize your coaching</li>
       </ol>
 
-      <CodeBlock label="Commands" code={'/personalfeedback\n/rephrase Can you get this done ASAP?\n/settings'} />
+      <CodeBlock label="Commands" code={'/clarity-rephrase Can you get this done ASAP?\n/clarity-settings\n/clarity-help'} />
     </main>
   );
 }

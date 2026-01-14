@@ -7,7 +7,6 @@ import {
   Rocket,
   MessageSquare,
   Zap,
-  BarChart3,
   Shield,
   Wrench,
   ArrowUpRight,
@@ -68,19 +67,6 @@ export default function HelpPage(): React.ReactElement {
           </div>
           <div className="mb-1 text-sm font-semibold text-neutral-900">Auto coaching</div>
           <p className="text-sm leading-loose text-neutral-600">How suggestions appear and work.</p>
-        </Link>
-
-        <Link href="/docs/reports" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">
-          <div className="mb-3 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200/60 bg-neutral-50">
-              <BarChart3 size={18} className="text-neutral-800" />
-            </div>
-            <div className="ml-auto hidden text-neutral-400 group-hover:text-neutral-800 md:block">
-              <ArrowUpRight size={16} />
-            </div>
-          </div>
-          <div className="mb-1 text-sm font-semibold text-neutral-900">Reports</div>
-          <p className="text-sm leading-loose text-neutral-600">Scheduled summaries and highlights.</p>
         </Link>
 
         <Link href="/docs/privacy" className="group relative rounded-2xl border border-neutral-200/60 bg-white p-5 shadow-sm transition-all hover:shadow hover:border-neutral-900">

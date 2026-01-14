@@ -25,19 +25,16 @@ export const EVENTS = {
   // === FEATURE USAGE (Backend) ===
   FEATURE_AUTO_COACHING_TRIGGERED: 'feature:auto_coaching_triggered',
   FEATURE_MESSAGE_REPLACED: 'feature:message_replaced',
-  FEATURE_PERSONAL_FEEDBACK_GENERATED: 'feature:personal_feedback_generated',
   FEATURE_SETTINGS_UPDATED: 'feature:settings_updated',
   FEATURE_FEEDBACK_SUBMITTED: 'feature:feedback_submitted',
   FEATURE_ADMIN_TRANSFERRED: 'feature:admin_transferred',
+  FEATURE_COACHING_FLAGS_UPDATED: 'feature:coaching_flags_updated',
   
   // === USAGE LIMITS ===
   LIMITS_USAGE_LIMIT_REACHED: 'limits:usage_limit_reached',
   LIMITS_UPGRADE_PROMPT_SHOWN: 'limits:upgrade_prompt_shown',
   LIMITS_FEATURE_ACCESS_DENIED: 'limits:feature_access_denied',
   LIMITS_ONBOARDING_REQUIRED: 'limits:onboarding_required',
-
-  // === REPORTS ===
-  REPORT_VIEWED: 'report:viewed',
   
   // === ERRORS (Simplified) ===
   ERROR_SERVER: 'error:server_error',
@@ -47,13 +44,11 @@ export const EVENTS = {
 } as const;
 
 export const ONBOARDING_STEPS = {
-  FREQUENCY: 'frequency',
   CHANNELS: 'channels', 
   PAYMENT: 'payment',
 } as const;
 
 export const SLASH_COMMANDS = {
-  PERSONAL_FEEDBACK: '/personalfeedback',
   REPHRASE: '/rephrase',
   SETTINGS: '/settings',
   HELP: '/clarity-help',
@@ -74,5 +69,4 @@ export const ERROR_CATEGORIES = {
 export const FEATURES = {
   AUTO_COACHING: 'autoCoaching',
   MANUAL_REPHRASE: 'manualRephrase',
-  PERSONAL_FEEDBACK: 'personalFeedback',
 } as const;

@@ -110,9 +110,9 @@ Per page, the top of the content must appear in this order:
 - Do not mention environment variables, tokens, or APIs.
 - **Branding**: Always use "Clarity" as the app name, never "Your App" or generic references.
 - Use Slack‑first steps and examples:
-  - `/personalfeedback` for personal analysis.
-  - `/rephrase <message>` to improve tone.
-  - `/settings` to open settings modal (not command parameters).
+  - `/clarity-rephrase <message>` to improve tone.
+  - `/clarity-settings` to open settings modal (manage coaching flags & channels).
+  - `/clarity-help` to see available commands.
 - Examples must be shown within the first 6 lines of the page or immediately after the screenshot.
 - **Settings Integration**: Document how features can be toggled via `/settings` command across relevant pages.
 
@@ -124,8 +124,7 @@ Per page, the top of the content must appear in this order:
 ## Per‑Page Kicker Labels (Sentence Case)
 - Getting Started: "Get started"
 - Commands: "Core"  
-- Auto Coaching: "Core" (formerly Real‑time Analysis)
-- Reports: "Core"
+- Auto Coaching: "Core"
 - Privacy & Security: "Reference"
 - Troubleshooting: "Reference"
 
@@ -164,14 +163,13 @@ Don't:
 - Left nav and content scroll independently; three-column layout works.
 
 ## Implementation Notes (where to look)
-- Welcome & section grid: [`src/app/app/help/page.tsx`](mdc:src/app/app/help/page.tsx)
+- Welcome & section grid: [`src/app/docs/page.tsx`](mdc:src/app/docs/page.tsx)
 - Subpages: 
-  - Getting Started: [`src/app/app/help/getting-started/page.tsx`](mdc:src/app/app/help/getting-started/page.tsx)
-  - Commands: [`src/app/app/help/commands/page.tsx`](mdc:src/app/app/help/commands/page.tsx)
-  - Auto Coaching: [`src/app/app/help/auto-coaching/page.tsx`](mdc:src/app/app/help/auto-coaching/page.tsx)
-  - Reports: [`src/app/app/help/reports/page.tsx`](mdc:src/app/app/help/reports/page.tsx)
-  - Privacy: [`src/app/app/help/privacy/page.tsx`](mdc:src/app/app/help/privacy/page.tsx)
-  - Troubleshooting: [`src/app/app/help/troubleshooting/page.tsx`](mdc:src/app/app/help/troubleshooting/page.tsx)
+  - Getting Started: [`src/app/docs/getting-started/page.tsx`](mdc:src/app/docs/getting-started/page.tsx)
+  - Commands: [`src/app/docs/commands/page.tsx`](mdc:src/app/docs/commands/page.tsx)
+  - Auto Coaching: [`src/app/docs/auto-coaching/page.tsx`](mdc:src/app/docs/auto-coaching/page.tsx)
+  - Privacy: [`src/app/docs/privacy/page.tsx`](mdc:src/app/docs/privacy/page.tsx)
+  - Troubleshooting: [`src/app/docs/troubleshooting/page.tsx`](mdc:src/app/docs/troubleshooting/page.tsx)
 
 ## Copy Tone & Microcopy
 - **Sentence case everywhere**: Navigation, headings, labels all use sentence case
@@ -189,10 +187,10 @@ Don't:
 
 ## Recent Content Improvements (2025)
 - **Branding consistency**: All "Your App" references updated to "Clarity"
-- **Navigation fixes**: Corrected `/realtime` → `/auto-coaching` links, removed non-existent `/features` page
-- **Settings documentation**: Added comprehensive `/settings` modal information across relevant pages
-- **Command accuracy**: Updated `/settings` documentation to reflect modal behavior (not CLI parameters)
-- **Cross-references**: Reports and auto coaching pages now document settings toggles
+- **Navigation fixes**: Corrected links, removed non-existent pages
+- **Settings documentation**: Added comprehensive `/clarity-settings` modal information with coaching flags
+- **Command accuracy**: Updated command documentation to use `/clarity-` prefix
+- **Coaching flags**: New customizable coaching focus areas feature documented
 - **Import fixes**: Corrected double-slash import paths in components
 - **Visual spacing**: Enhanced section separation with `mt-8`/`mt-12` for better content hierarchy
 

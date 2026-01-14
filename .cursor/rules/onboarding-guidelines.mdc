@@ -16,8 +16,7 @@ Onboarding is now done entirely within Slack using modals, not via external webp
 ### Modal Flow
 1. **Welcome Step**: Brief intro to Clarity features
 2. **Channel Selection**: Choose channels for auto-coaching (checkboxes)
-3. **Frequency Selection**: Weekly or monthly report preference
-4. **Completion**: Save preferences and mark `hasCompletedOnboarding: true`
+3. **Completion**: Save preferences and mark `hasCompletedOnboarding: true`
 
 ## Implementation Files
 
@@ -74,24 +73,6 @@ const modal = {
         options: channelOptions
       },
       label: { type: 'plain_text', text: 'Enable auto-coaching in channels' }
-    },
-    // Frequency selection (radio buttons)
-    {
-      type: 'input',
-      block_id: 'frequency_block',
-      element: {
-        type: 'radio_buttons',
-        action_id: 'report_frequency',
-        initial_option: {
-          text: { type: 'plain_text', text: 'Weekly' },
-          value: 'weekly'
-        },
-        options: [
-          { text: { type: 'plain_text', text: 'Weekly' }, value: 'weekly' },
-          { text: { type: 'plain_text', text: 'Monthly' }, value: 'monthly' }
-        ]
-      },
-      label: { type: 'plain_text', text: 'Report frequency' }
     }
   ],
   submit: { type: 'plain_text', text: 'Complete Setup' }
@@ -105,14 +86,12 @@ const modal = {
 if (callbackId === 'onboarding_modal') {
   const values = payload.view.state.values;
   const selectedChannels = values.channels_block?.selected_channels?.selected_options || [];
-  const frequency = values.frequency_block?.report_frequency?.selected_option?.value || 'weekly';
   
   // Update user preferences
   await slackUserCollection.updateOne(
     { slackId: userId, workspaceId: workspace._id.toString() },
     {
       $set: {
-        analysisFrequency: frequency,
         autoCoachingEnabledChannels: selectedChannels.map(c => c.value),
         hasCompletedOnboarding: true,
         updatedAt: new Date()

@@ -14,16 +14,16 @@ const FEATURE_ITEMS: { title: string; desc: string; img: string; tint: string }[
       "linear-gradient(180deg, rgba(56,189,248,0.14) 0%, rgba(96,165,250,0.12) 100%)",
   },
   {
-    title: "Personal feedback",
-    desc: "Friendly insights on your patterns with simple ideas to try next.",
-    img: "/personal_feedback_command.png",
+    title: "Manual rephrase",
+    desc: "Check any message before sending with /clarity-rephrase command.",
+    img: "/rephrase_command.png",
     tint:
       "linear-gradient(180deg, rgba(99,102,241,0.14) 0%, rgba(34,211,238,0.12) 100%)",
   },
   {
-    title: "Reports",
-    desc: "Clear weekly or monthly summaries with trends and top examples.",
-    img: "/weekly_report.png",
+    title: "Custom flags",
+    desc: "Choose what to focus on—customize your coaching experience.",
+    img: "/settings_modal_command.png",
     tint:
       "linear-gradient(180deg, rgba(34,211,238,0.14) 0%, rgba(56,189,248,0.12) 100%)",
   },

@@ -15,7 +15,7 @@ export default function NonAdminInstallGuide(): React.ReactElement {
     { file: 'step-08.jpeg', title: 'Approve the app in Admin Console (admin)', note: 'Add the app to the allowed list for your workspace.' },
     { file: 'step-09.jpeg', title: 'Re‑try “Add to Slack”', note: 'Once approved, the install button will proceed normally.' },
     { file: 'step-10.jpeg', title: 'Authorize permissions', note: 'Review scopes and click “Allow” to finish installation.' },
-    { file: 'step-11.jpeg', title: 'You are all set', note: 'Run /personalfeedback or /rephrase in Slack to get started.' },
+    { file: 'step-11.jpeg', title: 'You are all set', note: 'Run /clarity-rephrase or /clarity-help in Slack to get started.' },
   ];
 
   return (
@@ -52,7 +52,7 @@ export default function NonAdminInstallGuide(): React.ReactElement {
         <ul className="mt-2 list-disc pl-5 text-sm leading-loose text-[#3e3e3f]">
           <li>Still blocked? Ask an admin to approve the app and allow installing external apps.</li>
           <li>No admin access at all? Try installing in a dev/sandbox workspace to evaluate first.</li>
-          <li>Once installed, open Slack and run <code className="rounded bg-neutral-100 px-1 py-0.5">/personalfeedback</code> to begin.</li>
+          <li>Once installed, open Slack and run <code className="rounded bg-neutral-100 px-1 py-0.5">/clarity-help</code> to begin.</li>
         </ul>
         <div className="mt-2 text-sm text-[#3e3e3f]">
           Return to the <Link href="/docs/getting-started">Quick start</Link> when installation is complete.

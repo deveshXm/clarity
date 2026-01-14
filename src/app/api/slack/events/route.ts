@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible, getSlackUserInfoWithEmail } from '@/lib/slack';
 import { workspaceCollection, slackUserCollection, botChannelsCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
-import { SlackEventSchema, Workspace, SlackUser } from '@/types';
+import { SlackEventSchema, Workspace, SlackUser, DEFAULT_COACHING_FLAGS } from '@/types';
 import { comprehensiveMessageAnalysis } from '@/lib/ai';
 import { validateWorkspaceAccess, incrementWorkspaceUsage } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
@@ -217,8 +217,8 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                 name: userInfo.name,
                 displayName: userInfo.displayName,
                 image: userInfo.image,
-                analysisFrequency: 'weekly' as const,
                 autoCoachingEnabledChannels: [],
+                coachingFlags: [...DEFAULT_COACHING_FLAGS],
                 isActive: true,
                 createdAt: new Date(),
                 updatedAt: new Date()
@@ -258,9 +258,13 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         
         console.log('Fetched conversation history:', conversationHistory.length, 'messages');
         
+        // Get user's coaching flags (or defaults if not set)
+        const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
+        
         const analysis = await comprehensiveMessageAnalysis(
             validatedEvent.text,
-            conversationHistory
+            conversationHistory,
+            flags
         );
         
         console.log('Comprehensive analysis result:', {

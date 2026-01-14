@@ -95,7 +95,6 @@ export async function initializeWorkspaceSubscription(workspaceId: string): Prom
     monthlyUsage: {
       autoCoaching: 0,
       manualRephrase: 0,
-      personalFeedback: 0,
     },
     createdAt: now,
     updatedAt: now,
@@ -145,7 +144,6 @@ export async function resetWorkspaceMonthlyUsage(workspaceId: string): Promise<v
         'subscription.monthlyUsage': {
           autoCoaching: 0,
           manualRephrase: 0,
-          personalFeedback: 0,
         },
         'subscription.updatedAt': new Date()
       }
@@ -234,9 +232,7 @@ export function generateUpgradeMessage(feature: SubscriptionFeature, reason: str
   const featureNames: Record<SubscriptionFeature, string> = {
     autoCoaching: 'Auto Coaching',
     manualRephrase: 'Manual Rephrase',
-    personalFeedback: 'Personal Feedback',
-    reports: 'Reports',
-    advancedReportAnalytics: 'Advanced Report Analytics'
+    customFlags: 'Custom Coaching Flags'
   };
   
   const featureName = featureNames[feature] || feature;
@@ -286,10 +282,8 @@ export function generateLimitReachedMessage(
 ): object {
   const featureNames: Record<SubscriptionFeature, string> = {
     autoCoaching: 'Auto Coaching',
-    manualRephrase: 'Manual Rephrase', 
-    personalFeedback: 'Personal Feedback',
-    reports: 'Reports',
-    advancedReportAnalytics: 'Advanced Report Analytics'
+    manualRephrase: 'Manual Rephrase',
+    customFlags: 'Custom Coaching Flags'
   };
   
   const featureName = featureNames[feature] || feature;
@@ -344,10 +338,8 @@ export function generateProLimitReachedMessage(
 ): object {
   const featureNames: Record<SubscriptionFeature, string> = {
     autoCoaching: 'Auto Coaching',
-    manualRephrase: 'Manual Rephrase', 
-    personalFeedback: 'Personal Feedback',
-    reports: 'Reports',
-    advancedReportAnalytics: 'Advanced Report Analytics'
+    manualRephrase: 'Manual Rephrase',
+    customFlags: 'Custom Coaching Flags'
   };
   
   const featureName = featureNames[feature] || feature;

@@ -24,7 +24,6 @@ export default function PrivacyPage(): React.ReactElement {
       <ol className="list-decimal space-y-3 pl-5 text-sm leading-loose text-[#3e3e3f]">
         <li>Read messages in channels where you invite the app.</li>
         <li>Send private suggestions that only you can see.</li>
-        <li>Send you personal reports via direct message.</li>
         <li>Use your name to make messages feel personal.</li>
       </ol>
     </main>

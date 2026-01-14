@@ -172,52 +172,6 @@ export async function getWorkspaceActiveChannels(workspaceId: string) {
     }
 }
 
-// Save latest communication score on Slack user
-export async function saveCommunicationScore(
-    userId: string,
-    period: 'weekly' | 'monthly',
-    score: number,
-    meta?: { reportId?: string }
-): Promise<ServerActionResult<{ weekly?: { score: number; reportId?: string; updatedAt: Date }, monthly?: { score: number; reportId?: string; updatedAt: Date } }>> {
-    try {
-        if (!userId) {
-            return { success: false, error: 'Missing userId' };
-        }
-
-        if (period !== 'weekly' && period !== 'monthly') {
-            return { success: false, error: 'Invalid period' };
-        }
-
-        if (typeof score !== 'number' || score < 0 || score > 100) {
-            return { success: false, error: 'Invalid score' };
-        }
-
-        const _id = new ObjectId(userId);
-
-        const updatedAt = new Date();
-        const fieldPath = `communicationScores.${period}` as const;
-
-        const update: Record<string, unknown> = {};
-        update[fieldPath] = {
-            score,
-            reportId: meta?.reportId,
-            updatedAt
-        };
-
-        const result = await slackUserCollection.findOneAndUpdate(
-            { _id },
-            { $set: update },
-            { returnDocument: 'after' }
-        );
-
-        const scores = (result?.communicationScores || {}) as { weekly?: { score: number; reportId?: string; updatedAt: Date }, monthly?: { score: number; reportId?: string; updatedAt: Date } };
-
-        return { success: true, data: scores };
-    } catch (error) {
-        console.error('Error saving communication score:', error);
-        return { success: false, error: 'Failed to save communication score' };
-    }
-}
 
 // Get workspace by team ID (for Slack commands)
 export async function getWorkspaceByTeamId(teamId: string) {

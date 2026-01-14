@@ -1,7 +1,7 @@
 import { WebClient } from '@slack/web-api';
 import * as crypto from 'crypto';
 import { botChannelsCollection } from './db';
-import { SlackChannel, SlackUser, SUBSCRIPTION_TIERS, Report } from '@/types';
+import { SlackChannel, SlackUser, SUBSCRIPTION_TIERS } from '@/types';
 
 // OAuth configuration
 export const slackOAuthConfig = {
@@ -363,14 +363,14 @@ export const sendWelcomeMessage = async (
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*What I do for you:*\n• Give you private suggestions to improve your messages\n• Help you rephrase text to be clearer and more effective\n• Send you personal weekly or monthly communication insights\n• Point out areas like vagueness or tone that could be improved"
+                    text: "*What I do for you:*\n• Give you private suggestions to improve your messages\n• Help you rephrase text to be clearer and more effective\n• Let you customize what I focus on with coaching flags\n• Point out areas like vagueness or tone that could be improved"
                 }
             },
             {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*Available commands:*\n• `/clarity-personal-feedback` - Get insights on your recent messages\n• `/clarity-rephrase [your message]` - Get a clearer version of any text\n• `/clarity-settings` - Customize your preferences and billing\n• `/clarity-help` - View all available commands and features"
+                    text: "*Available commands:*\n• `/clarity-rephrase [your message]` - Get a clearer version of any text\n• `/clarity-settings` - Customize your coaching flags and preferences\n• `/clarity-status` - Check if coaching is active in a channel\n• `/clarity-help` - View all available commands and features"
                 }
             },
             {
@@ -453,7 +453,7 @@ I noticed you haven't finished setting up your communication coaching yet.
 
 It only takes 2 minutes to:
 ✅ Choose which channels I should help you in
-✅ Set your feedback frequency (weekly or monthly reports)
+✅ Customize your coaching focus areas
 ✅ Invite teammates who might benefit too
 
 Your future self will thank you! 💪`;
@@ -470,7 +470,7 @@ Your future self will thank you! 💪`;
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "It only takes 2 minutes to:\n✅ Choose which channels I should help you in\n✅ Set your feedback frequency (weekly or monthly reports)\n✅ Invite teammates who might benefit too"
+                    text: "It only takes 2 minutes to:\n✅ Choose which channels I should help you in\n✅ Customize your coaching focus areas\n✅ Invite teammates who might benefit too"
                 }
             },
             {
@@ -791,201 +791,6 @@ export const sendChannelMonitoringNotification = async (
     }
 };
 
-// 🔔 NEW: Weekly report DM delivery
-export const sendWeeklyReportDM = async (
-    user: SlackUser,
-    report: Report,
-    botToken: string
-): Promise<boolean> => {
-    const { getFlagInfo, getFlagEmoji } = await import('@/types');
-
-    const blocks: unknown[] = [
-        {
-            type: "header",
-            text: { type: "plain_text", text: "📊 Your Weekly Communication Report" }
-        },
-        {
-            type: "section",
-            text: {
-                type: "mrkdwn",
-                text: `*Communication Score: ${report.communicationScore}/10* ${
-                    report.scoreChange > 0 ? '📈' :
-                    report.scoreChange < 0 ? '📉' : '➡️'
-                }\n*${Math.abs(report.scoreChange)} points ${
-                    report.scoreChange > 0 ? 'improvement' :
-                    report.scoreChange < 0 ? 'decline' : 'change'
-                } from last week*`
-            }
-        },
-        {
-            type: "section",
-            text: {
-                type: "mrkdwn",
-                text: `*This week:* ${report.currentPeriod.flaggedMessages} improvements from ${report.currentPeriod.totalMessages} messages\n\n*Top areas to focus on:*\n${
-                    (report.currentPeriod.flagBreakdown || []).slice(0, 3).map((flag) => {
-                        const flagInfo = getFlagInfo(flag.flagId);
-                        return `• ${getFlagEmoji(flag.flagId)} ${flagInfo?.name || 'Unknown'} (${flag.count ?? 0} times)`;
-                    }).join('\n') || '• None'
-                }`
-            }
-        },
-        {
-            type: "section",
-            text: {
-                type: "mrkdwn",
-                text: `*💡 Key Insight*\n${(report.keyInsights && report.keyInsights[0]) || 'Keep up the great work!'}\n\n*🤝 Communication Partners:*\n${
-                    (report.currentPeriod.partnerAnalysis || [])
-                        .filter((p) => (p.messagesExchanged ?? 0) > 0)
-                        .slice()
-                        .sort((a, b) => (b.messagesExchanged ?? 0) - (a.messagesExchanged ?? 0))
-                        .slice(0, 3)
-                        .map((partner) => `• ${partner.partnerName} (${partner.messagesExchanged} instances)`)
-                        .join('\n') || '• None'
-                }`
-            }
-        }
-    ];
-
-    // Add achievements if any
-    if (report.achievements.length > 0) {
-        blocks.push({
-            type: "section",
-            text: {
-                type: "mrkdwn",
-                text: `*🏆 Achievements:*\n${report.achievements.map((achievement) =>
-                    `${achievement.icon} ${achievement.description}`
-                ).join('\n')}`
-            }
-        });
-    }
-
-    // Top flagged messages (examples) as its own section before action buttons
-    if (Array.isArray(report.messageExamples) && report.messageExamples.length > 0) {
-        blocks.push({
-            type: "section",
-            text: { type: "mrkdwn", text: "*Top flagged messages*" }
-        });
-
-        const top = report.messageExamples.slice(0, 2);
-        top.forEach((ex, idx) => {
-            const summaryText = ex.summary && ex.summary.trim() 
-                ? ex.summary.slice(0, 120)
-                : 'Communication issue detected';
-                
-            blocks.push({
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: `• ${summaryText}`
-                },
-                accessory: {
-                    type: "button",
-                    text: { type: "plain_text", text: "Open" },
-                    url: `slack://channel?team=T123456&id=${ex.channelId}&message=${ex.messageTs}`,
-                    action_id: `open_example_${idx}`
-                }
-            } as unknown as { type: string; text: { type: string; text: string }; accessory?: unknown });
-        });
-    }
-
-    // Action buttons
-    const actionBlock = {
-        type: "actions",
-        elements: [
-            {
-                type: "button",
-                text: { type: "plain_text", text: "📈 View Detailed Report" },
-                style: "primary",
-                url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://localhost:3000'}/reports/weekly/${report.reportId}`
-            }
-        ]
-    };
-
-    // (Examples now appear in a dedicated section above; no extra buttons here)
-
-    blocks.push(actionBlock);
-
-    return await sendDirectMessage(user.slackId, '', botToken, blocks);
-};
-
-// 🔔 NEW: Monthly report DM delivery
-export const sendMonthlyReportDM = async (
-    user: SlackUser,
-    report: Report,
-    botToken: string
-): Promise<boolean> => {
-    const { getFlagInfo, getFlagEmoji } = await import('@/types');
-
-    const improvingFlags = report.chartMetadata.flagTrends.filter((f) => f.trend === 'down').slice(0, 2);
-    const concerningFlags = report.chartMetadata.flagTrends.filter((f) => f.trend === 'up').slice(0, 2);
-
-    const blocks: unknown[] = [
-        {
-            type: "header",
-            text: { type: "plain_text", text: "📈 Your Monthly Communication Report" }
-        },
-        {
-            type: "section",
-            text: {
-                type: "mrkdwn",
-                text: `*Communication Score: ${report.communicationScore}/100* ${
-                    report.scoreChange > 0 ? '🚀' :
-                    report.scoreChange < 0 ? '⚠️' : '➡️'
-                }\n*${Math.abs(report.scoreChange)} points ${
-                    report.scoreChange > 0 ? 'improvement' :
-                    report.scoreChange < 0 ? 'change' : 'change'
-                } from last month*`
-            }
-        },
-        {
-            type: "section",
-            text: {
-                type: "mrkdwn",
-                text: `*This month:* ${report.currentPeriod.flaggedMessages} improvements from ${report.currentPeriod.totalMessages} messages\n\n${
-                    improvingFlags.length > 0 ?
-                    `*🟢 Areas showing improvement:*\n${improvingFlags.map((flag) => {
-                        const flagInfo = getFlagInfo(flag.flagId);
-                        return `• ${getFlagEmoji(flag.flagId)} ${flagInfo?.name} (-${Math.abs(flag.changePercent)}%)`;
-                    }).join('\n')}\n\n` : ''
-                }${
-                    concerningFlags.length > 0 ?
-                    `*🔴 Areas needing attention:*\n${concerningFlags.map((flag) => {
-                        const flagInfo = getFlagInfo(flag.flagId);
-                        return `• ${getFlagEmoji(flag.flagId)} ${flagInfo?.name} (+${flag.changePercent}%)`;
-                    }).join('\n')}` : ''
-                }`
-            }
-        },
-        {
-            type: "section",
-            text: {
-                type: "mrkdwn",
-                text: `*🤝 Communication Partners:*\n${
-                    (report.currentPeriod.partnerAnalysis || [])
-                        .slice()
-                        .sort((a, b) => (b.messagesExchanged ?? 0) - (a.messagesExchanged ?? 0))
-                        .slice(0, 3)
-                        .map((partner) => `${partner.partnerName} (${partner.messagesExchanged ?? 0} instances)`)
-                        .join(' • ') || 'None'
-                }\n\n*💡 Monthly Insight:* ${report.recommendations[0] || 'Keep practicing your improved communication habits!'}`
-            }
-        },
-        {
-            type: "actions",
-            elements: [
-                {
-                    type: "button",
-                    text: { type: "plain_text", text: "📊 View Full Analytics" },
-                    style: "primary",
-                    url: `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'https://localhost:3000'}/reports/monthly/${report.reportId}`
-                }
-            ]
-        }
-    ];
-
-    return await sendDirectMessage(user.slackId, '', botToken, blocks);
-};
-
 // Open workspace onboarding modal for admin
 export const openOnboardingModal = async (
     triggerId: string,
@@ -1102,7 +907,7 @@ export const openOnboardingModal = async (
                     type: 'section',
                     text: {
                         type: 'mrkdwn',
-                        text: `*Pro Plan* - $${SUBSCRIPTION_TIERS.PRO.price}/month\n${SUBSCRIPTION_TIERS.PRO.description}\n• ${SUBSCRIPTION_TIERS.PRO.monthlyLimits.autoCoaching} auto-coaching/mo\n• ${SUBSCRIPTION_TIERS.PRO.monthlyLimits.manualRephrase} manual rephrase/mo\n• Advanced analytics & reports`
+                        text: `*Pro Plan* - $${SUBSCRIPTION_TIERS.PRO.price}/month\n${SUBSCRIPTION_TIERS.PRO.description}\n• ${SUBSCRIPTION_TIERS.PRO.monthlyLimits.autoCoaching} auto-coaching/mo\n• ${SUBSCRIPTION_TIERS.PRO.monthlyLimits.manualRephrase} manual rephrase/mo\n• Custom coaching flags`
                     },
                     accessory: {
                         type: 'button',
@@ -1238,7 +1043,7 @@ export const getSlackUserInfoWithEmail = async (
     }
 };
 
-// Open admin transfer modal
+// Open admin transfer modal (push onto existing modal stack)
 export const openAdminTransferModal = async (
     triggerId: string,
     botToken: string,
@@ -1260,7 +1065,7 @@ export const openAdminTransferModal = async (
             },
             close: {
                 type: 'plain_text' as const,
-                text: 'Cancel'
+                text: 'Back'
             },
             blocks: [
                 {
@@ -1299,9 +1104,10 @@ export const openAdminTransferModal = async (
             private_metadata: JSON.stringify({ currentAdminId })
         };
 
-        await workspaceSlack.views.open({
+        // Use views.push since we're opening from within another modal (settings)
+        await workspaceSlack.views.push({
             trigger_id: triggerId,
-            view: modal as Parameters<typeof workspaceSlack.views.open>[0]['view']
+            view: modal as Parameters<typeof workspaceSlack.views.push>[0]['view']
         });
 
         return true;

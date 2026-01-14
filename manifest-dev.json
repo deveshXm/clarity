@@ -3,7 +3,7 @@
         "name": "Clarity-Dev",
         "description": "Your AI communication coach for better workplace messaging.",
         "background_color": "#4A154B",
-        "long_description": "Clarity is an AI-powered communication coach designed to improve workplace messaging within your workspace. By leveraging advanced natural language processing and a Large Language Model, Clarity helps users quickly enhance, correct, and refine their written content directly in Slack.\n\nWhether you need to improve tone, clarify your sentences, or get coaching on your communication style, Clarity makes it easy to ensure that your communication is always clear, concise, and professional. Say goodbye to communication barriers and hello to smoother workflows!\n\nUse the following commands in any Slack message — whether in public or private channels, group chats, or direct messages — and let Clarity help you communicate better:\n\n`/clarity-rephrase` your_text\n`/clarity-personal-feedback`\n`/clarity-settings`\n`/clarity-help`\n\nPricing plan\nWe offer flexible plans tailored to both individuals and teams:\n\nFree Plan: Core features with monthly usage limits.\nPro Plan: Priced at $4.99/month with expanded features and higher usage limits.\n\nDisclaimer\nOur app utilizes a Large Language Model (LLM) to provide intelligent and context-aware responses. While we strive for accuracy and relevance, users should be aware that the model may occasionally generate inaccurate, incomplete, or inappropriate responses. These outputs are generated based on probabilistic patterns and are not guaranteed to reflect factual information or professional advice.\n\nPrivacy & Compliance\nWe comply with the EU General Data Protection Regulation (GDPR). We never store your chats or any personal information."
+        "long_description": "Clarity is an AI-powered communication coach designed to improve workplace messaging within your workspace. By leveraging advanced natural language processing and a Large Language Model, Clarity helps users quickly enhance, correct, and refine their written content directly in Slack.\n\nWhether you need to improve tone, clarify your sentences, or get coaching on your communication style, Clarity makes it easy to ensure that your communication is always clear, concise, and professional. Say goodbye to communication barriers and hello to smoother workflows!\n\nUse the following commands in any Slack message — whether in public or private channels, group chats, or direct messages — and let Clarity help you communicate better:\n\n`/clarity-rephrase` your_text\n`/clarity-settings`\n`/clarity-help`\n\nPricing plan\nWe offer flexible plans tailored to both individuals and teams:\n\nFree Plan: Core features with monthly usage limits.\nPro Plan: Priced at $4.99/month with expanded features and higher usage limits.\n\nDisclaimer\nOur app utilizes a Large Language Model (LLM) to provide intelligent and context-aware responses. While we strive for accuracy and relevance, users should be aware that the model may occasionally generate inaccurate, incomplete, or inappropriate responses. These outputs are generated based on probabilistic patterns and are not guaranteed to reflect factual information or professional advice.\n\nPrivacy & Compliance\nWe comply with the EU General Data Protection Regulation (GDPR). We never store your chats or any personal information."
     },
     "features": {
         "bot_user": {
@@ -15,12 +15,6 @@
                 "command": "/clarity-help",
                 "url": "https://f4c5bf4752aa.ngrok-free.app/api/slack/commands",
                 "description": "Show all available Clarity commands and features",
-                "should_escape": false
-            },
-            {
-                "command": "/clarity-personal-feedback",
-                "url": "https://f4c5bf4752aa.ngrok-free.app/api/slack/commands",
-                "description": "Get analysis of your recent communication patterns",
                 "should_escape": false
             },
             {

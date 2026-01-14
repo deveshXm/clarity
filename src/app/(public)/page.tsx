@@ -231,7 +231,7 @@ export default function LandingPage() {
               </Text>
             </Card>
 
-            {/* Reports Feature */}
+            {/* Custom Coaching Feature */}
             <Card 
               shadow="sm" 
               radius="xl" 
@@ -242,11 +242,11 @@ export default function LandingPage() {
               }}
             >
               <Title order={3} size="h3" fw={600} style={{ fontSize: '20px', marginBottom: '12px', color: '#0F172A' }}>
-                Grow your communication style
+                Personalized coaching focus
               </Title>
               <Text size="sm" style={{ color: '#475569', marginBottom: '12px' }}>
-                Over time, Clarity learns how you like to speak and nudges you gently toward more
-                grounded, harmonious conversations.
+                Choose what matters to you. Customize which communication patterns Clarity helps you
+                improve—from tone to clarity to collaboration style.
               </Text>
               <Text size="xs" style={{ 
                 textTransform: 'uppercase', 
@@ -254,7 +254,7 @@ export default function LandingPage() {
                 color: '#F59E0B',
                 fontWeight: 600
               }}>
-                Micro‑coaching in every chat
+                Your coaching, your way
               </Text>
             </Card>
           </section>
@@ -366,7 +366,7 @@ export default function LandingPage() {
                 </div>
               </motion.div>
 
-              {/* Feature 3: Regular personal feedback */}
+              {/* Feature 3: Custom coaching flags */}
               <motion.div
                 initial={{ opacity: 0, y: 60 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -378,42 +378,52 @@ export default function LandingPage() {
                   <div className="rounded-xl overflow-hidden shadow-2xl">
                     <div className="rounded-t-xl p-6" style={{ background: '#0F172A', color: '#F1F5F9' }}>
                       <div className="rounded-lg p-4 text-sm" style={{ background: '#1E293B' }}>
-                        <p className="mb-3" style={{ color: '#CBD5E1' }}>Clarity APP · 3:15 PM</p>
-                        <p className="rounded-lg px-4 py-3 inline-block text-base" style={{ background: '#334155' }}>
-                          Hey there! Here&apos;s your personal feedback
+                        <p className="mb-3" style={{ color: '#CBD5E1' }}>Clarity Settings</p>
+                        <p className="text-base font-semibold mb-3" style={{ color: '#F1F5F9' }}>
+                          🎯 Coaching Focus (6/8 active)
                         </p>
                       </div>
                     </div>
                     <div className="rounded-b-xl p-6" style={{ background: '#F8FAFC', color: '#0F172A' }}>
-                      <p className="text-base font-semibold mb-4" style={{ color: '#0F172A' }}>
-                        How you&apos;re doing: <span style={{ color: '#059669' }}>7.5/10</span> 🟡 Looking good!
-                      </p>
-                      <div className="mb-4">
-                        <div className="text-sm font-semibold mb-2" style={{ color: '#64748B' }}>⭐ You&apos;re already great at:</div>
-                        <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: '#334155' }}>
-                          <li>You reach out frequently and keep conversations active</li>
-                          <li>You use mentions to direct questions effectively</li>
-                        </ul>
-                      </div>
-                      <div className="mb-4">
-                        <div className="text-sm font-semibold mb-2" style={{ color: '#64748B' }}>💡 Let&apos;s work on these together:</div>
-                        <ul className="text-sm space-y-1 list-disc list-inside" style={{ color: '#334155' }}>
-                          <li>Tone can come across as abrasive; softening language will improve responses</li>
-                          <li>Provide clearer context and concise questions</li>
-                        </ul>
-                      </div>
-                      <div className="text-sm" style={{ color: '#64748B' }}>
-                        <span className="font-semibold">👥 Relationship insights:</span> Work on <span style={{ color: '#E11D48' }}>rudeness, pushiness</span> when messaging John Doe
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <span style={{ color: '#22C55E' }}>✅</span>
+                          <div>
+                            <p className="text-sm font-semibold" style={{ color: '#0F172A' }}>Pushiness</p>
+                            <p className="text-xs" style={{ color: '#64748B' }}>Overly aggressive or demanding tone</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span style={{ color: '#22C55E' }}>✅</span>
+                          <div>
+                            <p className="text-sm font-semibold" style={{ color: '#0F172A' }}>Vagueness</p>
+                            <p className="text-xs" style={{ color: '#64748B' }}>Unclear or imprecise requests</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span style={{ color: '#22C55E' }}>✅</span>
+                          <div>
+                            <p className="text-sm font-semibold" style={{ color: '#0F172A' }}>Rudeness</p>
+                            <p className="text-xs" style={{ color: '#64748B' }}>Impolite or discourteous communication</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 opacity-50">
+                          <span>⬜</span>
+                          <div>
+                            <p className="text-sm font-semibold" style={{ color: '#0F172A' }}>One-Liner</p>
+                            <p className="text-xs" style={{ color: '#64748B' }}>Overly brief responses</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
                 <div className="flex-1 text-center lg:text-left">
                   <Title order={3} size="h3" fw={900} style={{ fontSize: 'clamp(28px, 4vw, 40px)', marginBottom: '16px', color: '#0F172A' }}>
-                    Get regular personal feedback on your communication
+                    Focus on what matters to you
                   </Title>
                   <Text size="xl" className="leading-relaxed" style={{ color: '#334155', fontSize: 'clamp(18px, 2.5vw, 22px)' }}>
-                    Grow into a more effective collaborator. Get insights that help you understand how your communication impacts your team and discover ways to create more positive, productive interactions.
+                    Choose your coaching focus. Enable the flags that match your goals, disable what you&apos;ve mastered, and even create custom flags for patterns unique to your communication style.
                   </Text>
                 </div>
               </motion.div>
@@ -505,8 +515,8 @@ export default function LandingPage() {
                   <div className="mt-6 space-y-3 flex-1">
                     {[
                       "20 auto-coaching suggestions/month",
-                      "10 manual rephrase commands", 
-                      "2 personal feedback reports",
+                      "50 manual rephrase commands", 
+                      "Default coaching flags",
                       "Basic tone improvements"
                     ].map((feature, index) => (
                       <div key={index} className="flex items-center gap-2">
@@ -550,10 +560,9 @@ export default function LandingPage() {
                   
                   <div className="mt-6 space-y-3 flex-1">
                     {[
-                      "Unlimited auto-coaching",
-                      "Unlimited rephrase commands",
-                      "Unlimited personal feedback", 
-                      "Weekly & monthly reports",
+                      "200 auto-coaching suggestions/month",
+                      "200 rephrase commands/month",
+                      "Custom coaching flags", 
                       "Advanced AI reasoning"
                     ].map((feature, index) => (
                       <div key={index} className="flex items-center gap-2">

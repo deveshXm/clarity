@@ -16,7 +16,6 @@ export const nav: NavGroup[] = [
     items: [
       { label: 'Slash commands', href: '/docs/commands' },
       { label: 'Auto coaching', href: '/docs/auto-coaching' },
-      { label: 'Reports', href: '/docs/reports' },
     ],
   },
   {

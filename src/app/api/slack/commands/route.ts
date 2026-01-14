@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, fetchConversationHistory, sendDirectMessage, isChannelAccessible, getSlackOAuthUrl, openOnboardingModal, getWorkspaceChannels, getSlackUserInfoWithEmail } from '@/lib/slack';
+import { verifySlackSignature, fetchConversationHistory, isChannelAccessible, getSlackOAuthUrl, openOnboardingModal, getWorkspaceChannels, getSlackUserInfoWithEmail } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection, botChannelsCollection, feedbackCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
-import { generatePersonalFeedback, generateImprovedMessage, analyzeMessageForFlags, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
-import { SlackUser, Workspace, getTierConfig } from '@/types';
+import { generateImprovedMessage, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
+import { SlackUser, Workspace, getTierConfig, DEFAULT_COACHING_FLAGS } from '@/types';
 import { validateWorkspaceAccess, incrementWorkspaceUsage, generateUpgradeMessage, generateLimitReachedMessage, generateProLimitReachedMessage } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
@@ -117,8 +117,8 @@ export async function POST(request: NextRequest) {
                 name: userInfo.name,
                 displayName: userInfo.displayName,
                 image: userInfo.image,
-                analysisFrequency: 'weekly' as const,
                 autoCoachingEnabledChannels: [],
+                coachingFlags: [...DEFAULT_COACHING_FLAGS],
                 isActive: true,
                 createdAt: new Date(),
                 updatedAt: new Date()
@@ -177,9 +177,6 @@ export async function POST(request: NextRequest) {
         // Step 4: Process command normally (workspace is onboarded)
         let response;
         switch (command) {
-            case '/clarity-personal-feedback':
-                response = await handlePersonalFeedback(userId, channelId, workspace, user);
-                break;
             case '/clarity-rephrase':
                 response = await handleRephrase(text, userId, channelId, workspace, user);
                 break;
@@ -222,158 +219,6 @@ export async function POST(request: NextRequest) {
             text: 'Sorry, there was an error processing your command. Please try again.',
             response_type: 'ephemeral'
         }, { status: 500 });
-    }
-}
-
-async function handlePersonalFeedback(userId: string, channelId: string, workspace: Workspace, user: SlackUser) {
-    try {
-        // Check workspace subscription access
-        const accessCheck = await validateWorkspaceAccess(workspace, 'personalFeedback');
-        
-        if (!accessCheck.allowed) {
-            if (accessCheck.upgradeRequired) {
-                return generateUpgradeMessage('personalFeedback', accessCheck.reason || 'Feature requires upgrade', String(workspace._id));
-            }
-            
-            // Check if workspace is PRO
-            if (workspace.subscription?.tier === 'PRO') {
-                const proConfig = getTierConfig('PRO');
-                return generateProLimitReachedMessage(
-                    'personalFeedback',
-                    workspace.subscription.monthlyUsage.personalFeedback || 0,
-                    proConfig.monthlyLimits.personalFeedback,
-                    accessCheck.resetDate || new Date()
-                );
-            }
-            
-            // FREE workspace limit reached
-            const freeConfig = getTierConfig('FREE');
-            return generateLimitReachedMessage(
-                'personalFeedback',
-                workspace.subscription?.monthlyUsage.personalFeedback || 0,
-                freeConfig.monthlyLimits.personalFeedback,
-                accessCheck.resetDate || new Date(),
-                String(workspace._id)
-            );
-        }
-
-        // Check if bot has access to current channel
-        const hasChannelAccess = await isChannelAccessible(channelId, String(workspace._id));
-        
-        if (!hasChannelAccess) {
-            return {
-                text: '⚠️ *I need to be added to this channel*\n\nPlease add me to this channel so I can analyze your communication patterns.',
-                response_type: 'ephemeral'
-            };
-        }
-
-        // Schedule background analysis
-        after(async () => {
-            try {
-                logInfo('Starting background personal feedback analysis', { 
-                    user_id: userId,
-                    channel_id: channelId,
-                    operation: 'personal_feedback_analysis'
-                });
-                
-                const conversationHistory = await fetchConversationHistory(channelId, workspace.botToken, undefined, 40);
-                console.log('📚 Fetched conversation history:', conversationHistory.length, 'messages');
-                
-                // Analyze recent messages for relationship context
-                let relationshipInsights: { name: string; issues: string[] }[] = [];
-                try {
-                    const recentMessages = conversationHistory.slice(-10);
-                    const relationshipMap = new Map<string, string[]>();
-                    
-                    for (const message of recentMessages) {
-                        if (message.trim()) {
-                            const analysis = await analyzeMessageForFlags(message, conversationHistory);
-                            if (analysis.flags.length > 0 && analysis.target?.name) {
-                                const issues = relationshipMap.get(analysis.target.name) || [];
-                                analysis.flags.forEach(flag => {
-                                    if (!issues.includes(flag.type)) {
-                                        issues.push(flag.type);
-                                    }
-                                });
-                                relationshipMap.set(analysis.target.name, issues);
-                            }
-                        }
-                    }
-                    
-                    relationshipInsights = Array.from(relationshipMap.entries()).map(([name, issues]) => ({
-                        name,
-                        issues
-                    }));
-                } catch (err) {
-                    console.error('Error analyzing relationship context:', err);
-                }
-                
-                const feedback = await generatePersonalFeedback(conversationHistory);
-                
-                // Track personal feedback generation
-                trackEvent(userId, EVENTS.FEATURE_PERSONAL_FEEDBACK_GENERATED, {
-                    user_name: user.name,
-                    workspace_id: String(workspace._id),
-                    channel_id: channelId,
-                    overall_score: feedback.overallScore,
-                    patterns_count: feedback.patterns?.length || 0,
-                    improvements_count: feedback.improvements?.length || 0,
-                });
-                
-                // Format response
-                const scoreEmoji = feedback.overallScore >= 8 ? '🟢 You\'re crushing it!' : feedback.overallScore >= 6 ? '🟡 Looking good!' : '🔴 Let\'s level up together!';
-                const responseText = `*Hey there! Here's your personal feedback*\n\n` +
-                    `*How you're doing: ${feedback.overallScore}/10* ${scoreEmoji}\n\n` +
-                    `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                    `🌟 *You're already great at:*\n` +
-                    `${feedback.strengths.slice(0, 3).map(s => `• ${s}`).join('\n')}\n\n` +
-                    `💪 *Let's work on these together:*\n` +
-                    `${feedback.improvements.slice(0, 3).map(i => `• ${i}`).join('\n')}\n\n` +
-                    `👀 *I noticed you tend to:*\n` +
-                    `${feedback.patterns.slice(0, 3).map(p => 
-                        `• Use *${p.type.toLowerCase()}* quite a bit (${p.frequency} times)`
-                    ).join('\n')}\n\n` +
-                    (relationshipInsights.length > 0 && 
-                     relationshipInsights.some(insight => insight.name && insight.name !== 'Unknown') ? 
-                        `👥 *Relationship insights:*\n` +
-                        `${relationshipInsights
-                            .filter(insight => insight.name && insight.name !== 'Unknown')
-                            .slice(0, 2)
-                            .map(insight => 
-                                `• Work on *${insight.issues.join(', ')}* when messaging *${insight.name}*`
-                            ).join('\n')}\n\n` : '') +
-                    `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                    `🎯 *Here's what I'd love to see you try next:*\n` +
-                    `${feedback.recommendations.slice(0, 3).map((r, i) => `${i + 1}. ${r}`).join('\n')}\n\n` +
-                    `💙 _Based on your recent messages in <#${channelId}> • Use \`/clarity-settings\` to customize your coaching_`;
-                
-                const dmSent = await sendDirectMessage(userId, responseText, workspace.botToken);
-                
-                if (dmSent) {
-                    await incrementWorkspaceUsage(workspace, 'personalFeedback');
-                }
-                
-            } catch (err) {
-                console.error('Error in background personal feedback:', err);
-                await sendDirectMessage(
-                    userId, 
-                    '❌ Sorry, I encountered an error while generating your personal feedback report.',
-                    workspace.botToken
-                );
-            }
-        });
-
-        return {
-            text: '⏳ *Analyzing your communication patterns...*\n\nI\'ll send the detailed analysis to your DMs shortly!',
-            response_type: 'ephemeral'
-        };
-        
-    } catch (error) {
-        console.error('Error in personalfeedback command:', error);
-        return {
-            text: 'Sorry, I couldn\'t start your feedback analysis. Please try again later.',
-            response_type: 'ephemeral'
-        };
     }
 }
 
@@ -422,11 +267,14 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                 let analysisResult;
                 let conversationHistory: string[] = [];
                 
+                // Get user's coaching flags (or defaults if not set)
+                const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
+                
                 if (hasChannelAccess) {
                     conversationHistory = await fetchConversationHistory(channelId, workspace.botToken, undefined, 10);
-                    analysisResult = await analyzeMessageForRephraseWithContext(text, conversationHistory);
+                    analysisResult = await analyzeMessageForRephraseWithContext(text, conversationHistory, flags);
                 } else {
-                    analysisResult = await analyzeMessageForRephraseWithoutContext(text);
+                    analysisResult = await analyzeMessageForRephraseWithoutContext(text, flags);
                 }
                 
                 const workspaceSlack = new WebClient(workspace.botToken);
@@ -552,6 +400,21 @@ async function handleSettings(userId: string, user: SlackUser, workspace: Worksp
             }
         ] : [];
 
+        // Get user's coaching flags (or defaults if not set)
+        const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
+        const enabledCount = flags.filter(f => f.enabled).length;
+        
+        // Build flag options for checkboxes
+        const flagOptions = flags.map((flag, index) => ({
+            text: { type: 'plain_text' as const, text: flag.name },
+            description: { type: 'plain_text' as const, text: flag.description },
+            value: String(index)
+        }));
+        
+        const enabledFlagOptions = flags
+            .map((flag, index) => flag.enabled ? { text: { type: 'plain_text' as const, text: flag.name }, description: { type: 'plain_text' as const, text: flag.description }, value: String(index) } : null)
+            .filter((opt): opt is NonNullable<typeof opt> => opt !== null);
+
         const modal = {
             type: 'modal' as const,
             callback_id: 'settings_modal',
@@ -565,34 +428,45 @@ async function handleSettings(userId: string, user: SlackUser, workspace: Worksp
             },
             blocks: [
                 {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: `*🎯 Coaching Focus* (${enabledCount}/${flags.length} active)`
+                    },
+                    accessory: {
+                        type: 'button',
+                        action_id: 'manage_flags_button',
+                        text: {
+                            type: 'plain_text',
+                            text: 'Edit Flags',
+                            emoji: true
+                        }
+                    }
+                },
+                {
                     type: 'input',
-                    block_id: 'frequency_selection',
+                    block_id: 'coaching_flags_block',
+                    optional: true,
+                    element: {
+                        type: 'checkboxes',
+                        action_id: 'coaching_flags_checkboxes',
+                        options: flagOptions,
+                        ...(enabledFlagOptions.length > 0 ? { initial_options: enabledFlagOptions } : {})
+                    },
                     label: {
                         type: 'plain_text',
-                        text: 'Report Frequency'
-                    },
-                    element: {
-                        type: 'radio_buttons',
-                        action_id: 'frequency_radio',
-                        initial_option: user.analysisFrequency === 'weekly' ? {
-                            text: { type: 'plain_text', text: 'Weekly' },
-                            value: 'weekly'
-                        } : {
-                            text: { type: 'plain_text', text: 'Monthly' },
-                            value: 'monthly'
-                        },
-                        options: [
-                            { text: { type: 'plain_text', text: 'Weekly' }, value: 'weekly' },
-                            { text: { type: 'plain_text', text: 'Monthly' }, value: 'monthly' }
-                        ]
+                        text: 'Select what I should help you improve'
                     }
+                },
+                {
+                    type: 'divider'
                 },
                 {
                     type: 'section',
                     block_id: 'auto_coaching_channels_section',
                     text: {
                         type: 'mrkdwn',
-                        text: '*Auto Coaching Channels*\nSelect channels where you want automatic coaching:'
+                        text: '*📢 Auto Coaching Channels*\nSelect channels where you want automatic coaching:'
                     },
                     accessory: botChannels.length > 0 ? {
                         type: 'checkboxes',
@@ -625,7 +499,8 @@ async function handleSettings(userId: string, user: SlackUser, workspace: Worksp
             ],
             private_metadata: JSON.stringify({ 
                 workspaceId: String(workspace._id),
-                isAdmin 
+                isAdmin,
+                coachingFlags: flags
             })
         };
 
@@ -715,21 +590,17 @@ async function handleClarityHelp() {
                 fields: [
                     {
                         type: 'mrkdwn',
-                        text: '_Get communication insights_\n\n`/clarity-personal-feedback`'
+                        text: '_Check Clarity\'s status_\n\n`/clarity-status`'
                     },
                     {
                         type: 'mrkdwn',
-                        text: '_Check Clarity\'s status_\n\n`/clarity-status`'
+                        text: '_Customize your preferences_\n\n`/clarity-settings`'
                     }
                 ]
             },
             {
                 type: 'section',
                 fields: [
-                    {
-                        type: 'mrkdwn',
-                        text: '_Customize your preferences_\n\n`/clarity-settings`'
-                    },
                     {
                         type: 'mrkdwn',
                         text: '_Send us feedback_\n\n`/clarity-feedback [your feedback]`'

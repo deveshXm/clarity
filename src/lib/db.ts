@@ -38,5 +38,4 @@ export const workspaceCollection = db.collection("workspaces"); // Workspace dat
 export const slackUserCollection = db.collection("slackUsers"); // User preferences only
 export const botChannelsCollection = db.collection("botChannels"); // Channels bot is active in
 export const analysisInstanceCollection = db.collection("analysisInstances"); // Message analysis data
-export const reportCollection = db.collection("reports"); // Weekly/monthly reports
 export const feedbackCollection = db.collection("feedback"); // User feedback

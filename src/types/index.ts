@@ -1,16 +1,26 @@
 import { z } from 'zod';
 
-// MESSAGE ANALYSIS TYPES CONSTANT
-export const MESSAGE_ANALYSIS_TYPES = {
-    1: { key: 'pushiness', name: 'Pushiness', description: 'Overly aggressive or demanding communication' },
-    2: { key: 'vagueness', name: 'Vagueness', description: 'Unclear or imprecise communication' },
-    3: { key: 'nonObjective', name: 'Non-Objective', description: 'Subjective or biased communication' },
-    4: { key: 'circular', name: 'Circular', description: 'Repetitive or circular reasoning' },
-    5: { key: 'rudeness', name: 'Rudeness', description: 'Impolite or discourteous communication' },
-    6: { key: 'passiveAggressive', name: 'Passive-Aggressive', description: 'Indirect expression of negative feelings' },
-    7: { key: 'fake', name: 'Fake', description: 'Insincere or inauthentic communication' },
-    8: { key: 'oneLiner', name: 'One-Liner', description: 'Overly brief or dismissive responses' },
-} as const;
+// COACHING FLAGS SCHEMA & DEFAULTS
+export const CoachingFlagSchema = z.object({
+    name: z.string().max(50),
+    description: z.string().max(200),
+    enabled: z.boolean(),
+});
+
+export type CoachingFlag = z.infer<typeof CoachingFlagSchema>;
+
+export const DEFAULT_COACHING_FLAGS: CoachingFlag[] = [
+    { name: 'Pushiness', description: 'Overly aggressive or demanding tone', enabled: true },
+    { name: 'Vagueness', description: 'Unclear or imprecise requests', enabled: true },
+    { name: 'Non-Objective', description: 'Subjective or biased communication', enabled: true },
+    { name: 'Circular', description: 'Repetitive or circular reasoning', enabled: true },
+    { name: 'Rudeness', description: 'Impolite or discourteous communication', enabled: true },
+    { name: 'Passive-Aggressive', description: 'Indirect expression of negative feelings', enabled: true },
+    { name: 'Fake', description: 'Insincere or inauthentic communication', enabled: false },
+    { name: 'One-Liner', description: 'Overly brief or dismissive responses', enabled: false },
+];
+
+export const MAX_COACHING_FLAGS = 15;
 
 // BASIC USER SCHEMA (defined first for use in Slack schemas)
 export const UserSchema = z.object({
@@ -49,7 +59,6 @@ export const SubscriptionSchema = z.object({
     monthlyUsage: z.object({
         autoCoaching: z.number().default(0),
         manualRephrase: z.number().default(0),
-        personalFeedback: z.number().default(0),
     }),
 
     // Timestamps
@@ -89,18 +98,6 @@ export const BotChannelSchema = z.object({
     addedAt: z.coerce.date(),
 });
 
-// Communication Scores Schema (stored on Slack user)
-export const CommunicationScoreEntrySchema = z.object({
-    score: z.number().min(0).max(100),
-    reportId: z.string().optional(),
-    updatedAt: z.coerce.date(),
-});
-
-export const CommunicationScoresSchema = z.object({
-    weekly: CommunicationScoreEntrySchema.optional(),
-    monthly: CommunicationScoreEntrySchema.optional(),
-}).optional();
-
 // Slack User Schema - Simplified for personal preferences only
 // Subscription and onboarding status are now workspace-level
 export const SlackUserSchema = z.object({
@@ -114,11 +111,8 @@ export const SlackUserSchema = z.object({
     userToken: z.string().optional(), // User's OAuth token for message updating
     
     // Personal preferences
-    analysisFrequency: z.enum(['weekly', 'monthly']).default('weekly'),
     autoCoachingEnabledChannels: z.array(z.string()).default([]), // Channel IDs where user has enabled auto-coaching
-    
-    // Communication scores (personal to user)
-    communicationScores: CommunicationScoresSchema,
+    coachingFlags: z.array(CoachingFlagSchema).default([]), // User's coaching flags (seeded from defaults)
     
     isActive: z.boolean().default(true),
     createdAt: z.coerce.date(),
@@ -148,119 +142,9 @@ export const AnalysisInstanceSchema = z.object({
 
 export const CreateAnalysisInstanceSchema = AnalysisInstanceSchema.omit({ _id: true, createdAt: true });
 
-// Report Storage Schema - Optimized with Pre-calculated Metadata
-export const ReportSchema = z.object({
-    _id: z.string(),
-    reportId: z.string(), // 🔐 Long unguessable ID
-    userId: z.string(),
-    workspaceId: z.string(), // Slack team ID for deep links
-    period: z.enum(['weekly', 'monthly']),
-    periodStart: z.coerce.date(),
-    periodEnd: z.coerce.date(),
-
-    // 🎯 Communication scoring (0–10, AI-generated)
-    communicationScore: z.number().min(0).max(10),
-    previousScore: z.number().min(0).max(10).optional(),
-    scoreChange: z.number(),
-    scoreTrend: z.enum(['improving', 'declining', 'stable']),
-
-    // 📊 Current period analytics (this week/month only)
-    currentPeriod: z.object({
-        totalMessages: z.number(),
-        flaggedMessages: z.number(),
-        flaggedMessageIds: z.array(z.string()), // Store IDs for deep linking
-
-        // 🏷️ Flag breakdown for current period
-        flagBreakdown: z.array(z.object({
-            flagId: z.number().min(1).max(8),
-            count: z.number(),
-            percentage: z.number(),
-            messageIds: z.array(z.string()), // Specific messages for examples
-        })),
-
-        // 🤝 Partner analysis for current period
-        partnerAnalysis: z.array(z.object({
-            partnerName: z.string(),
-            partnerSlackId: z.string(),
-            messagesExchanged: z.number(),
-            flagsWithPartner: z.number(),
-            topIssues: z.array(z.number()), // Flag IDs
-            relationshipScore: z.number().min(0).max(100),
-        })),
-    }),
-
-    // 📈 Pre-calculated chart data (no need to recalculate)
-    chartMetadata: z.object({
-        flagTrends: z.array(z.object({
-            flagId: z.number().min(1).max(8),
-            currentCount: z.number(),
-            previousCount: z.number(),
-            trend: z.enum(['up', 'down', 'stable']),
-            changePercent: z.number(),
-        })),
-
-        scoreHistory: z.array(z.object({
-            period: z.string(), // "2025-W03", "2025-01"
-            score: z.number(),
-        })),
-
-        partnerTrends: z.array(z.object({
-            partnerName: z.string(),
-            partnerSlackId: z.string(),
-            currentFlags: z.number(),
-            previousFlags: z.number(),
-            trend: z.enum(['improving', 'declining', 'stable']),
-        })),
-
-        instancesTrend: z.object({
-            labels: z.array(z.string()),
-            current: z.array(z.number()),
-            previous: z.array(z.number()),
-        }).optional(),
-    }),
-
-    // 💬 Message examples (privacy-compliant, limited to current period)
-    messageExamples: z.array(z.object({
-        messageTs: z.string(),
-        channelId: z.string(),
-        flagIds: z.array(z.number()),
-        summary: z.string(),
-        targetName: z.string().optional(),
-        improvement: z.string().optional(),
-    })),
-
-    // 💡 AI recommendations (based on current vs previous report comparison)
-    recommendations: z.array(z.string()),
-    keyInsights: z.array(z.string()),
-
-    // 🏆 Achievements and milestones
-    achievements: z.array(z.object({
-        type: z.string(),
-        description: z.string(),
-        icon: z.string(),
-    })),
-
-    createdAt: z.coerce.date(),
-    expiresAt: z.coerce.date(), // 🗑️ Auto-cleanup after 90 days
-});
-
-// Helper functions using MESSAGE_ANALYSIS_TYPES
-export function getFlagInfo(flagId: number) {
-    return MESSAGE_ANALYSIS_TYPES[flagId as keyof typeof MESSAGE_ANALYSIS_TYPES];
-}
-
-export function getFlagEmoji(flagId: number): string {
-    const emojiMap = {
-        1: '🚀', // pushiness - aggressive
-        2: '❓', // vagueness - unclear
-        3: '⚖️', // non-objective - biased
-        4: '🔄', // circular - repetitive
-        5: '😠', // rudeness - angry
-        6: '🎭', // passive-aggressive - masked
-        7: '🎪', // fake - artificial
-        8: '💬', // one-liner - brief
-    };
-    return emojiMap[flagId as keyof typeof emojiMap] || '🏷️';
+// Helper function for coaching flags
+export function getEnabledFlags(flags: CoachingFlag[]): CoachingFlag[] {
+    return flags.filter(f => f.enabled);
 }
 
 // Invitation Schema
@@ -325,35 +209,6 @@ export const ComprehensiveAnalysisResultSchema = z.object({
     }),
 });
 
-// Personal Feedback Result
-export const PersonalFeedbackResultSchema = z.object({
-    overallScore: z.number().min(0).max(10),
-    strengths: z.array(z.string()),
-    improvements: z.array(z.string()),
-    patterns: z.array(z.object({
-        type: z.string(),
-        frequency: z.number(),
-        examples: z.array(z.string()),
-    })),
-    recommendations: z.array(z.string()),
-});
-
-// Report Generation Result
-export const ReportResultSchema = z.object({
-    userId: z.string(),
-    period: z.enum(['weekly', 'monthly']),
-    startDate: z.coerce.date(),
-    endDate: z.coerce.date(),
-    totalMessages: z.number(),
-    flaggedMessages: z.number(),
-    improvementRate: z.number().min(0).max(100),
-    topIssues: z.array(z.object({
-        type: z.string(),
-        count: z.number(),
-        percentage: z.number(),
-    })),
-    recommendations: z.array(z.string()),
-});
 
 // SLACK API TYPES
 
@@ -424,10 +279,6 @@ export const ExampleTaskInputSchema = z.object({
 
 // INFERRED TYPES
 
-// Message Analysis Types
-export type MessageAnalysisType = keyof typeof MESSAGE_ANALYSIS_TYPES;
-export type MessageAnalysisTypeInfo = typeof MESSAGE_ANALYSIS_TYPES[keyof typeof MESSAGE_ANALYSIS_TYPES];
-
 // Slack Types
 export type Workspace = z.infer<typeof WorkspaceSchema>;
 export type CreateWorkspaceInput = z.infer<typeof CreateWorkspaceSchema>;
@@ -445,11 +296,6 @@ export type CreateInvitationInput = z.infer<typeof CreateInvitationSchema>;
 export type MessageAnalysisResult = z.infer<typeof MessageAnalysisResultSchema>;
 export type ImprovedMessageResult = z.infer<typeof ImprovedMessageResultSchema>;
 export type ComprehensiveAnalysisResult = z.infer<typeof ComprehensiveAnalysisResultSchema>;
-export type PersonalFeedbackResult = z.infer<typeof PersonalFeedbackResultSchema>;
-export type ReportResult = z.infer<typeof ReportResultSchema>;
-
-// Report Types
-export type Report = z.infer<typeof ReportSchema>;
 
 // Slack Channel Selection Types
 export const SlackChannelSchema = z.object({
@@ -490,11 +336,9 @@ export const SUBSCRIPTION_TIERS = {
         monthlyLimits: {
             autoCoaching: 20,        // messages per month
             manualRephrase: 50,      // messages per month  
-            personalFeedback: 12,     // personal feedback reports per month
         },
         features: {
-            reports: false,      // Paid only
-            advancedReportAnalytics: false // Paid only
+            customFlags: false,      // Paid only - custom coaching flags
         },
         displayFeatures: [
             {
@@ -512,24 +356,10 @@ export const SUBSCRIPTION_TIERS = {
                 limitLabel: 'Limited manual rephrase'
             },
             {
-                name: 'Personal feedback reports',
-                description: 'Get detailed analysis of your communication patterns',
+                name: 'Default coaching flags',
+                description: 'Use pre-defined coaching focus areas',
                 included: true,
-                limit: 5,
-                limitLabel: 'Fewer personal feedback reports'
-            },
-            {
-                name: 'Basic tone guardrails',
-                description: 'Prevent common communication issues',
-                included: true,
-                limitLabel: 'Limited basic tone guardrails'
-            },
-
-            {
-                name: 'Free model',
-                description: 'Get free analysis of your communication',
-                included: false,
-                limitLabel: 'Access to free model'
+                limitLabel: 'Default flags only'
             },
         ]
     },
@@ -541,39 +371,30 @@ export const SUBSCRIPTION_TIERS = {
         monthlyLimits: {
             autoCoaching: 200,        // messages per month
             manualRephrase: 200,      // messages per month  
-            personalFeedback: 40,    // personal feedback reports per month
         },
         features: {
-            reports: true,       // Enabled
-            advancedReportAnalytics: true  // Enabled
+            customFlags: true,       // Enabled - custom coaching flags
         },
         displayFeatures: [
             {
                 name: 'Auto coaching suggestions',
                 description: 'Get instant, private suggestions to improve your messages',
                 included: true,
-                limit: 1000,
+                limit: 200,
                 limitLabel: 'Expanded auto coaching'
             },
             {
                 name: 'Manual rephrase',
                 description: 'Use /rephrase command to improve specific messages',
                 included: true,
-                limit: 1000,
+                limit: 200,
                 limitLabel: 'Expanded manual rephrase'
             },
             {
-                name: 'Personal feedback reports',
-                description: 'Get detailed analysis of your communication patterns',
+                name: 'Custom coaching flags',
+                description: 'Create and customize your own coaching focus areas',
                 included: true,
-                limit: 500,
-                limitLabel: 'Many personal feedback reports'
-            },
-            {
-                name: 'Advanced report analytics',
-                description: 'Deep insights and trends in your communication',
-                included: true,
-                limitLabel: 'Access to weekly & monthly reports'
+                limitLabel: 'Up to 15 custom flags'
             },
             {
                 name: 'Advanced reasoning model',

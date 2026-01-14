@@ -6,7 +6,7 @@ import { WebClient } from '@slack/web-api';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
-import { Workspace } from '@/types';
+import { Workspace, CoachingFlag, DEFAULT_COACHING_FLAGS, MAX_COACHING_FLAGS } from '@/types';
 
 // Define types inline for now
 interface SlackInteractivePayload {
@@ -23,6 +23,7 @@ interface SlackInteractivePayload {
       values?: {
         [blockId: string]: {
           [actionId: string]: {
+            value?: string; // For plain_text_input
             selected_option?: {
               value: string;
             };
@@ -104,6 +105,14 @@ export async function POST(request: NextRequest) {
                 return await handleTransferAdminAction(payload);
             } else if (action.action_id === 'complete_onboarding') {
                 return await handleCompleteOnboardingAction(payload);
+            } else if (action.action_id === 'add_custom_flag') {
+                return await handleAddCustomFlagAction(payload);
+            } else if (action.action_id === 'manage_flags_button') {
+                return await handleManageFlagsButton(payload);
+            } else if (action.action_id === 'manage_flags_overflow') {
+                return await handleManageFlagsOverflowAction(payload, action);
+            } else if (action.action_id.startsWith('flag_overflow_')) {
+                return await handleFlagOverflowAction(payload, action);
             }
         } else if (payload.type === 'view_submission') {
             // Handle modal form submissions
@@ -113,6 +122,12 @@ export async function POST(request: NextRequest) {
                 return await handleOnboardingSubmission(payload);
             } else if (payload.view?.callback_id === 'admin_transfer_modal') {
                 return await handleAdminTransferSubmission(payload);
+            } else if (payload.view?.callback_id === 'create_flag_modal') {
+                return await handleCreateFlagSubmission(payload);
+            } else if (payload.view?.callback_id === 'edit_flag_modal') {
+                return await handleEditFlagSubmission(payload);
+            } else if (payload.view?.callback_id === 'delete_flag_modal') {
+                return await handleDeleteFlagSubmission(payload);
             }
         }
         
@@ -314,7 +329,7 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
                     elements: [
                         {
                             type: "mrkdwn",
-                            text: "🔒 *This coaching is private to you* • Use `/clarity-personal-feedback` for more insights"
+                            text: "🔒 *This coaching is private to you* • Use `/clarity-settings` to customize your coaching"
                         }
                     ]
                 }
@@ -354,7 +369,7 @@ async function handleKeepOriginalMessage() {
                 elements: [
                     {
                         type: "mrkdwn",
-                        text: "💡 *Tip: Use `/clarity-personal-feedback` to get your overall communication analysis*"
+                        text: "💡 *Tip: Use `/clarity-settings` to customize your coaching focus areas*"
                     }
                 ]
             }
@@ -479,38 +494,40 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                 view: {
                     type: 'modal',
                     callback_id: 'settings_modal',
-                    title: {
-                        type: 'plain_text',
-                        text: 'Settings'
-                    },
-                    blocks: [
-                        {
-                            type: 'section',
-                            text: {
-                                type: 'mrkdwn',
-                                text: '❌ Something went wrong'
-                            }
-                        }
-                    ]
+                    title: { type: 'plain_text', text: 'Settings' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Something went wrong' } }]
                 }
             });
         }
-
-        // Extract selected frequency from the modal form
-        const selectedValue = view.state?.values?.frequency_selection?.frequency_radio?.selected_option?.value;
         
-        // Extract selected channels from checkboxes (now using accessory instead of input)
+        // Extract selected channels from checkboxes
         const channelsElement = view.state?.values?.auto_coaching_channels_section?.channel_checkboxes;
-        console.log('🔍 Channel checkboxes element:', JSON.stringify(channelsElement, null, 2));
-        
-        // Handle checkbox state - Slack sends selected_options array with channel IDs
-        // Direct logic: selected = enabled, unselected = disabled
         const enabledChannelIds = channelsElement?.selected_options?.map((option: { value: string }) => option.value) || [];
         
-        // Get user first to access their workspace
+        // Get coaching flags from private_metadata and update enabled state from checkboxes
+        const metadata = view.private_metadata ? JSON.parse(view.private_metadata) : {};
+        const baseFlags: CoachingFlag[] = metadata.coachingFlags || DEFAULT_COACHING_FLAGS;
+        
+        // Get selected flags from checkboxes (values are indices)
+        const flagsElement = view.state?.values?.coaching_flags_block?.coaching_flags_checkboxes;
+        const enabledFlagIndices = new Set(
+            flagsElement?.selected_options?.map((option: { value: string }) => parseInt(option.value, 10)) || []
+        );
+        
+        // Update flags enabled state based on checkbox selection
+        const flags: CoachingFlag[] = baseFlags.map((flag, index) => ({
+            ...flag,
+            enabled: enabledFlagIndices.has(index)
+        }));
+        
+        // Ensure at least one flag is enabled
+        if (!flags.some(f => f.enabled) && flags.length > 0) {
+            flags[0].enabled = true;
+        }
+        
+        // Get user
         const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
         if (!user) {
-            console.error('User not found:', userId);
             return NextResponse.json({
                 response_action: 'update',
                 view: {
@@ -525,7 +542,6 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         // Get workspace
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
         if (!workspace) {
-            console.error('Workspace not found for user:', userId);
             return NextResponse.json({
                 response_action: 'update',
                 view: {
@@ -537,35 +553,6 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
             });
         }
         
-        console.log('✅ Settings updated:', {
-            frequency: selectedValue,
-            enabledChannels: enabledChannelIds.length,
-            channelIds: enabledChannelIds
-        });
-        
-        if (!selectedValue || !['weekly', 'monthly'].includes(selectedValue)) {
-            return NextResponse.json({
-                response_action: 'update',
-                view: {
-                    type: 'modal',
-                    callback_id: 'settings_modal',
-                    title: {
-                        type: 'plain_text',
-                        text: 'Settings'
-                    },
-                    blocks: [
-                        {
-                            type: 'section',
-                            text: {
-                                type: 'mrkdwn',
-                                text: '❌ Something went wrong'
-                            }
-                        }
-                    ]
-                }
-            });
-        }
-
         // Update user's preferences in the database
         after(async () => {
             try {
@@ -573,63 +560,45 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                     { slackId: userId },
                     {
                         $set: {
-                            analysisFrequency: selectedValue,
                             autoCoachingEnabledChannels: enabledChannelIds,
+                            coachingFlags: flags,
                             updatedAt: new Date(),
                         },
                     },
                     { returnDocument: 'after' }
                 );
 
-                // Track settings update
                 if (userDoc) {
                     trackEvent(userId, EVENTS.FEATURE_SETTINGS_UPDATED, {
                         user_name: userDoc.name || 'Unknown',
                         workspace_id: userDoc.workspaceId,
-                        analysis_frequency: selectedValue,
                         auto_coaching_enabled_channels_count: enabledChannelIds.length,
+                        coaching_flags_count: flags.length,
+                        enabled_flags_count: flags.filter((f: CoachingFlag) => f.enabled).length,
                         subscription_tier: workspace?.subscription?.tier || 'FREE',
                     });
                 }
             } catch (err) {
                 const errorObj = err instanceof Error ? err : new Error(String(err));
-                logError('DB update error in settings submission', errorObj, { 
-                    user_id: userId,
-                    operation: 'settings_db_update'
-                });
-                trackError(userId, errorObj, { 
-                    operation: 'settings_db_update',
-                    context: 'background_processing'
-                });
+                logError('DB update error in settings submission', errorObj, { user_id: userId });
+                trackError(userId, errorObj, { operation: 'settings_db_update' });
             }
         });
 
-        // Update modal to show success message
         return NextResponse.json({
             response_action: 'update',
             view: {
                 type: 'modal',
                 callback_id: 'settings_modal',
-                title: {
-                    type: 'plain_text',
-                    text: 'Settings'
-                },
+                title: { type: 'plain_text', text: 'Settings' },
                 blocks: [
                     {
                         type: 'section',
-                        text: {
-                            type: 'mrkdwn',
-                            text: '✅ *Settings updated successfully*\n\nYour private coaching preferences have been saved.'
-                        }
+                        text: { type: 'mrkdwn', text: '✅ *Settings updated successfully*\n\nYour coaching preferences have been saved.' }
                     },
                     {
                         type: 'context',
-                        elements: [
-                            {
-                                type: 'mrkdwn',
-                                text: '🔒 Remember: All coaching is completely private to you'
-                            }
-                        ]
+                        elements: [{ type: 'mrkdwn', text: '🔒 Remember: All coaching is completely private to you' }]
                     }
                 ]
             }
@@ -637,32 +606,15 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         
     } catch (error) {
         const errorObj = error instanceof Error ? error : new Error(String(error));
-        logError('Error handling settings submission', errorObj, { 
-            user_id: payload.user?.id,
-            operation: 'settings_submission'
-        });
-        trackError(payload.user?.id || 'anonymous', errorObj, { 
-            operation: 'settings_submission',
-            context: 'interactive_action'
-        });
+        logError('Error handling settings submission', errorObj, { user_id: payload.user?.id });
+        trackError(payload.user?.id || 'anonymous', errorObj, { operation: 'settings_submission' });
         return NextResponse.json({
             response_action: 'update',
             view: {
                 type: 'modal',
                 callback_id: 'settings_modal',
-                title: {
-                    type: 'plain_text',
-                    text: 'Settings'
-                },
-                blocks: [
-                    {
-                        type: 'section',
-                        text: {
-                            type: 'mrkdwn',
-                            text: '❌ Something went wrong'
-                        }
-                    }
-                ]
+                title: { type: 'plain_text', text: 'Settings' },
+                blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Something went wrong' } }]
             }
         });
     }
@@ -762,8 +714,8 @@ async function handleOnboardingSubmission(payload: SlackInteractivePayload) {
                         workspaceId: String(workspace._id),
                         name: payload.user.name,
                         displayName: payload.user.name,
-                        analysisFrequency: 'weekly',
                         autoCoachingEnabledChannels: selectedChannels.map(c => c.id),
+                        coachingFlags: [...DEFAULT_COACHING_FLAGS],
                         isActive: true,
                         createdAt: new Date(),
                         updatedAt: new Date()
@@ -978,6 +930,693 @@ async function handleAdminTransferSubmission(payload: SlackInteractivePayload) {
                 callback_id: 'admin_transfer_modal',
                 title: { type: 'plain_text', text: 'Transfer Admin' },
                 blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Something went wrong. Please try again.' } }]
+            }
+        });
+    }
+}
+
+// ===================== Coaching Flag Handlers =====================
+
+async function handleAddCustomFlagAction(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const triggerId = payload.trigger_id;
+        
+        if (!userId || !triggerId) {
+            return NextResponse.json({ text: 'Missing required data' });
+        }
+        
+        // Get user to check flag count
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) {
+            return NextResponse.json({ text: 'User not found' });
+        }
+        
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        if (!workspace) {
+            return NextResponse.json({ text: 'Workspace not found' });
+        }
+        
+        const currentFlagsCount = user.coachingFlags?.length || DEFAULT_COACHING_FLAGS.length;
+        if (currentFlagsCount >= MAX_COACHING_FLAGS) {
+            return NextResponse.json({ text: `Maximum of ${MAX_COACHING_FLAGS} flags reached.` });
+        }
+        
+        const workspaceSlack = new WebClient(workspace.botToken);
+        
+        await workspaceSlack.views.push({
+            trigger_id: triggerId,
+            view: {
+                type: 'modal',
+                callback_id: 'create_flag_modal',
+                title: { type: 'plain_text', text: 'Create Custom Flag' },
+                submit: { type: 'plain_text', text: 'Create' },
+                blocks: [
+                    {
+                        type: 'input',
+                        block_id: 'flag_name',
+                        label: { type: 'plain_text', text: 'Name' },
+                        element: {
+                            type: 'plain_text_input',
+                            action_id: 'name_input',
+                            placeholder: { type: 'plain_text', text: 'e.g., Too many exclamation marks' },
+                            max_length: 50
+                        }
+                    },
+                    {
+                        type: 'input',
+                        block_id: 'flag_description',
+                        label: { type: 'plain_text', text: 'What should I look for?' },
+                        element: {
+                            type: 'plain_text_input',
+                            action_id: 'description_input',
+                            placeholder: { type: 'plain_text', text: 'e.g., Messages with excessive exclamation marks' },
+                            max_length: 200,
+                            multiline: true
+                        }
+                    },
+                    {
+                        type: 'context',
+                        elements: [{ type: 'mrkdwn', text: '💡 Be specific - this helps me coach better' }]
+                    }
+                ]
+            }
+        });
+        
+        return new NextResponse('', { status: 200 });
+        
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error handling add custom flag action', errorObj);
+        return NextResponse.json({ text: 'Error opening flag creation modal' });
+    }
+}
+
+async function handleManageFlagsButton(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const triggerId = payload.trigger_id;
+        
+        if (!userId || !triggerId) {
+            return NextResponse.json({ text: 'Missing required data' });
+        }
+        
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) return NextResponse.json({ text: 'User not found' });
+        
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        if (!workspace) return NextResponse.json({ text: 'Workspace not found' });
+        
+        const flags: CoachingFlag[] = user.coachingFlags?.length ? user.coachingFlags : [...DEFAULT_COACHING_FLAGS];
+        const workspaceSlack = new WebClient(workspace.botToken);
+        
+        // Build flag blocks with overflow menus for each flag
+        const flagBlocks = flags.map((flag, index) => ({
+            type: 'section',
+            text: {
+                type: 'mrkdwn',
+                text: `*${flag.name}*\n${flag.description}`
+            },
+            accessory: {
+                type: 'overflow',
+                action_id: `flag_overflow_${index}`,
+                options: [
+                    { text: { type: 'plain_text', text: '✏️ Edit' }, value: `edit_${index}` },
+                    { text: { type: 'plain_text', text: '🗑️ Delete' }, value: `delete_${index}` }
+                ]
+            }
+        }));
+        
+        await workspaceSlack.views.push({
+            trigger_id: triggerId,
+            view: {
+                type: 'modal',
+                callback_id: 'manage_flags_modal',
+                title: { type: 'plain_text', text: 'Edit Flags' },
+                close: { type: 'plain_text', text: 'Back' },
+                blocks: [
+                    {
+                        type: 'section',
+                        text: { type: 'mrkdwn', text: `*${flags.length}/${MAX_COACHING_FLAGS} flags*` },
+                        accessory: flags.length < MAX_COACHING_FLAGS ? {
+                            type: 'button',
+                            action_id: 'add_custom_flag',
+                            text: { type: 'plain_text', text: '➕ Add Flag', emoji: true }
+                        } : undefined
+                    },
+                    { type: 'divider' },
+                    ...flagBlocks
+                ]
+            }
+        });
+        
+        return new NextResponse('', { status: 200 });
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error opening manage flags modal', errorObj);
+        return NextResponse.json({ text: 'Error opening flags manager' });
+    }
+}
+
+async function handleManageFlagsOverflowAction(payload: SlackInteractivePayload, action: SlackInteractivePayload['actions'][0]) {
+    try {
+        const userId = payload.user?.id;
+        const triggerId = payload.trigger_id;
+        const selectedValue = action.value || (action as unknown as { selected_option?: { value: string } }).selected_option?.value;
+        
+        if (!userId || !triggerId || !selectedValue) {
+            return NextResponse.json({ text: 'Missing required data' });
+        }
+        
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) return NextResponse.json({ text: 'User not found' });
+        
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        if (!workspace) return NextResponse.json({ text: 'Workspace not found' });
+        
+        const flags: CoachingFlag[] = user.coachingFlags?.length ? user.coachingFlags : [...DEFAULT_COACHING_FLAGS];
+        const workspaceSlack = new WebClient(workspace.botToken);
+        
+        if (selectedValue === 'add_flag') {
+            // Open create flag modal
+            await workspaceSlack.views.push({
+                trigger_id: triggerId,
+                view: {
+                    type: 'modal',
+                    callback_id: 'create_flag_modal',
+                    title: { type: 'plain_text', text: 'Add Flag' },
+                    submit: { type: 'plain_text', text: 'Create' },
+                    blocks: [
+                        {
+                            type: 'input',
+                            block_id: 'flag_name',
+                            label: { type: 'plain_text', text: 'Name' },
+                            element: {
+                                type: 'plain_text_input',
+                                action_id: 'name_input',
+                                placeholder: { type: 'plain_text', text: 'e.g., Passive voice' },
+                                max_length: 50
+                            }
+                        },
+                        {
+                            type: 'input',
+                            block_id: 'flag_description',
+                            label: { type: 'plain_text', text: 'What should I look for?' },
+                            element: {
+                                type: 'plain_text_input',
+                                action_id: 'description_input',
+                                placeholder: { type: 'plain_text', text: 'e.g., Flag messages written in passive voice' },
+                                max_length: 200,
+                                multiline: true
+                            }
+                        }
+                    ]
+                }
+            });
+            return new NextResponse('', { status: 200 });
+        }
+        
+        // Parse edit_X or delete_X actions
+        const [actionType, indexStr] = selectedValue.split('_');
+        const flagIndex = parseInt(indexStr, 10);
+        
+        if (isNaN(flagIndex) || flagIndex < 0 || flagIndex >= flags.length) {
+            return NextResponse.json({ text: 'Flag not found' });
+        }
+        
+        if (actionType === 'edit') {
+            const flag = flags[flagIndex];
+            await workspaceSlack.views.push({
+                trigger_id: triggerId,
+                view: {
+                    type: 'modal',
+                    callback_id: 'edit_flag_modal',
+                    private_metadata: JSON.stringify({ flagIndex }),
+                    title: { type: 'plain_text', text: 'Edit Flag' },
+                    submit: { type: 'plain_text', text: 'Save' },
+                    blocks: [
+                        {
+                            type: 'input',
+                            block_id: 'flag_name',
+                            label: { type: 'plain_text', text: 'Name' },
+                            element: {
+                                type: 'plain_text_input',
+                                action_id: 'name_input',
+                                initial_value: flag.name,
+                                max_length: 50
+                            }
+                        },
+                        {
+                            type: 'input',
+                            block_id: 'flag_description',
+                            label: { type: 'plain_text', text: 'What should I look for?' },
+                            element: {
+                                type: 'plain_text_input',
+                                action_id: 'description_input',
+                                initial_value: flag.description,
+                                max_length: 200,
+                                multiline: true
+                            }
+                        }
+                    ]
+                }
+            });
+            return new NextResponse('', { status: 200 });
+        }
+        
+        if (actionType === 'delete') {
+            const flag = flags[flagIndex];
+            await workspaceSlack.views.push({
+                trigger_id: triggerId,
+                view: {
+                    type: 'modal',
+                    callback_id: 'delete_flag_modal',
+                    private_metadata: JSON.stringify({ flagIndex }),
+                    title: { type: 'plain_text', text: 'Delete Flag' },
+                    submit: { type: 'plain_text', text: 'Delete' },
+                    close: { type: 'plain_text', text: 'Cancel' },
+                    blocks: [
+                        {
+                            type: 'section',
+                            text: {
+                                type: 'mrkdwn',
+                                text: `Are you sure you want to delete *${flag.name}*?\n\n_${flag.description}_`
+                            }
+                        }
+                    ]
+                }
+            });
+            return new NextResponse('', { status: 200 });
+        }
+        
+        return NextResponse.json({ text: 'Unknown action' });
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error handling manage flags overflow', errorObj);
+        return NextResponse.json({ text: 'Error managing flags' });
+    }
+}
+
+async function handleFlagOverflowAction(payload: SlackInteractivePayload, action: SlackInteractivePayload['actions'][0]) {
+    try {
+        const userId = payload.user?.id;
+        const triggerId = payload.trigger_id;
+        const selectedValue = action.value || (action as unknown as { selected_option?: { value: string } }).selected_option?.value;
+        
+        if (!userId || !triggerId || !selectedValue) {
+            return NextResponse.json({ text: 'Missing required data' });
+        }
+        
+        // Parse action: toggle_index, edit_index, or delete_index
+        const [actionType, indexStr] = selectedValue.split('_');
+        const flagIndex = parseInt(indexStr, 10);
+        
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) return NextResponse.json({ text: 'User not found' });
+        
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        if (!workspace) return NextResponse.json({ text: 'Workspace not found' });
+        
+        const flags: CoachingFlag[] = user.coachingFlags?.length ? user.coachingFlags : [...DEFAULT_COACHING_FLAGS];
+        
+        if (isNaN(flagIndex) || flagIndex < 0 || flagIndex >= flags.length) {
+            return NextResponse.json({ text: 'Flag not found' });
+        }
+        
+        const workspaceSlack = new WebClient(workspace.botToken);
+        
+        if (actionType === 'toggle') {
+            // Toggle flag enabled state
+            const enabledCount = flags.filter(f => f.enabled).length;
+            const targetFlag = flags[flagIndex];
+            
+            // Prevent disabling last enabled flag
+            if (targetFlag.enabled && enabledCount <= 1) {
+                return NextResponse.json({ text: 'At least one flag must be enabled.' });
+            }
+            
+            flags[flagIndex].enabled = !flags[flagIndex].enabled;
+            
+            await slackUserCollection.updateOne(
+                { slackId: userId },
+                { $set: { coachingFlags: flags, updatedAt: new Date() } }
+            );
+            
+            // Send ephemeral confirmation
+            return NextResponse.json({ 
+                text: `${flags[flagIndex].enabled ? '✅' : '⬜'} ${flags[flagIndex].name} ${flags[flagIndex].enabled ? 'enabled' : 'disabled'}` 
+            });
+            
+        } else if (actionType === 'edit') {
+            const flag = flags[flagIndex];
+            
+            await workspaceSlack.views.push({
+                trigger_id: triggerId,
+                view: {
+                    type: 'modal',
+                    callback_id: 'edit_flag_modal',
+                    private_metadata: JSON.stringify({ flagIndex }),
+                    title: { type: 'plain_text', text: 'Edit Flag' },
+                    submit: { type: 'plain_text', text: 'Save' },
+                    blocks: [
+                        {
+                            type: 'input',
+                            block_id: 'flag_name',
+                            label: { type: 'plain_text', text: 'Name' },
+                            element: {
+                                type: 'plain_text_input',
+                                action_id: 'name_input',
+                                initial_value: flag.name,
+                                max_length: 50
+                            }
+                        },
+                        {
+                            type: 'input',
+                            block_id: 'flag_description',
+                            label: { type: 'plain_text', text: 'What should I look for?' },
+                            element: {
+                                type: 'plain_text_input',
+                                action_id: 'description_input',
+                                initial_value: flag.description,
+                                max_length: 200,
+                                multiline: true
+                            }
+                        }
+                    ]
+                }
+            });
+            
+            return new NextResponse('', { status: 200 });
+            
+        } else if (actionType === 'delete') {
+            const flag = flags[flagIndex];
+            
+            await workspaceSlack.views.push({
+                trigger_id: triggerId,
+                view: {
+                    type: 'modal',
+                    callback_id: 'delete_flag_modal',
+                    private_metadata: JSON.stringify({ flagIndex }),
+                    title: { type: 'plain_text', text: 'Delete Flag?' },
+                    submit: { type: 'plain_text', text: 'Delete' },
+                    close: { type: 'plain_text', text: 'Cancel' },
+                    blocks: [
+                        {
+                            type: 'section',
+                            text: {
+                                type: 'mrkdwn',
+                                text: `Are you sure you want to delete *${flag.name}*?\n\nThis cannot be undone.`
+                            }
+                        }
+                    ]
+                }
+            });
+            
+            return new NextResponse('', { status: 200 });
+        }
+        
+        return NextResponse.json({ text: 'Unknown action' });
+        
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error handling flag overflow action', errorObj);
+        return NextResponse.json({ text: 'Error processing flag action' });
+    }
+}
+
+async function handleCreateFlagSubmission(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const view = payload.view;
+        
+        if (!userId || !view) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { flag_name: 'Missing required data' }
+            });
+        }
+        
+        const name = view.state?.values?.flag_name?.name_input?.value?.trim();
+        const description = view.state?.values?.flag_description?.description_input?.value?.trim();
+        
+        if (!name || !description) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { 
+                    ...(name ? {} : { flag_name: 'Name is required' }),
+                    ...(description ? {} : { flag_description: 'Description is required' })
+                }
+            });
+        }
+        
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { flag_name: 'User not found' }
+            });
+        }
+        
+        const flags: CoachingFlag[] = user.coachingFlags?.length ? user.coachingFlags : [...DEFAULT_COACHING_FLAGS];
+        
+        if (flags.length >= MAX_COACHING_FLAGS) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { flag_name: `Maximum of ${MAX_COACHING_FLAGS} flags reached` }
+            });
+        }
+        
+        // Create new flag
+        const newFlag: CoachingFlag = {
+            name,
+            description,
+            enabled: true
+        };
+        
+        flags.push(newFlag);
+        
+        await slackUserCollection.updateOne(
+            { slackId: userId },
+            { $set: { coachingFlags: flags, updatedAt: new Date() } }
+        );
+        
+        trackEvent(userId, EVENTS.FEATURE_COACHING_FLAGS_UPDATED, {
+            action: 'create',
+            flag_name: name,
+            total_flags: flags.length
+        });
+        
+        return NextResponse.json({
+            response_action: 'update',
+            view: {
+                type: 'modal',
+                callback_id: 'create_flag_modal',
+                title: { type: 'plain_text', text: 'Flag Created!' },
+                blocks: [
+                    {
+                        type: 'section',
+                        text: { type: 'mrkdwn', text: `✅ *${name}* has been created and enabled.\n\nUse \`/clarity-settings\` to manage your flags.` }
+                    }
+                ]
+            }
+        });
+        
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error creating flag', errorObj);
+        return NextResponse.json({
+            response_action: 'errors',
+            errors: { flag_name: 'Error creating flag' }
+        });
+    }
+}
+
+async function handleEditFlagSubmission(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const view = payload.view;
+        
+        if (!userId || !view) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { flag_name: 'Missing required data' }
+            });
+        }
+        
+        const metadata = view.private_metadata ? JSON.parse(view.private_metadata) : {};
+        const flagIndex = metadata.flagIndex;
+        
+        const name = view.state?.values?.flag_name?.name_input?.value?.trim();
+        const description = view.state?.values?.flag_description?.description_input?.value?.trim();
+        
+        if (!name || !description) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { 
+                    ...(name ? {} : { flag_name: 'Name is required' }),
+                    ...(description ? {} : { flag_description: 'Description is required' })
+                }
+            });
+        }
+        
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { flag_name: 'User not found' }
+            });
+        }
+        
+        const flags: CoachingFlag[] = user.coachingFlags?.length ? user.coachingFlags : [...DEFAULT_COACHING_FLAGS];
+        
+        if (typeof flagIndex !== 'number' || flagIndex < 0 || flagIndex >= flags.length) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { flag_name: 'Flag not found' }
+            });
+        }
+        
+        flags[flagIndex].name = name;
+        flags[flagIndex].description = description;
+        
+        await slackUserCollection.updateOne(
+            { slackId: userId },
+            { $set: { coachingFlags: flags, updatedAt: new Date() } }
+        );
+        
+        trackEvent(userId, EVENTS.FEATURE_COACHING_FLAGS_UPDATED, {
+            action: 'edit',
+            flag_index: flagIndex,
+            flag_name: name
+        });
+        
+        return NextResponse.json({
+            response_action: 'update',
+            view: {
+                type: 'modal',
+                callback_id: 'edit_flag_modal',
+                title: { type: 'plain_text', text: 'Flag Updated!' },
+                blocks: [
+                    {
+                        type: 'section',
+                        text: { type: 'mrkdwn', text: `✅ *${name}* has been updated.\n\nUse \`/clarity-settings\` to manage your flags.` }
+                    }
+                ]
+            }
+        });
+        
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error editing flag', errorObj);
+        return NextResponse.json({
+            response_action: 'errors',
+            errors: { flag_name: 'Error updating flag' }
+        });
+    }
+}
+
+async function handleDeleteFlagSubmission(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const view = payload.view;
+        
+        if (!userId || !view) {
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'delete_flag_modal',
+                    title: { type: 'plain_text', text: 'Error' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Missing required data' } }]
+                }
+            });
+        }
+        
+        const metadata = view.private_metadata ? JSON.parse(view.private_metadata) : {};
+        const flagIndex = metadata.flagIndex;
+        
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) {
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'delete_flag_modal',
+                    title: { type: 'plain_text', text: 'Error' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ User not found' } }]
+                }
+            });
+        }
+        
+        const flags: CoachingFlag[] = user.coachingFlags?.length ? user.coachingFlags : [...DEFAULT_COACHING_FLAGS];
+        
+        if (typeof flagIndex !== 'number' || flagIndex < 0 || flagIndex >= flags.length) {
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'delete_flag_modal',
+                    title: { type: 'plain_text', text: 'Error' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Flag not found' } }]
+                }
+            });
+        }
+        
+        const deletedFlag = flags[flagIndex];
+        
+        // Prevent deleting last enabled flag
+        const enabledCount = flags.filter(f => f.enabled).length;
+        if (deletedFlag.enabled && enabledCount <= 1) {
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'delete_flag_modal',
+                    title: { type: 'plain_text', text: 'Cannot Delete' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Cannot delete the last enabled flag. Please enable another flag first.' } }]
+                }
+            });
+        }
+        
+        flags.splice(flagIndex, 1);
+        
+        await slackUserCollection.updateOne(
+            { slackId: userId },
+            { $set: { coachingFlags: flags, updatedAt: new Date() } }
+        );
+        
+        trackEvent(userId, EVENTS.FEATURE_COACHING_FLAGS_UPDATED, {
+            action: 'delete',
+            flag_index: flagIndex,
+            flag_name: deletedFlag.name,
+            remaining_flags: flags.length
+        });
+        
+        return NextResponse.json({
+            response_action: 'update',
+            view: {
+                type: 'modal',
+                callback_id: 'delete_flag_modal',
+                title: { type: 'plain_text', text: 'Flag Deleted' },
+                blocks: [
+                    {
+                        type: 'section',
+                        text: { type: 'mrkdwn', text: `✅ *${deletedFlag.name}* has been deleted.\n\nUse \`/clarity-settings\` to manage your flags.` }
+                    }
+                ]
+            }
+        });
+        
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error deleting flag', errorObj);
+        return NextResponse.json({
+            response_action: 'update',
+            view: {
+                type: 'modal',
+                callback_id: 'delete_flag_modal',
+                title: { type: 'plain_text', text: 'Error' },
+                blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Error deleting flag' } }]
             }
         });
     }

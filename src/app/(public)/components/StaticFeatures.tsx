@@ -20,9 +20,9 @@ const FEATURE_ITEMS = [
     position: "right"
   },
   {
-    title: "Get feedback over time",
-    desc: "Get feedback on your communication over time, as we help you get better overall.",
-    img: "/personal_feedback_command.png",
+    title: "Customize your coaching",
+    desc: "Choose which communication patterns to focus on with customizable coaching flags.",
+    img: "/settings_modal_command.png",
     tint: "linear-gradient(180deg, rgba(34,211,238,0.14) 0%, rgba(56,189,248,0.12) 100%)",
     position: "left"
   },

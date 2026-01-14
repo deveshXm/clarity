@@ -21,7 +21,6 @@ export const workspaceCollection = db.collection("workspaces");
 export const slackUserCollection = db.collection("slackUsers");
 export const botChannelsCollection = db.collection("botChannels");
 export const analysisInstanceCollection = db.collection("analysisInstances");
-export const reportCollection = db.collection("reports");
 export const feedbackCollection = db.collection("feedback");
 ```
 
@@ -59,19 +58,20 @@ SlackUser {
   name: string,
   displayName: string,
   image?: string,
-  timezone?: string,
   isActive: boolean,
   isAdmin: boolean,                   // Admin role for workspace
-  analysisFrequency: 'weekly' | 'monthly',
   autoCoachingEnabledChannels: string[], // Per-user channel preferences
-  hasCompletedOnboarding: boolean,    // User's personal onboarding
+  coachingFlags: CoachingFlag[],      // User's coaching flags (seeded from DEFAULT_COACHING_FLAGS)
   userToken?: string,                 // User's OAuth token for message updating
-  communicationScores?: {             // Latest scores
-    weekly?: { score: number, reportId?: string, updatedAt: Date },
-    monthly?: { score: number, reportId?: string, updatedAt: Date }
-  },
   createdAt: Date,
   updatedAt: Date
+}
+
+// CoachingFlag schema (stored in user.coachingFlags array)
+CoachingFlag {
+  name: string,        // Max 50 chars
+  description: string, // Max 200 chars
+  enabled: boolean
 }
 ```
 
@@ -86,8 +86,7 @@ Subscription {
   stripeSubscriptionId?: string,
   monthlyUsage: {
     autoCoaching: number,
-    manualRephrase: number,
-    personalFeedback: number
+    manualRephrase: number
   },
   createdAt: Date,
   updatedAt: Date
@@ -98,7 +97,7 @@ Subscription {
 
 ### Workspace-Level vs User-Level Data
 - **Workspace-Level**: `botToken`, `botUserId`, `subscription`, `adminSlackId`, `stripeCustomerId`
-- **User-Level**: `analysisFrequency`, `autoCoachingEnabledChannels`, `isAdmin`, `communicationScores`
+- **User-Level**: `autoCoachingEnabledChannels`, `coachingFlags`, `isAdmin`
 
 ### Admin Role Management
 ```typescript
@@ -163,8 +162,8 @@ if (!existingUser) {
     email: adminEmail,
     name: adminUserName,
     displayName: adminUserName,
-    analysisFrequency: 'weekly',
     autoCoachingEnabledChannels: [],
+    coachingFlags: [...DEFAULT_COACHING_FLAGS],
     isAdmin: true,  // Admin flag set during install
     isActive: true,
     createdAt: new Date(),
@@ -186,9 +185,8 @@ if (!user) {
     name: userInfo.user?.real_name || 'Slack User',
     isActive: true,
     isAdmin: false,  // Non-admin users
-    analysisFrequency: 'weekly',
     autoCoachingEnabledChannels: [],
-    hasCompletedOnboarding: false,
+    coachingFlags: [...DEFAULT_COACHING_FLAGS],
     createdAt: new Date(),
     updatedAt: new Date()
   };

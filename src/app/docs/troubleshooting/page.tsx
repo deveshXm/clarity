@@ -43,7 +43,7 @@ export default function TroubleshootingPage(): React.ReactElement {
 
         <details className="rounded-lg border border-neutral-200/60 bg-white p-3 shadow-sm">
           <summary className="cursor-pointer text-sm font-semibold text-neutral-900">Didn&apos;t get a welcome message?</summary>
-          <div className="mt-2 text-sm leading-loose text-[#3e3e3f]">Open the app in Slack and click &ldquo;Open in Slack&rdquo; again to complete setup. Then try <code className="rounded bg-neutral-100 px-1 py-0.5">/personalfeedback</code>.</div>
+          <div className="mt-2 text-sm leading-loose text-[#3e3e3f]">Open the app in Slack and click &ldquo;Open in Slack&rdquo; again to complete setup. Then try <code className="rounded bg-neutral-100 px-1 py-0.5">/clarity-help</code>.</div>
         </details>
 
         <details className="rounded-lg border border-neutral-200/60 bg-white p-3 shadow-sm">
