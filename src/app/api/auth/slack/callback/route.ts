@@ -172,6 +172,9 @@ export async function GET(request: NextRequest) {
             workspaceId: workspaceObjectId.toString()
         });
 
+        // Get user token from OAuth response (needed for editing user's messages)
+        const userToken = authed_user.access_token || null;
+        
         if (!existingUser) {
             // Import DEFAULT_COACHING_FLAGS inline to avoid circular deps
             const { DEFAULT_COACHING_FLAGS } = await import('@/types');
@@ -186,6 +189,7 @@ export async function GET(request: NextRequest) {
                 displayName: adminUserName,
                 autoCoachingEnabledChannels: [],
                 coachingFlags: [...DEFAULT_COACHING_FLAGS],
+                userToken: userToken, // Store user token for message editing
                 isAdmin: true,
                 isActive: true,
                 createdAt: new Date(),
@@ -195,16 +199,18 @@ export async function GET(request: NextRequest) {
             logInfo('Created admin user', {
                 slack_id: authed_user.id,
                 workspace_id: workspaceObjectId.toString(),
-                name: adminUserName
+                name: adminUserName,
+                has_user_token: !!userToken
             });
         } else {
-            // Update existing user to ensure admin status
+            // Update existing user to ensure admin status and refresh user token
             await slackUserCollection.updateOne(
                 { slackId: authed_user.id, workspaceId: workspaceObjectId.toString() },
                 { 
                     $set: { 
                         isAdmin: true,
                         isActive: true,
+                        ...(userToken && { userToken }), // Update user token if provided
                         updatedAt: new Date()
                     } 
                 }
@@ -212,7 +218,8 @@ export async function GET(request: NextRequest) {
             
             logInfo('Updated existing user as admin', {
                 slack_id: authed_user.id,
-                workspace_id: workspaceObjectId.toString()
+                workspace_id: workspaceObjectId.toString(),
+                has_user_token: !!userToken
             });
         }
 

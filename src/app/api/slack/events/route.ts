@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible, getSlackUserInfoWithEmail } from '@/lib/slack';
+import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible, getSlackUserInfoWithEmail, sendChannelOptInMessage } from '@/lib/slack';
 import { workspaceCollection, slackUserCollection, botChannelsCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackEventSchema, Workspace, SlackUser, DEFAULT_COACHING_FLAGS } from '@/types';
@@ -128,6 +128,20 @@ export async function POST(request: NextRequest) {
                     }
                 });
             }
+            
+            // Handle app mention - send opt-in prompt if user doesn't have monitoring enabled
+            if (event.type === 'app_mention') {
+                console.log('📣 App mention event received');
+                
+                after(async () => {
+                    try {
+                        await handleAppMention(event, eventData.team_id);
+                        console.log('✅ App mention processing completed');
+                    } catch (error) {
+                        console.error('❌ App mention processing error:', error);
+                    }
+                });
+            }
         }
         
         // Return immediate response to Slack
@@ -199,52 +213,32 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             return;
         }
         
-        // Find or create user
-        let user = await slackUserCollection.findOne({
-            slackId: validatedEvent.user,
-            workspaceId: String(workspace._id)
-        }) as SlackUser | null;
-        
-        // Auto-create user if not exists
-        if (!user) {
-            const userInfo = await getSlackUserInfoWithEmail(validatedEvent.user, workspace.botToken);
-            
-            const newUser = {
-                _id: new ObjectId(),
-                slackId: validatedEvent.user,
-                workspaceId: String(workspace._id),
-                email: userInfo.email,
-                name: userInfo.name,
-                displayName: userInfo.displayName,
-                image: userInfo.image,
-                autoCoachingEnabledChannels: [],
-                coachingFlags: [...DEFAULT_COACHING_FLAGS],
-                isActive: true,
-                createdAt: new Date(),
-                updatedAt: new Date()
-            };
-            
-            await slackUserCollection.insertOne(newUser);
-            user = newUser as unknown as SlackUser;
-            console.log('🆕 Auto-created user on message event:', validatedEvent.user);
-        }
-
-        // Check if bot is active in this channel
+        // Check if bot is active in this channel first
         const isChannelActive = await isChannelAccessible(validatedEvent.channel, String(workspace._id));
         if (!isChannelActive) {
             console.log('⏭️ Bot not active in this channel, skipping analysis');
             return;
         }
         
-        console.log('🤖 Bot is active in channel, checking user preferences...');
+        // Find user (don't create yet - only create if flagged for discovery)
+        let user = await slackUserCollection.findOne({
+            slackId: validatedEvent.user,
+            workspaceId: String(workspace._id)
+        }) as SlackUser | null;
         
-        // Check if user has auto-coaching enabled for this specific channel
-        if (!user.autoCoachingEnabledChannels.includes(validatedEvent.channel)) {
+        // Track if this is a new user (for discovery flow)
+        const isNewUser = !user;
+        
+        // For existing users, check if they have auto-coaching enabled for this channel
+        if (user && !user.autoCoachingEnabledChannels.includes(validatedEvent.channel)) {
             console.log('⏭️ Auto-coaching not enabled for this channel, skipping analysis');
             return;
         }
         
-        console.log('✅ Auto-coaching enabled for this channel, proceeding with analysis');
+        // If user exists with channel enabled OR user doesn't exist (discovery mode), proceed
+        console.log(isNewUser 
+            ? '🔍 New user detected, analyzing for discovery...' 
+            : '✅ Auto-coaching enabled for this channel, proceeding with analysis');
         
         // Comprehensive AI analysis
         console.log('🔍 Starting comprehensive message analysis...');
@@ -258,8 +252,8 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         
         console.log('Fetched conversation history:', conversationHistory.length, 'messages');
         
-        // Get user's coaching flags (or defaults if not set)
-        const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
+        // Get user's coaching flags (or defaults if not set or new user)
+        const flags = user?.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
         
         const analysis = await comprehensiveMessageAnalysis(
             validatedEvent.text,
@@ -279,11 +273,11 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
 
         // Track AI analysis completion
         trackEvent(validatedEvent.user, EVENTS.API_AI_ANALYSIS_COMPLETED, {
-            user_name: user.name,
+            user_name: user?.name || 'Unknown',
             workspace_id: String(workspace._id),
             channel_id: validatedEvent.channel,
             message_length: validatedEvent.text.length,
-            analysis_type: 'auto_coaching',
+            analysis_type: isNewUser ? 'discovery' : 'auto_coaching',
             flags_found: analysis.flags.length,
             needs_coaching: analysis.needsCoaching,
             has_targets: analysis.targetIds && analysis.targetIds.length > 0,
@@ -292,6 +286,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             context_messages: conversationHistory.length,
             primary_issue: analysis.reasoning.primaryIssue,
             subscription_tier: workspace.subscription?.tier || 'FREE',
+            is_new_user: isNewUser,
         });
         
         // If no coaching needed, exit early
@@ -307,38 +302,53 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         const primaryFlag = analysis.flags[0];
         const improvedMessage = analysis.improvedMessage;
         
-        // Build interactive message with Block Kit
-        const blocks = [
+        // For new users (discovery), create them now that they've been flagged
+        if (isNewUser) {
+            const userInfo = await getSlackUserInfoWithEmail(validatedEvent.user, workspace.botToken);
+            
+            const newUser = {
+                _id: new ObjectId(),
+                slackId: validatedEvent.user,
+                workspaceId: String(workspace._id),
+                email: userInfo.email,
+                name: userInfo.name,
+                displayName: userInfo.displayName,
+                image: userInfo.image,
+                autoCoachingEnabledChannels: [],
+                coachingFlags: [...DEFAULT_COACHING_FLAGS],
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+            
+            await slackUserCollection.insertOne(newUser);
+            user = newUser as unknown as SlackUser;
+            console.log('🆕 Created user after flagging (discovery):', validatedEvent.user);
+        }
+        
+        // Truncate original message for compact display
+        const maxLen = 50;
+        const originalTruncated = validatedEvent.text.length > maxLen 
+            ? validatedEvent.text.substring(0, maxLen) + '...' 
+            : validatedEvent.text;
+        
+        // Build compact interactive message
+        const blocks: Array<Record<string, unknown>> = [
             {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: `I noticed your message could be improved for *${primaryFlag.type}*:\n\n*${primaryFlag.explanation}*`
+                    text: `"${originalTruncated}" → "${improvedMessage.improvedMessage}"`
                 }
             },
             {
-                type: "divider"
-            },
-            {
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: `*📝 Original:*\n"${validatedEvent.text}"`
-                }
-            },
-            {
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: `*✨ Improved:*\n"${improvedMessage.improvedMessage}"`
-                }
-            },
-            {
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: `*💡 Key improvements:*\n${improvedMessage.improvements.map((improvement: string) => `• ${improvement}`).join('\n')}`
-                }
+                type: "context",
+                elements: [
+                    {
+                        type: "mrkdwn",
+                        text: `*${primaryFlag.type}* — ${primaryFlag.explanation}`
+                    }
+                ]
             },
             {
                 type: "actions",
@@ -347,7 +357,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                         type: "button",
                         text: {
                             type: "plain_text",
-                            text: "🔄 Replace Message"
+                            text: "Replace"
                         },
                         style: "primary",
                         action_id: "replace_message",
@@ -358,6 +368,18 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                             improved_text: improvedMessage.improvedMessage,
                             user: validatedEvent.user
                         })
+                    },
+                    {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            text: "Didn't like it"
+                        },
+                        action_id: "dismiss_suggestion",
+                        value: JSON.stringify({
+                            flag_type: primaryFlag.type,
+                            user: validatedEvent.user
+                        })
                     }
                 ]
             },
@@ -366,11 +388,59 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                 elements: [
                     {
                         type: "mrkdwn",
-                        text: "🔒 *Only you can see this suggestion* • Use `/clarity-settings` to adjust preferences"
+                        text: "Only you can see this"
                     }
                 ]
             }
         ];
+        
+        // For new users, add opt-in section
+        if (isNewUser) {
+            const docsUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL 
+                ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs`
+                : 'https://clarityapp.io/docs';
+            
+            blocks.push(
+                { type: "divider" },
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "Would you like me to monitor this channel for your messages in the future?"
+                    }
+                },
+                {
+                    type: "actions",
+                    block_id: "discovery_opt_in_actions",
+                    elements: [
+                        {
+                            type: "button",
+                            text: {
+                                type: "plain_text",
+                                text: "Yes",
+                                emoji: true
+                            },
+                            style: "primary",
+                            action_id: "enable_channel_monitoring",
+                            value: JSON.stringify({
+                                channel_id: validatedEvent.channel,
+                                user_id: validatedEvent.user
+                            })
+                        },
+                        {
+                            type: "button",
+                            text: {
+                                type: "plain_text",
+                                text: "Learn about Clarity",
+                                emoji: true
+                            },
+                            action_id: "learn_about_clarity_link",
+                            url: docsUrl
+                        }
+                    ]
+                }
+            );
+        }
         
         // Send ephemeral message with interactive components
         console.log('📤 Sending interactive coaching feedback...');
@@ -386,10 +456,13 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         if (success) {
             console.log('✅ Ephemeral feedback sent successfully');
             
+            // User is guaranteed to exist at this point (either existing or just created)
+            const currentUser = user!;
+            
             // Save analysis instance
             const instanceData = {
                 _id: new ObjectId(),
-                userId: user._id,
+                userId: currentUser._id,
                 workspaceId: String(workspace._id),
                 channelId: validatedEvent.channel,
                 messageTs: validatedEvent.ts,
@@ -414,8 +487,8 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             await analysisInstanceCollection.insertOne(instanceData);
 
             // Track successful auto coaching trigger
-            trackEvent(user.slackId, EVENTS.FEATURE_AUTO_COACHING_TRIGGERED, {
-                user_name: user.name,
+            trackEvent(currentUser.slackId, EVENTS.FEATURE_AUTO_COACHING_TRIGGERED, {
+                user_name: currentUser.name,
                 workspace_id: String(workspace._id),
                 channel_id: validatedEvent.channel,
                 flags_found: analysis.flags.map(f => f.type),
@@ -424,6 +497,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                 target_count: analysis.targetIds ? analysis.targetIds.length : 0,
                 message_length: validatedEvent.text.length,
                 subscription_tier: workspace.subscription?.tier || 'FREE',
+                is_discovery: isNewUser,
             });
 
             // Track usage at workspace level
@@ -514,6 +588,7 @@ async function handleBotJoinedChannel(event: Record<string, unknown>) {
         const channelId = event.channel as string;
         const userId = event.user as string;
         const teamId = event.team as string;
+        const inviterId = event.inviter as string | undefined;
         
         if (!channelId || !userId || !teamId) {
             console.error('❌ Missing required fields in bot joined channel event');
@@ -561,11 +636,38 @@ async function handleBotJoinedChannel(event: Record<string, unknown>) {
                 });
                 
                 console.log(`✅ Added channel ${channelName} (${channelId}) to database for workspace ${teamId}`);
-                
-                // Send notification to workspace users about the new channel monitoring
-                await notifyUsersAboutNewChannelMonitoring(workspace as unknown as Workspace, channelId, channelName);
             } else {
                 console.log(`📝 Channel ${channelName} (${channelId}) already exists in database`);
+            }
+            
+            // Send opt-in message to the person who added the bot (if known)
+            if (inviterId) {
+                // Check if inviter already has monitoring enabled for this channel
+                const inviterUser = await slackUserCollection.findOne({
+                    slackId: inviterId,
+                    workspaceId: workspace._id.toString()
+                });
+                
+                const hasMonitoringEnabled = inviterUser?.autoCoachingEnabledChannels?.includes(channelId);
+                
+                if (!hasMonitoringEnabled) {
+                    const optInSent = await sendChannelOptInMessage(
+                        channelId,
+                        inviterId,
+                        channelName,
+                        workspace.botToken
+                    );
+                    
+                    if (optInSent) {
+                        console.log(`✅ Sent opt-in message to inviter ${inviterId} for channel #${channelName}`);
+                    } else {
+                        console.log(`❌ Failed to send opt-in message to inviter ${inviterId}`);
+                    }
+                } else {
+                    console.log(`📝 Inviter ${inviterId} already has monitoring enabled for this channel`);
+                }
+            } else {
+                console.log('📝 No inviter found for bot join event, skipping opt-in message');
             }
             
         } catch (apiError) {
@@ -613,42 +715,67 @@ async function handleBotLeftChannel(event: Record<string, unknown>, teamId: stri
     }
 }
 
-async function notifyUsersAboutNewChannelMonitoring(workspace: Workspace, channelId: string, channelName: string) {
+async function handleAppMention(event: Record<string, unknown>, teamId: string) {
     try {
-        // Find all active users in this workspace
-        const workspaceUsers = await slackUserCollection.find({
-            workspaceId: String(workspace._id),
-            isActive: true
-        }).toArray();
-
-        if (workspaceUsers.length === 0) {
-            console.log(`No active users found for workspace ${workspace.workspaceId}`);
+        const channelId = event.channel as string;
+        const userId = event.user as string;
+        
+        if (!channelId || !userId || !teamId) {
+            console.error('❌ Missing required fields in app mention event');
             return;
         }
-
-        // Import the notification function
-        const { sendChannelMonitoringNotification } = await import('@/lib/slack');
-
-        // Send notification to each user about the new channel
-        for (const user of workspaceUsers) {
-            try {
-                const channelData = [{ id: channelId, name: channelName }];
-                const notificationSent = await sendChannelMonitoringNotification(
-                    user as unknown as SlackUser, 
-                    workspace.botToken, 
-                    channelData
-                );
-
-                if (notificationSent) {
-                    console.log(`✅ Sent new channel notification to user ${user.slackId} for channel #${channelName}`);
-                } else {
-                    console.log(`❌ Failed to send new channel notification to user ${user.slackId} for channel #${channelName}`);
-                }
-            } catch (userError) {
-                console.error(`Error sending new channel notification to user ${user.slackId}:`, userError);
-            }
+        
+        // Find the workspace
+        const workspace = await workspaceCollection.findOne({ workspaceId: teamId });
+        
+        if (!workspace) {
+            console.log('⚠️ Workspace not found for team:', teamId);
+            return;
         }
+        
+        // Check if user exists and has monitoring enabled for this channel
+        const user = await slackUserCollection.findOne({
+            slackId: userId,
+            workspaceId: workspace._id.toString()
+        });
+        
+        // If user has monitoring enabled, no need to prompt
+        if (user?.autoCoachingEnabledChannels?.includes(channelId)) {
+            console.log(`📝 User ${userId} already has monitoring enabled for this channel`);
+            return;
+        }
+        
+        // Check if bot is active in this channel
+        const botChannel = await botChannelsCollection.findOne({
+            channelId,
+            workspaceId: workspace._id.toString()
+        });
+        
+        if (!botChannel) {
+            console.log('⏭️ Bot not active in this channel, skipping opt-in prompt');
+            return;
+        }
+        
+        // Get channel name
+        const slack = new WebClient(workspace.botToken);
+        const channelInfo = await slack.conversations.info({ channel: channelId });
+        const channelName = channelInfo.channel?.name || 'this channel';
+        
+        // Send opt-in message
+        const optInSent = await sendChannelOptInMessage(
+            channelId,
+            userId,
+            channelName,
+            workspace.botToken
+        );
+        
+        if (optInSent) {
+            console.log(`✅ Sent opt-in message to user ${userId} for channel #${channelName}`);
+        } else {
+            console.log(`❌ Failed to send opt-in message to user ${userId}`);
+        }
+        
     } catch (error) {
-        console.error('Error notifying users about new channel monitoring:', error);
+        console.error('Error handling app mention:', error);
     }
 }

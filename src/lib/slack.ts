@@ -791,6 +791,75 @@ export const sendChannelMonitoringNotification = async (
     }
 };
 
+// Send ephemeral opt-in message asking if user wants channel monitoring
+export const sendChannelOptInMessage = async (
+    channelId: string,
+    userId: string,
+    channelName: string,
+    botToken: string
+): Promise<boolean> => {
+    try {
+        const docsUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL 
+            ? `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/docs`
+            : 'https://clarityapp.io/docs';
+        
+        const blocks = [
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `Would you like me to monitor your messages in *#${channelName}*?`
+                }
+            },
+            {
+                type: "context",
+                elements: [
+                    {
+                        type: "mrkdwn",
+                        text: "I'll give you private suggestions to improve your communication. Only you can see them."
+                    }
+                ]
+            },
+            {
+                type: "actions",
+                block_id: "opt_in_actions",
+                elements: [
+                    {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            text: "Yes",
+                            emoji: true
+                        },
+                        style: "primary",
+                        action_id: "enable_channel_monitoring",
+                        value: JSON.stringify({
+                            channel_id: channelId,
+                            user_id: userId
+                        })
+                    },
+                    {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            text: "Learn about Clarity",
+                            emoji: true
+                        },
+                        action_id: "learn_about_clarity_link",
+                        url: docsUrl
+                    }
+                ]
+            }
+        ];
+
+        const fallbackText = `Would you like me to monitor your messages in #${channelName}?`;
+        return await sendEphemeralMessage(channelId, userId, fallbackText, botToken, [], blocks);
+    } catch (error) {
+        console.error('Error sending channel opt-in message:', error);
+        return false;
+    }
+};
+
 // Open workspace onboarding modal for admin
 export const openOnboardingModal = async (
     triggerId: string,

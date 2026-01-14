@@ -118,6 +118,11 @@ if (callbackId === 'onboarding_modal') {
 - ✅ Handle all logic in interactive handler
 - ✅ Docs page shows PostInstallBanner to guide user back to Slack
 
+### Modal Stacking Pattern
+- **`views.open`**: Use for fresh modals from slash commands or message buttons
+- **`views.push`**: Use when opening a modal from within another modal (e.g., "Edit Flags" button in settings)
+- **Close button**: Use "Back" for pushed modals (returns to previous), "Cancel" for root modals
+
 ### Email Collection
 - ❌ Don't ask for email in modal
 - ✅ Fetch from Slack API using `users:read.email` scope
@@ -132,3 +137,9 @@ if (callbackId === 'onboarding_modal') {
 - Use `after()` for any post-submission work
 - Respond immediately to prevent Slack timeout
 - Log errors but don't block modal close
+
+### Slack Block Kit Constraints
+- **Overflow menu**: Maximum 5 options allowed
+- **Checkboxes in input blocks**: Can't have accessories - use for simple enable/disable
+- **Checkboxes in section blocks**: Can have overflow menu accessory for additional actions
+- **Prefer checkboxes over toggle buttons**: More compact, standard UX pattern

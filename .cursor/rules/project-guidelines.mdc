@@ -95,23 +95,30 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 
 ### Workspace vs User Data
 - **Workspace-Level**: `botToken`, `botUserId`, `subscription`, `adminSlackId`, `hasCompletedOnboarding`, `stripeCustomerId`
-- **User-Level**: `autoCoachingEnabledChannels`, `coachingFlags`, `isAdmin`
+- **User-Level**: `autoCoachingEnabledChannels`, `coachingFlags`, `isAdmin`, `userToken`
 
 ## Slack Integration Architecture ✅ WORKSPACE-WIDE
 
 ### Installation Flow
 1. **User clicks Install**: OAuth redirects to Slack
 2. **OAuth Callback**: Creates/updates workspace with `botToken`, `botUserId`, sets installer as `adminSlackId`
-3. **Admin User Created**: Installer created in `slackUserCollection` with `isAdmin: true` during OAuth
+3. **Admin User Created**: Installer created in `slackUserCollection` with `isAdmin: true`, `userToken` stored during OAuth
 4. **Welcome DM**: Sent to installer with "Complete Setup" button, docs link, and contact info
 5. **Redirect to Docs**: User redirected to `/docs/getting-started?installed=true&openSlack={teamId}&botId={botUserId}`
 6. **PostInstallBanner**: Auto-opens Slack DM with bot using `slack://user?team={teamId}&id={botUserId}`
 7. **Complete Setup Button**: Admin clicks button in welcome DM to open onboarding modal
 8. **Auto-Create Users**: Other (non-admin) users created on first command interaction
 
+### User Token (`userToken`)
+- **Purpose**: Required for editing user's messages via `chat.update`
+- **Source**: `authed_user.access_token` from OAuth response
+- **Storage**: Stored in `slackUserCollection` during OAuth callback
+- **Scope**: Requires `chat:write` user scope in OAuth request
+- **Fallback**: If missing, Replace button shows reinstall prompt
+
 ### Admin Role Management
 - **First Installer**: Becomes workspace admin (`adminSlackId` on workspace)
-- **Admin Transfer**: Admin can transfer role to another user
+- **Admin Transfer**: Admin can transfer role via "Edit Flags" → uses `views.push` to push modal onto stack
 - **Non-Admin Restriction**: Non-admins cannot change admin
 - **One-Way Transfer**: Once admin transfers, they lose admin rights
 - **Billing Access**: Only admin sees billing section in settings
@@ -167,6 +174,38 @@ export const SUBSCRIPTION_TIERS = {
 4. Validate subscription access via `validateUserAccess(userId, 'autoCoaching', workspaceId)`
 5. Run AI analysis and send ephemeral coaching if needed
 
+## Suggestion UI ✅ COMPACT DESIGN
+Coaching suggestions use a compact, minimal format for both auto-coaching and manual rephrase.
+
+### Structure
+```
+"Original truncated..." → "Improved message"
+
+*Flag Name* — Brief explanation
+
+[Replace/Send]  [Didn't like it]
+
+Only you can see this
+```
+
+### Auto-Coaching (existing message)
+- **Replace** button: Updates user's original message using `userToken` + `chat.update`
+- **Didn't like it** button: Dismisses suggestion
+- Requires `userToken` stored during OAuth (user must have `chat:write` user scope)
+
+### Manual Rephrase (no existing message)
+- **Send** button: Posts improved text as new message to channel
+- **Didn't like it** button: Dismisses suggestion
+- Uses bot token with user's display name/icon
+
+### Key Principles
+- Truncate original message to ~50 chars with "..."
+- Use arrow (→) to show transformation
+- Flag name in bold, explanation after em-dash
+- Minimal emojis (none in main UI)
+- Small context text at bottom
+- Two-button layout for all suggestions
+
 ## API Architecture
 - **Use Server Actions**: Prefer Server Actions over API routes for most functionality
 - **API routes only for**:
@@ -181,6 +220,24 @@ export const SUBSCRIPTION_TIERS = {
 - `/clarity-settings` - Open settings modal (manage coaching flags & channels)
 - `/clarity-status` - Check bot status in channel
 - `/clarity-feedback [text]` - Submit feedback
+
+## Settings Modal UI ✅ COMPACT DESIGN
+- **Coaching Flags**: Use `checkboxes` input element (compact text, not section blocks)
+  - Tick checkbox = enable flag, untick = disable
+  - Each flag shows name + description in checkbox format
+- **Edit Flags Button**: Opens separate "Edit Flags" modal via `views.push`
+  - Lists all flags with individual overflow menus (edit/delete)
+  - "Add Flag" button at top
+- **Auto Coaching Channels**: Checkboxes in section accessory
+- **Billing (Admin only)**: Button links to Stripe checkout/portal
+- **Transfer Admin (Admin only)**: Button opens admin transfer modal via `views.push`
+
+## Slack Modal Constraints ⚠️ IMPORTANT
+- **Overflow menu limit**: Maximum 5 options per overflow menu
+- **Modal stacking**: Use `views.push` when opening modal from within another modal
+- **Use `views.open`**: Only for opening fresh modals (e.g., from slash commands)
+- **Use `views.push`**: When button inside modal opens another modal (pushes onto stack)
+- **Close button text**: Use "Back" for pushed modals, "Cancel" for root modals
 
 ## Using `after()` for Background Tasks
 - Use Next.js `after()` from `next/server` for async work after HTTP response

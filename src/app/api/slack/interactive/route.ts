@@ -16,6 +16,7 @@ interface SlackInteractivePayload {
   channel: { id: string; name: string };
   message: { ts: string };
   trigger_id?: string;
+  response_url?: string;
   view?: {
     callback_id?: string;
     private_metadata?: string;
@@ -96,11 +97,11 @@ export async function POST(request: NextRequest) {
             if (action.action_id === 'replace_message') {
                 return await handleMessageReplacement(payload, action);
             } else if (action.action_id === 'keep_original') {
-                return await handleKeepOriginal();
+                return await handleKeepOriginal(payload);
             } else if (action.action_id === 'send_improved_message') {
                 return await handleSendImprovedMessage(payload, action);
             } else if (action.action_id === 'keep_original_message') {
-                return await handleKeepOriginalMessage();
+                return await handleKeepOriginalMessage(payload);
             } else if (action.action_id === 'transfer_admin') {
                 return await handleTransferAdminAction(payload);
             } else if (action.action_id === 'complete_onboarding') {
@@ -113,6 +114,10 @@ export async function POST(request: NextRequest) {
                 return await handleManageFlagsOverflowAction(payload, action);
             } else if (action.action_id.startsWith('flag_overflow_')) {
                 return await handleFlagOverflowAction(payload, action);
+            } else if (action.action_id === 'dismiss_suggestion') {
+                return await handleDismissSuggestion(payload);
+            } else if (action.action_id === 'enable_channel_monitoring') {
+                return await handleEnableChannelMonitoring(payload, action);
             }
         } else if (payload.type === 'view_submission') {
             // Handle modal form submissions
@@ -150,6 +155,19 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleMessageReplacement(payload: SlackInteractivePayload, action: SlackInteractivePayload['actions'][0]) {
+    const responseUrl = payload.response_url;
+    
+    // Helper to delete ephemeral message
+    const deleteEphemeral = async () => {
+        if (responseUrl) {
+            await fetch(responseUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ delete_original: 'true' })
+            });
+        }
+    };
+    
     try {
         const data: MessageReplacementData = JSON.parse(action.value);
         const { original_ts, channel, original_text, improved_text, user } = data;
@@ -168,16 +186,14 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         });
         
         if (!appUser) {
-            return NextResponse.json({
-                text: 'Error: User not found or app not installed.'
-            });
+            await deleteEphemeral();
+            return NextResponse.json({ ok: true });
         }
         
         // Check if user has provided user token (required for message updating)
         if (!appUser.userToken) {
-            return NextResponse.json({
-                text: '❌ Please reinstall the app to enable message editing functionality.'
-            });
+            await deleteEphemeral();
+            return NextResponse.json({ ok: true });
         }
         
         // Create user-specific WebClient to update their own message
@@ -193,9 +209,8 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         
         if (!updateResult.ok) {
             console.error('Failed to update message:', updateResult.error);
-            return NextResponse.json({
-                text: `❌ Could not update the message: ${updateResult.error}. Please try again.`
-            });
+            await deleteEphemeral();
+            return NextResponse.json({ ok: true });
         }
         
         console.log('✅ Message update successful');
@@ -211,29 +226,9 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
             subscription_tier: workspace?.subscription?.tier || 'FREE',
         });
         
-        // Update the ephemeral message to show success
-        return NextResponse.json({
-            replace_original: true,
-            text: "✅ Message updated successfully!",
-            blocks: [
-                {
-                    type: "section",
-                    text: {
-                        type: "mrkdwn",
-                        text: "✅ *Message updated successfully!*\n\nYour message has been improved. Keep up the great communication!"
-                    }
-                },
-                {
-                    type: "context",
-                    elements: [
-                        {
-                            type: "mrkdwn",
-                            text: "💡 *Tip: Use `/clarity-settings` to adjust coaching preferences*"
-                        }
-                    ]
-                }
-            ]
-        });
+        // Delete the ephemeral message
+        await deleteEphemeral();
+        return NextResponse.json({ ok: true });
         
     } catch (error) {
         const errorObj = error instanceof Error ? error : new Error(String(error));
@@ -244,19 +239,36 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
             operation: 'message_replacement',
             context: 'interactive_action'
         });
-        return NextResponse.json({
-            text: '❌ An error occurred while updating the message. Please try again.'
-        });
+        await deleteEphemeral();
+        return NextResponse.json({ ok: true });
     }
 }
 
-async function handleKeepOriginal() {
-    return NextResponse.json({
-        text: '👍 Message kept as original.'
-    });
+async function handleKeepOriginal(payload: SlackInteractivePayload) {
+    const responseUrl = payload.response_url;
+    if (responseUrl) {
+        await fetch(responseUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ delete_original: 'true' })
+        });
+    }
+    return NextResponse.json({ ok: true });
 }
 
 async function handleSendImprovedMessage(payload: SlackInteractivePayload, action: SlackInteractivePayload['actions'][0]) {
+    const responseUrl = payload.response_url;
+    
+    const deleteEphemeral = async () => {
+        if (responseUrl) {
+            await fetch(responseUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ delete_original: 'true' })
+            });
+        }
+    };
+    
     try {
         const data = JSON.parse(action.value);
         const { improvedMessage, channelId, userId } = data;
@@ -274,20 +286,16 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         });
         
         if (!appUser) {
-            return NextResponse.json({
-                replace_original: true,
-                text: 'Error: User not found or app not installed.'
-            });
+            await deleteEphemeral();
+            return NextResponse.json({ ok: true });
         }
         
         // Get workspace bot token
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(appUser.workspaceId) });
         if (!workspace || !workspace.botToken) {
             console.error('❌ Workspace not found or missing bot token for user:', userId);
-            return NextResponse.json({
-                replace_original: true,
-                text: 'Error: Workspace configuration not found.'
-            });
+            await deleteEphemeral();
+            return NextResponse.json({ ok: true });
         }
         
         // Create workspace-specific WebClient
@@ -304,37 +312,15 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         
         if (!postResult.ok) {
             console.error('Failed to post improved message:', postResult.error);
-            return NextResponse.json({
-                replace_original: true,
-                text: '❌ Could not post the improved message. Please try again.'
-            });
+            await deleteEphemeral();
+            return NextResponse.json({ ok: true });
         }
         
         console.log('✅ Improved message posted successfully');
         
-        // Update the ephemeral message to show success
-        return NextResponse.json({
-            replace_original: true,
-            text: "✅ Message sent successfully!",
-            blocks: [
-                {
-                    type: "section",
-                    text: {
-                        type: "mrkdwn",
-                        text: "✅ *Message sent successfully!*\n\nYour improved message has been posted. Keep up the great communication!"
-                    }
-                },
-                {
-                    type: "context",
-                    elements: [
-                        {
-                            type: "mrkdwn",
-                            text: "🔒 *This coaching is private to you* • Use `/clarity-settings` to customize your coaching"
-                        }
-                    ]
-                }
-            ]
-        });
+        // Delete the ephemeral message
+        await deleteEphemeral();
+        return NextResponse.json({ ok: true });
         
     } catch (error) {
         const errorObj = error instanceof Error ? error : new Error(String(error));
@@ -345,36 +331,103 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
             operation: 'send_improved_message',
             context: 'interactive_action'
         });
-        return NextResponse.json({
-            replace_original: true,
-            text: '❌ An error occurred while sending the message. Please try again.'
-        });
+        await deleteEphemeral();
+        return NextResponse.json({ ok: true });
     }
 }
 
-async function handleKeepOriginalMessage() {
-    return NextResponse.json({
-        replace_original: true,
-        text: '👍 *Keeping original message*\n\nNo changes made. Your original message is fine as is!',
-        blocks: [
-            {
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: "👍 *Keeping original message*\n\nNo changes made. Your original message is fine as is!"
-                }
-            },
-            {
-                type: "context",
-                elements: [
-                    {
-                        type: "mrkdwn",
-                        text: "💡 *Tip: Use `/clarity-settings` to customize your coaching focus areas*"
-                    }
-                ]
+async function handleKeepOriginalMessage(payload: SlackInteractivePayload) {
+    const responseUrl = payload.response_url;
+    if (responseUrl) {
+        await fetch(responseUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ delete_original: 'true' })
+        });
+    }
+    return NextResponse.json({ ok: true });
+}
+
+async function handleDismissSuggestion(payload: SlackInteractivePayload) {
+    const responseUrl = payload.response_url;
+    if (responseUrl) {
+        await fetch(responseUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ delete_original: 'true' })
+        });
+    }
+    return NextResponse.json({ ok: true });
+}
+
+async function handleEnableChannelMonitoring(payload: SlackInteractivePayload, action: SlackInteractivePayload['actions'][0]) {
+    try {
+        const userId = payload.user?.id;
+        const responseUrl = payload.response_url;
+        
+        if (!userId) {
+            return NextResponse.json({ text: 'Missing user data' });
+        }
+        
+        const data = JSON.parse(action.value);
+        const channelId = data.channel_id;
+        
+        if (!channelId) {
+            return NextResponse.json({ text: 'Missing channel data' });
+        }
+        
+        // Find user
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        
+        if (!user) {
+            return NextResponse.json({ ok: true });
+        }
+        
+        // Check if already enabled - just delete the message
+        if (user.autoCoachingEnabledChannels?.includes(channelId)) {
+            if (responseUrl) {
+                await fetch(responseUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ delete_original: 'true' })
+                });
             }
-        ]
-    });
+            return NextResponse.json({ ok: true });
+        }
+        
+        // Add channel to user's monitoring list
+        await slackUserCollection.updateOne(
+            { slackId: userId },
+            { 
+                $addToSet: { autoCoachingEnabledChannels: channelId },
+                $set: { updatedAt: new Date() }
+            }
+        );
+        
+        console.log(`✅ Enabled channel monitoring for user ${userId} in channel ${channelId}`);
+        
+        // Track event
+        trackEvent(userId, EVENTS.FEATURE_SETTINGS_UPDATED, {
+            action: 'channel_monitoring_enabled',
+            channel_id: channelId,
+            source: 'opt_in_prompt'
+        });
+        
+        // Delete the ephemeral message using response_url
+        if (responseUrl) {
+            await fetch(responseUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ delete_original: 'true' })
+            });
+        }
+        
+        return NextResponse.json({ ok: true });
+        
+    } catch (error) {
+        console.error('Error enabling channel monitoring:', error);
+        return NextResponse.json({ ok: true });
+    }
 }
 
 async function handleTransferAdminAction(payload: SlackInteractivePayload) {

@@ -97,7 +97,7 @@ Subscription {
 
 ### Workspace-Level vs User-Level Data
 - **Workspace-Level**: `botToken`, `botUserId`, `subscription`, `adminSlackId`, `stripeCustomerId`
-- **User-Level**: `autoCoachingEnabledChannels`, `coachingFlags`, `isAdmin`
+- **User-Level**: `autoCoachingEnabledChannels`, `coachingFlags`, `isAdmin`, `userToken`
 
 ### Admin Role Management
 ```typescript

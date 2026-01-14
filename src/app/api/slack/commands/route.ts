@@ -293,7 +293,7 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                     await workspaceSlack.chat.postEphemeral({
                         channel: channelId,
                         user: userId,
-                        text: `✅ *Your message looks great!*\n\n*Original:* "${text}"\n\nNo significant communication issues detected. 🎉`
+                        text: 'Your message looks good — no issues found.'
                     });
                 } else {
                     const primaryFlag = analysisResult.flags[0];
@@ -305,10 +305,77 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                         improvedMessage = await generateImprovedMessage(text, primaryFlag.type);
                     }
                     
+                    // Truncate original message for compact display
+                    const maxLen = 50;
+                    const originalTruncated = text.length > maxLen 
+                        ? text.substring(0, maxLen) + '...' 
+                        : text;
+                    
+                    // Build compact interactive message with buttons
+                    const blocks = [
+                        {
+                            type: "section",
+                            text: {
+                                type: "mrkdwn",
+                                text: `"${originalTruncated}" → "${improvedMessage.improvedMessage}"`
+                            }
+                        },
+                        {
+                            type: "context",
+                            elements: [
+                                {
+                                    type: "mrkdwn",
+                                    text: `*${primaryFlag.type}* — ${primaryFlag.explanation}`
+                                }
+                            ]
+                        },
+                        {
+                            type: "actions",
+                            elements: [
+                                {
+                                    type: "button",
+                                    text: {
+                                        type: "plain_text",
+                                        text: "Send"
+                                    },
+                                    style: "primary",
+                                    action_id: "send_improved_message",
+                                    value: JSON.stringify({
+                                        improvedMessage: improvedMessage.improvedMessage,
+                                        channelId: channelId,
+                                        userId: userId
+                                    })
+                                },
+                                {
+                                    type: "button",
+                                    text: {
+                                        type: "plain_text",
+                                        text: "Didn't like it"
+                                    },
+                                    action_id: "dismiss_suggestion",
+                                    value: JSON.stringify({
+                                        flag_type: primaryFlag.type,
+                                        user: userId
+                                    })
+                                }
+                            ]
+                        },
+                        {
+                            type: "context",
+                            elements: [
+                                {
+                                    type: "mrkdwn",
+                                    text: "Only you can see this"
+                                }
+                            ]
+                        }
+                    ];
+                    
                     await workspaceSlack.chat.postEphemeral({
                         channel: channelId,
                         user: userId,
-                        text: `🔄 *Message Improvement Suggestions*\n\n*Original:* "${text}"\n\n*Improved:* "${improvedMessage.improvedMessage}"\n\n_Tone: ${improvedMessage.tone}_\n\n🔒 _Only you can see this suggestion_`
+                        text: 'Suggestion ready',
+                        blocks
                     });
                 }
                 
