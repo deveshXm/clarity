@@ -6,7 +6,7 @@
         },
         {
             "source": "/docs/:match*",
-            "destination": "https://clarity-9b1741c0.mintlify.dev/docs/:match*"
+            "destination": "https://clarity-9b1741c0.mintlify.dev/:match*"
         }
     ]
 }
