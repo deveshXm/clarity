@@ -1,0 +1,71 @@
+---
+title: "Privacy"
+description: "How Clarity handles your data"
+---
+
+Your privacy matters. Here is how Clarity handles your Slack messages and data.
+
+## What Clarity accesses
+
+Clarity only accesses messages in channels where you have enabled auto coaching or when you explicitly use commands like `/clarity-rephrase`.
+
+| Data | When accessed | Purpose |
+|------|--------------|---------|
+| Message content | When coaching is triggered | To analyze and suggest improvements |
+| Channel membership | During setup | To show available channels in settings |
+| User profile | During installation | To identify you in the workspace |
+| Email address | During installation | For account and support purposes |
+
+## What Clarity does NOT access
+
+- Messages in channels where coaching is disabled
+- Direct messages (unless you enable auto coaching there)
+- Files, images, or attachments
+- Message history before installation
+
+## Data storage
+
+### Message content
+
+Messages are processed in real-time and **not stored** after analysis. Once Clarity generates a suggestion, the original message content is discarded.
+
+### User preferences
+
+Your settings (coaching flags, enabled channels) are stored securely and associated with your Slack user ID.
+
+### Usage data
+
+We track anonymized usage metrics (e.g., number of suggestions generated) to improve the service and enforce usage limits.
+
+## Third-party services
+
+Clarity uses the following services:
+
+| Service | Purpose |
+|---------|---------|
+| OpenAI | AI analysis for message improvement |
+| Stripe | Payment processing |
+| MongoDB | User preferences storage |
+
+<Note>
+Message content sent to OpenAI is not used to train their models. See OpenAI's data usage policy for details.
+</Note>
+
+## Data deletion
+
+To delete your data:
+
+1. Remove Clarity from your Slack workspace
+2. Email support@clarityapp.io to request full data deletion
+
+We will delete all associated data within 30 days of your request.
+
+## Security
+
+- All data is encrypted in transit (TLS)
+- Database access is restricted and audited
+- We do not sell or share your data with third parties
+
+## Questions
+
+For privacy-related questions, contact us at support@clarityapp.io.

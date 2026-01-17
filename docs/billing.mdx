@@ -1,0 +1,83 @@
+---
+title: "Billing"
+description: "Plans, pricing, and subscription management"
+---
+
+Clarity offers a free tier and a Pro plan for power users.
+
+## Plans comparison
+
+| Feature | Free | Pro |
+|---------|------|-----|
+| Monthly price | $0 | $4.99 |
+| Auto coaching suggestions | 20/month | 200/month |
+| Manual rephrase uses | 50/month | 200/month |
+| Custom coaching flags | No | Yes |
+| All default flags | Yes | Yes |
+| Priority support | No | Yes |
+
+## Free plan
+
+The free plan is great for trying Clarity or light usage:
+
+- 20 auto coaching suggestions per month
+- 50 manual `/clarity-rephrase` uses per month
+- All default coaching flags
+- No credit card required
+
+## Pro plan
+
+Pro unlocks higher limits and customization:
+
+- 200 auto coaching suggestions per month
+- 200 manual rephrase uses per month
+- Create custom coaching flags
+- Priority email support
+
+### Upgrading to Pro
+
+1. Run `/clarity-settings`
+2. Click **Manage billing** (admin only)
+3. Select the Pro plan
+4. Complete payment via Stripe
+
+<Note>
+Only workspace admins can manage billing. If you are not an admin, ask your workspace admin to upgrade.
+</Note>
+
+## Managing your subscription
+
+### Access billing portal
+
+Run `/clarity-settings` and click **Manage billing** to access the Stripe portal where you can:
+
+- View your current plan
+- Update payment method
+- Download invoices
+- Cancel subscription
+
+### Cancellation
+
+You can cancel anytime from the billing portal. Your Pro features remain active until the end of your billing period.
+
+## Usage tracking
+
+Check your current usage anytime:
+
+```
+/clarity-status
+```
+
+This shows:
+
+- Auto coaching uses this month
+- Manual rephrase uses this month
+- Days until usage resets
+
+<Tip>
+Usage resets on the first of each month.
+</Tip>
+
+## Workspace billing
+
+Clarity is billed per workspace, not per user. One subscription covers everyone in your Slack workspace.

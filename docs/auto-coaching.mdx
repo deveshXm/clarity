@@ -1,0 +1,80 @@
+---
+title: "Auto coaching"
+description: "Get proactive communication coaching as you message"
+---
+
+Auto coaching analyzes your messages in real-time and offers suggestions to improve them before or after you send.
+
+<Frame>
+  <img src="/images/app_image.png" alt="Auto coaching suggestion" style={{ borderRadius: '0.5rem' }} />
+</Frame>
+
+## How it works
+
+1. **You send a message** in a channel where auto coaching is enabled
+2. **Clarity analyzes** the message against your active coaching flags
+3. **If improvements are found**, you receive a private suggestion
+4. **You decide** whether to replace your message or keep the original
+
+<Note>
+Only you can see the coaching suggestions. Your teammates see the original message until you choose to replace it.
+</Note>
+
+## Enabling auto coaching
+
+Open settings to enable auto coaching for specific channels:
+
+```
+/clarity-settings
+```
+
+In the settings modal:
+
+1. Find the **Auto coaching channels** section
+2. Check the channels where you want coaching enabled
+3. Click **Save**
+
+<Tip>
+Start with one or two channels to get comfortable with the feature before enabling it workspace-wide.
+</Tip>
+
+## Suggestion format
+
+When Clarity finds an improvement, you will see:
+
+```
+"Your original message..." → "Improved version"
+
+**Flag Name** — Brief explanation of the improvement
+
+[Replace]  [Didn't like it]
+
+Only you can see this
+```
+
+- **Replace** updates your original message with the improved version
+- **Didn't like it** dismisses the suggestion
+
+## Coaching flags
+
+Auto coaching uses your active coaching flags to determine what to look for. Common flags include:
+
+| Flag | What it checks |
+|------|----------------|
+| Professional tone | Avoids casual language in work contexts |
+| Clarity | Simplifies complex or unclear sentences |
+| Brevity | Shortens unnecessarily long messages |
+| Inclusive language | Suggests more inclusive alternatives |
+
+Customize your flags in [Settings](/settings).
+
+## Usage limits
+
+Auto coaching suggestions count toward your monthly limit:
+
+| Plan | Monthly limit |
+|------|---------------|
+| Free | 20 suggestions |
+| Pro | 200 suggestions |
+
+Check your current usage with `/clarity-status`.
