@@ -67,7 +67,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
             flagTypes: analysisResult.flags.map(f => f.type),
         });
         
-        // Build response
+        // Build response (flag names already mapped in comprehensiveMessageAnalysis)
         const response: EvaluateResponse = {
             flagged: analysisResult.needsCoaching,
             flags: analysisResult.flags.map(f => ({

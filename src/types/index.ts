@@ -187,20 +187,21 @@ export const ImprovedMessageResultSchema = z.object({
 });
 
 // Comprehensive Analysis Result (Single AI Call)
+// Note: type is now a string (mapped from flagIndex to actual flag name)
 export const ComprehensiveAnalysisResultSchema = z.object({
     needsCoaching: z.boolean(),
     flags: z.array(z.object({
-        typeId: z.number().min(1).max(8),
-        type: z.enum(['pushiness', 'vagueness', 'nonObjective', 'circular', 'rudeness', 'passiveAggressive', 'fake', 'oneLiner']),
+        typeId: z.number().min(1).max(15), // Up to 15 custom flags
+        type: z.string(), // Dynamic flag name from coaching flags
         confidence: z.number().min(0).max(1),
         explanation: z.string(),
     })),
-    targetIds: z.array(z.string()).default([]), // 🎯 Multiple target Slack user IDs
+    targetIds: z.array(z.string()).default([]), // Multiple target Slack user IDs
     improvedMessage: z.object({
         originalMessage: z.string(),
         improvedMessage: z.string(),
         improvements: z.array(z.string()),
-        tone: z.enum(['professional', 'friendly', 'direct', 'collaborative']),
+        tone: z.string(), // Dynamic tone from AI
     }).nullable(),
     reasoning: z.object({
         whyNeedsCoaching: z.string(),

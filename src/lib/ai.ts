@@ -119,23 +119,36 @@ export const generateImprovedMessageWithContext = async (
 
 // ------------------- Optimized Auto-Coaching (Single AI Call) -------------------
 
-function parseComprehensiveAnalysis(raw: unknown): ComprehensiveAnalysisResult {
+function parseComprehensiveAnalysis(raw: unknown, enabledFlags: CoachingFlag[]): ComprehensiveAnalysisResult {
     try {
-        const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        return data as ComprehensiveAnalysisResult;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data: any = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        
+        // Map flagIndex (1-based) back to actual flag names from input
+        const mappedFlags = (data.flags || [])
+            .filter((f: { flagIndex: number }) => f.flagIndex >= 1 && f.flagIndex <= enabledFlags.length)
+            .map((f: { flagIndex: number; confidence: number; explanation: string }) => ({
+                typeId: f.flagIndex,
+                type: enabledFlags[f.flagIndex - 1].name,
+                confidence: f.confidence,
+                explanation: f.explanation,
+            }));
+        
+        return {
+            needsCoaching: data.needsCoaching ?? false,
+            flags: mappedFlags,
+            targetIds: data.targetIds || [],
+            improvedMessage: data.improvedMessage || null,
+            reasoning: data.reasoning || { whyNeedsCoaching: '', primaryIssue: 'none', contextInfluence: '' }
+        };
     } catch (error) {
         console.error('Failed to parse comprehensive analysis:', error);
-        // Return safe fallback
         return {
             needsCoaching: false,
             flags: [],
             targetIds: [],
             improvedMessage: null,
-            reasoning: {
-                whyNeedsCoaching: 'Parse error occurred',
-                primaryIssue: 'none',
-                contextInfluence: 'Unable to analyze due to parsing error'
-            }
+            reasoning: { whyNeedsCoaching: 'Parse error', primaryIssue: 'none', contextInfluence: '' }
         };
     }
 }
@@ -145,6 +158,7 @@ export const comprehensiveMessageAnalysis = async (
     conversationHistory: string[],
     coachingFlags: CoachingFlag[]
 ): Promise<ComprehensiveAnalysisResult> => {
+    const enabledFlags = coachingFlags.filter(f => f.enabled);
     const categoriesStr = buildCategoriesString(coachingFlags);
     const systemPrompt = AUTO_COACHING_ANALYSIS_PROMPT.replace('{{CATEGORIES}}', categoriesStr);
     const history = conversationHistory.slice(0, 15).join('\n'); // Last 15 messages for context
@@ -155,5 +169,5 @@ export const comprehensiveMessageAnalysis = async (
         { role: 'user', content: userPrompt },
     ]);
     
-    return parseComprehensiveAnalysis(raw);
+    return parseComprehensiveAnalysis(raw, enabledFlags);
 };

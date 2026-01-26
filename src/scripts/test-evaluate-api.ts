@@ -192,7 +192,7 @@ const testCases: TestCase[] = [
     {
         name: '18. Message with code blocks',
         request: {
-            message: 'The bug is in this function - it returns null instead of the user object:\n```\nfunction test() { return null; }\n```\nIt should return the authenticated user from the session.',
+            message: 'Found the bug in src/auth/session.ts line 42. The getUser function returns null instead of the user object:\n```\nfunction getUser() { return null; }\n```\nIt should return req.session.user instead. Can you fix this?',
         },
         expectedFlagged: false,
     },

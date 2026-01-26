@@ -67,10 +67,12 @@ Focus on clarity and politeness without sterilizing the author's voice
 **Required JSON Response Format:**
 {
   "needsCoaching": true/false,
-  "flags": [{"typeId": 1, "type": "pushiness", "confidence": 0.8, "explanation": "specific reason"}] or [],
+  "flags": [{"flagIndex": 1, "confidence": 0.8, "explanation": "specific reason"}] or [],
   "targetIds": ["U123456789", "U987654321"] or [],
   "improvedMessage": {"originalMessage": "exact text", "improvedMessage": "better version", "improvements": ["specific change 1", "change 2"], "tone": "casual/professional/friendly"} or null,
   "reasoning": {"whyNeedsCoaching": "clear explanation", "primaryIssue": "main problem or none", "contextInfluence": "how history informed analysis"}
-}`;
+}
+
+**IMPORTANT:** The "flagIndex" MUST be the exact number from the Analysis Categories list above (1, 2, 3, etc.). Do not invent flag names - only use the indices provided.`;
 
 export { temporaryPrompt } from './temporaryPrompt';
