@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, fetchConversationHistory, isChannelAccessible, getSlackOAuthUrl, openOnboardingModal, getWorkspaceChannels, getSlackUserInfoWithEmail } from '@/lib/slack';
-import { slackUserCollection, workspaceCollection, botChannelsCollection, feedbackCollection } from '@/lib/db';
+import { slackUserCollection, workspaceCollection, botChannelsCollection, feedbackCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
 import { generateImprovedMessage, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
@@ -304,6 +304,27 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                     } else {
                         improvedMessage = await generateImprovedMessage(text, primaryFlag.type);
                     }
+                    
+                    // Save analysis instance for manual rephrase
+                    const instanceData = {
+                        _id: new ObjectId(),
+                        userId: user._id,
+                        workspaceId: String(workspace._id),
+                        channelId: channelId,
+                        messageTs: new Date().getTime().toString(), // Use current timestamp since no original message ts
+                        flagIds: analysisResult.flags.map(f => f.typeId),
+                        targetIds: analysisResult.target ? [analysisResult.target.slackId] : [],
+                        originalMessage: text,
+                        rephrasedMessage: improvedMessage.improvedMessage,
+                        createdAt: new Date(),
+                        aiMetadata: {
+                            primaryFlagId: primaryFlag.typeId,
+                            confidence: primaryFlag.confidence,
+                            reasoning: primaryFlag.explanation,
+                        },
+                    };
+                    
+                    await analysisInstanceCollection.insertOne(instanceData);
                     
                     // Truncate original message for compact display
                     const maxLen = 50;

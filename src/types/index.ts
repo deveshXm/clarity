@@ -121,7 +121,7 @@ export const SlackUserSchema = z.object({
 
 export const CreateSlackUserSchema = SlackUserSchema.omit({ _id: true, createdAt: true, updatedAt: true });
 
-// Analysis Instance Schema - Multiple flags per message (Privacy-First: No Message Text)
+// Analysis Instance Schema - Multiple flags per message
 export const AnalysisInstanceSchema = z.object({
     _id: z.string(),
     userId: z.string(), // MongoDB ObjectId as string
@@ -130,7 +130,8 @@ export const AnalysisInstanceSchema = z.object({
     messageTs: z.string(), // Slack timestamp for deep linking
     flagIds: z.array(z.number().min(1).max(8)), // 🎯 Multiple flags per message
     targetIds: z.array(z.string()).default([]), // 🎯 Multiple target Slack user IDs
-    issueDescription: z.string(), // AI-extracted description of what's wrong (no confidential info)
+    originalMessage: z.string(), // Original message text that was analyzed
+    rephrasedMessage: z.string(), // AI-generated improved message
     createdAt: z.coerce.date(),
     aiMetadata: z.object({
         primaryFlagId: z.number().min(1).max(8),
@@ -195,7 +196,6 @@ export const ComprehensiveAnalysisResultSchema = z.object({
         explanation: z.string(),
     })),
     targetIds: z.array(z.string()).default([]), // 🎯 Multiple target Slack user IDs
-    issueDescription: z.string(), // Brief description of what's wrong (no confidential content)
     improvedMessage: z.object({
         originalMessage: z.string(),
         improvedMessage: z.string(),

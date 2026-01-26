@@ -265,7 +265,6 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             needsCoaching: analysis.needsCoaching,
             flagsFound: analysis.flags.length,
             hasTargets: analysis.targetIds && analysis.targetIds.length > 0,
-            issueDescription: analysis.issueDescription,
             targetCount: analysis.targetIds ? analysis.targetIds.length : 0,
             hasImprovement: !!analysis.improvedMessage,
             reasoning: analysis.reasoning.primaryIssue
@@ -468,7 +467,8 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                 messageTs: validatedEvent.ts,
                 flagIds: analysis.flags.map(f => f.typeId),
                 targetIds: analysis.targetIds || [],
-                issueDescription: analysis.issueDescription,
+                originalMessage: validatedEvent.text,
+                rephrasedMessage: improvedMessage.improvedMessage,
                 createdAt: new Date(),
                 aiMetadata: {
                     primaryFlagId: primaryFlag.typeId,
@@ -479,7 +479,6 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             };
             
             console.log('💾 Storing analysis instance:', {
-                issueDescription: instanceData.issueDescription,
                 flagIds: instanceData.flagIds,
                 targetIds: instanceData.targetIds
             });
