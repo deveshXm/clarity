@@ -90,7 +90,7 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
 - **workspaceCollection**: Workspace data with `botToken`, `botUserId`, `adminSlackId`, `subscription`, `hasCompletedOnboarding`
 - **slackUserCollection**: User data with preferences, `isAdmin` flag, `coachingFlags`
 - **botChannelsCollection**: Tracks channels where bot is active
-- **analysisInstanceCollection**: Stores message analysis results
+- **analysisInstanceCollection**: Stores `originalMessage`, `rephrasedMessage`, `flagIds`, `targetIds`, `aiMetadata` for every coaching suggestion (both auto-coaching and manual rephrase)
 - **feedbackCollection**: User feedback submissions
 
 ### Workspace vs User Data
@@ -173,6 +173,7 @@ export const SUBSCRIPTION_TIERS = {
 3. Check `user.autoCoachingEnabledChannels.includes(channelId)`
 4. Validate subscription access via `validateUserAccess(userId, 'autoCoaching', workspaceId)`
 5. Run AI analysis and send ephemeral coaching if needed
+6. Save analysis instance with `originalMessage` and `rephrasedMessage` to `analysisInstanceCollection`
 
 ## Suggestion UI ✅ COMPACT DESIGN
 Coaching suggestions use a compact, minimal format for both auto-coaching and manual rephrase.
