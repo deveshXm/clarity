@@ -3,7 +3,7 @@
  * Run with: npm run test:evaluate:dev
  */
 
-const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
+const BASE_URL = process.env.TEST_BASE_URL || 'https://clarity.rocktangle.com';
 
 interface EvaluateRequest {
     message: string;
