@@ -2,10 +2,16 @@
 
 Stateless API endpoint for evaluating messages against Clarity's communication coaching AI.
 
+## Base URL
+
+```
+https://clarity.rocktangle.com
+```
+
 ## Endpoint
 
 ```
-POST /api/evaluate
+POST https://clarity.rocktangle.com/api/evaluate
 ```
 
 ## Request
@@ -57,7 +63,7 @@ If `coachingFlags` is not provided, these defaults are used:
 {
   flagged: boolean;           // Whether the message has communication issues
   flags: Array<{
-    type: string;             // Flag type (e.g., "pushiness", "rudeness")
+    type: string;             // Flag name (e.g., "Pushiness", "Rudeness") - exact match from input flags
     confidence: number;       // Confidence score (0-1)
     explanation: string;      // Why this flag was triggered
   }>;
@@ -91,7 +97,7 @@ curl -X POST https://clarity.rocktangle.com/api/evaluate \
   "flagged": true,
   "flags": [
     {
-      "type": "pushiness",
+      "type": "Pushiness",
       "confidence": 0.95,
       "explanation": "Message uses demanding tone with 'NOW' in all caps"
     }
