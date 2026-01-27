@@ -18,6 +18,7 @@ interface SlackInteractivePayload {
   trigger_id?: string;
   response_url?: string;
   view?: {
+    id?: string; // View ID for updating
     callback_id?: string;
     private_metadata?: string;
     state?: {
@@ -46,6 +47,121 @@ interface MessageReplacementData {
   original_text: string;
   improved_text: string;
   user: string;
+}
+
+// Helper function to refresh Settings modal with updated flag data
+async function refreshSettingsModal(
+    settingsViewId: string,
+    userId: string,
+    workspaceId: string,
+    botToken: string
+) {
+    try {
+        const workspaceSlack = new WebClient(botToken);
+        
+        // Re-fetch user and workspace data
+        const user = await slackUserCollection.findOne({ slackId: userId, workspaceId, isActive: true });
+        if (!user) return;
+        
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(workspaceId) });
+        if (!workspace) return;
+        
+        const botChannels = await botChannelsCollection.find({ workspaceId }).toArray();
+        
+        const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
+        const enabledCount = flags.filter((f: CoachingFlag) => f.enabled).length;
+        
+        // Build flag options
+        const flagOptions = flags.map((flag: CoachingFlag, index: number) => ({
+            text: { type: 'plain_text' as const, text: flag.name },
+            description: { type: 'plain_text' as const, text: flag.description },
+            value: String(index)
+        }));
+        
+        const enabledFlagOptions = flags
+            .map((flag: CoachingFlag, index: number) => flag.enabled ? {
+                text: { type: 'plain_text' as const, text: flag.name },
+                description: { type: 'plain_text' as const, text: flag.description },
+                value: String(index)
+            } : null)
+            .filter((opt: unknown): opt is NonNullable<typeof opt> => opt !== null);
+        
+        // Build channel options
+        const channelOptions = botChannels.map(channel => ({
+            text: { type: 'plain_text' as const, text: `#${channel.channelName}` },
+            value: channel.channelId
+        }));
+        
+        const enabledChannelOptions = botChannels
+            .filter(channel => user.autoCoachingEnabledChannels?.includes(channel.channelId))
+            .map(channel => ({
+                text: { type: 'plain_text' as const, text: `#${channel.channelName}` },
+                value: channel.channelId
+            }));
+        
+        // Build blocks for Settings modal
+        const blocks = [
+            {
+                type: 'section',
+                text: { type: 'mrkdwn', text: `*🎯 Coaching Focus* (${enabledCount}/${flags.length} active)` },
+                accessory: {
+                    type: 'button',
+                    action_id: 'manage_flags_button',
+                    text: { type: 'plain_text', text: 'Edit Flags', emoji: true }
+                }
+            },
+            {
+                type: 'input',
+                block_id: 'coaching_flags_block',
+                optional: true,
+                element: {
+                    type: 'checkboxes',
+                    action_id: 'coaching_flags_checkboxes',
+                    options: flagOptions,
+                    ...(enabledFlagOptions.length > 0 ? { initial_options: enabledFlagOptions } : {})
+                },
+                label: { type: 'plain_text', text: 'Select what I should help you improve' }
+            },
+            { type: 'divider' },
+            {
+                type: 'section',
+                block_id: 'auto_coaching_channels_section',
+                text: { type: 'mrkdwn', text: '*📢 Auto Coaching Channels*\nSelect channels where you want automatic coaching:' },
+                ...(channelOptions.length > 0 ? {
+                    accessory: {
+                        type: 'checkboxes',
+                        action_id: 'channel_checkboxes',
+                        options: channelOptions,
+                        ...(enabledChannelOptions.length > 0 ? { initial_options: enabledChannelOptions } : {})
+                    }
+                } : {})
+            }
+        ];
+        
+        // Add context block if no channels
+        if (channelOptions.length === 0) {
+            blocks.push({
+                type: 'context',
+                elements: [{ type: 'mrkdwn', text: '_No channels available. Add Clarity to a channel first._' }]
+            } as typeof blocks[0]);
+        }
+        
+        // Build updated Settings modal
+        await workspaceSlack.views.update({
+            view_id: settingsViewId,
+            view: {
+                type: 'modal',
+                callback_id: 'settings_modal',
+                title: { type: 'plain_text', text: 'Settings' },
+                submit: { type: 'plain_text', text: 'Save' },
+                blocks
+            }
+        });
+        
+        logInfo('Settings modal refreshed after flag change', { user_id: userId, settings_view_id: settingsViewId });
+    } catch (error) {
+        logError('Error refreshing Settings modal', error instanceof Error ? error : new Error(String(error)));
+    }
 }
 
 export async function POST(request: NextRequest) {
@@ -121,18 +237,23 @@ export async function POST(request: NextRequest) {
             }
         } else if (payload.type === 'view_submission') {
             // Handle modal form submissions
-            if (payload.view?.callback_id === 'settings_modal') {
+            const callbackId = payload.view?.callback_id;
+            logInfo('View submission received', { callback_id: callbackId, user_id: payload.user?.id });
+            
+            if (callbackId === 'settings_modal') {
                 return await handleSettingsSubmission(payload);
-            } else if (payload.view?.callback_id === 'workspace_onboarding_modal') {
+            } else if (callbackId === 'workspace_onboarding_modal') {
                 return await handleOnboardingSubmission(payload);
-            } else if (payload.view?.callback_id === 'admin_transfer_modal') {
+            } else if (callbackId === 'admin_transfer_modal') {
                 return await handleAdminTransferSubmission(payload);
-            } else if (payload.view?.callback_id === 'create_flag_modal') {
+            } else if (callbackId === 'create_flag_modal') {
                 return await handleCreateFlagSubmission(payload);
-            } else if (payload.view?.callback_id === 'edit_flag_modal') {
+            } else if (callbackId === 'edit_flag_modal') {
                 return await handleEditFlagSubmission(payload);
-            } else if (payload.view?.callback_id === 'delete_flag_modal') {
+            } else if (callbackId === 'delete_flag_modal') {
                 return await handleDeleteFlagSubmission(payload);
+            } else {
+                logInfo('Unhandled view submission', { callback_id: callbackId });
             }
         }
         
@@ -993,9 +1114,13 @@ async function handleAdminTransferSubmission(payload: SlackInteractivePayload) {
 async function handleAddCustomFlagAction(payload: SlackInteractivePayload) {
     try {
         const userId = payload.user?.id;
-        const triggerId = payload.trigger_id;
+        const viewId = payload.view?.id;
         
-        if (!userId || !triggerId) {
+        // Extract settingsViewId from current modal's metadata
+        const currentMetadata = payload.view?.private_metadata ? JSON.parse(payload.view.private_metadata) : {};
+        const settingsViewId = currentMetadata.settingsViewId;
+        
+        if (!userId || !viewId) {
             return NextResponse.json({ text: 'Missing required data' });
         }
         
@@ -1017,13 +1142,16 @@ async function handleAddCustomFlagAction(payload: SlackInteractivePayload) {
         
         const workspaceSlack = new WebClient(workspace.botToken);
         
-        await workspaceSlack.views.push({
-            trigger_id: triggerId,
+        // Use views.update instead of push to avoid stack overflow
+        await workspaceSlack.views.update({
+            view_id: viewId,
             view: {
                 type: 'modal',
                 callback_id: 'create_flag_modal',
-                title: { type: 'plain_text', text: 'Create Custom Flag' },
+                private_metadata: JSON.stringify({ settingsViewId }), // Pass settingsViewId
+                title: { type: 'plain_text', text: 'Add Flag' },
                 submit: { type: 'plain_text', text: 'Create' },
+                close: { type: 'plain_text', text: 'Back' },
                 blocks: [
                     {
                         type: 'input',
@@ -1069,6 +1197,7 @@ async function handleManageFlagsButton(payload: SlackInteractivePayload) {
     try {
         const userId = payload.user?.id;
         const triggerId = payload.trigger_id;
+        const settingsViewId = payload.view?.id; // Store Settings modal view_id for later refresh
         
         if (!userId || !triggerId) {
             return NextResponse.json({ text: 'Missing required data' });
@@ -1105,6 +1234,7 @@ async function handleManageFlagsButton(payload: SlackInteractivePayload) {
             view: {
                 type: 'modal',
                 callback_id: 'manage_flags_modal',
+                private_metadata: JSON.stringify({ settingsViewId }), // Pass Settings view_id
                 title: { type: 'plain_text', text: 'Edit Flags' },
                 close: { type: 'plain_text', text: 'Back' },
                 blocks: [
@@ -1151,14 +1281,18 @@ async function handleManageFlagsOverflowAction(payload: SlackInteractivePayload,
         const workspaceSlack = new WebClient(workspace.botToken);
         
         if (selectedValue === 'add_flag') {
-            // Open create flag modal
-            await workspaceSlack.views.push({
-                trigger_id: triggerId,
+            const viewId = payload.view?.id;
+            if (!viewId) return NextResponse.json({ text: 'Missing view ID' });
+            
+            // Use views.update instead of push to avoid stack overflow
+            await workspaceSlack.views.update({
+                view_id: viewId,
                 view: {
                     type: 'modal',
                     callback_id: 'create_flag_modal',
                     title: { type: 'plain_text', text: 'Add Flag' },
                     submit: { type: 'plain_text', text: 'Create' },
+                    close: { type: 'plain_text', text: 'Back' },
                     blocks: [
                         {
                             type: 'input',
@@ -1199,14 +1333,19 @@ async function handleManageFlagsOverflowAction(payload: SlackInteractivePayload,
         
         if (actionType === 'edit') {
             const flag = flags[flagIndex];
-            await workspaceSlack.views.push({
-                trigger_id: triggerId,
+            const viewId = payload.view?.id;
+            if (!viewId) return NextResponse.json({ text: 'Missing view ID' });
+            
+            // Use views.update instead of push to avoid stack overflow
+            await workspaceSlack.views.update({
+                view_id: viewId,
                 view: {
                     type: 'modal',
                     callback_id: 'edit_flag_modal',
                     private_metadata: JSON.stringify({ flagIndex }),
                     title: { type: 'plain_text', text: 'Edit Flag' },
                     submit: { type: 'plain_text', text: 'Save' },
+                    close: { type: 'plain_text', text: 'Back' },
                     blocks: [
                         {
                             type: 'input',
@@ -1239,15 +1378,19 @@ async function handleManageFlagsOverflowAction(payload: SlackInteractivePayload,
         
         if (actionType === 'delete') {
             const flag = flags[flagIndex];
-            await workspaceSlack.views.push({
-                trigger_id: triggerId,
+            const viewId = payload.view?.id;
+            if (!viewId) return NextResponse.json({ text: 'Missing view ID' });
+            
+            // Use views.update instead of push to avoid stack overflow
+            await workspaceSlack.views.update({
+                view_id: viewId,
                 view: {
                     type: 'modal',
                     callback_id: 'delete_flag_modal',
                     private_metadata: JSON.stringify({ flagIndex }),
-                    title: { type: 'plain_text', text: 'Delete Flag' },
+                    title: { type: 'plain_text', text: 'Delete Flag?' },
                     submit: { type: 'plain_text', text: 'Delete' },
-                    close: { type: 'plain_text', text: 'Cancel' },
+                    close: { type: 'plain_text', text: 'Back' },
                     blocks: [
                         {
                             type: 'section',
@@ -1275,6 +1418,10 @@ async function handleFlagOverflowAction(payload: SlackInteractivePayload, action
         const userId = payload.user?.id;
         const triggerId = payload.trigger_id;
         const selectedValue = action.value || (action as unknown as { selected_option?: { value: string } }).selected_option?.value;
+        
+        // Extract settingsViewId from current modal's metadata
+        const currentMetadata = payload.view?.private_metadata ? JSON.parse(payload.view.private_metadata) : {};
+        const settingsViewId = currentMetadata.settingsViewId;
         
         if (!userId || !triggerId || !selectedValue) {
             return NextResponse.json({ text: 'Missing required data' });
@@ -1322,15 +1469,19 @@ async function handleFlagOverflowAction(payload: SlackInteractivePayload, action
             
         } else if (actionType === 'edit') {
             const flag = flags[flagIndex];
+            const viewId = payload.view?.id;
+            if (!viewId) return NextResponse.json({ text: 'Missing view ID' });
             
-            await workspaceSlack.views.push({
-                trigger_id: triggerId,
+            // Use views.update instead of push to avoid stack overflow
+            await workspaceSlack.views.update({
+                view_id: viewId,
                 view: {
                     type: 'modal',
                     callback_id: 'edit_flag_modal',
-                    private_metadata: JSON.stringify({ flagIndex }),
+                    private_metadata: JSON.stringify({ flagIndex, settingsViewId }), // Pass settingsViewId
                     title: { type: 'plain_text', text: 'Edit Flag' },
                     submit: { type: 'plain_text', text: 'Save' },
+                    close: { type: 'plain_text', text: 'Back' },
                     blocks: [
                         {
                             type: 'input',
@@ -1363,16 +1514,19 @@ async function handleFlagOverflowAction(payload: SlackInteractivePayload, action
             
         } else if (actionType === 'delete') {
             const flag = flags[flagIndex];
+            const viewId = payload.view?.id;
+            if (!viewId) return NextResponse.json({ text: 'Missing view ID' });
             
-            await workspaceSlack.views.push({
-                trigger_id: triggerId,
+            // Use views.update instead of push to avoid stack overflow
+            await workspaceSlack.views.update({
+                view_id: viewId,
                 view: {
                     type: 'modal',
                     callback_id: 'delete_flag_modal',
-                    private_metadata: JSON.stringify({ flagIndex }),
+                    private_metadata: JSON.stringify({ flagIndex, settingsViewId }), // Pass settingsViewId
                     title: { type: 'plain_text', text: 'Delete Flag?' },
                     submit: { type: 'plain_text', text: 'Delete' },
-                    close: { type: 'plain_text', text: 'Cancel' },
+                    close: { type: 'plain_text', text: 'Back' },
                     blocks: [
                         {
                             type: 'section',
@@ -1409,6 +1563,9 @@ async function handleCreateFlagSubmission(payload: SlackInteractivePayload) {
             });
         }
         
+        const metadata = view.private_metadata ? JSON.parse(view.private_metadata) : {};
+        const settingsViewId = metadata.settingsViewId; // For refreshing parent Settings modal
+        
         const name = view.state?.values?.flag_name?.name_input?.value?.trim();
         const description = view.state?.values?.flag_description?.description_input?.value?.trim();
         
@@ -1430,6 +1587,14 @@ async function handleCreateFlagSubmission(payload: SlackInteractivePayload) {
             });
         }
         
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        if (!workspace) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { flag_name: 'Workspace not found' }
+            });
+        }
+        
         const flags: CoachingFlag[] = user.coachingFlags?.length ? user.coachingFlags : [...DEFAULT_COACHING_FLAGS];
         
         if (flags.length >= MAX_COACHING_FLAGS) {
@@ -1448,8 +1613,9 @@ async function handleCreateFlagSubmission(payload: SlackInteractivePayload) {
         
         flags.push(newFlag);
         
+        // Update with workspaceId filter to ensure we update the correct user
         await slackUserCollection.updateOne(
-            { slackId: userId },
+            { slackId: userId, workspaceId: user.workspaceId },
             { $set: { coachingFlags: flags, updatedAt: new Date() } }
         );
         
@@ -1459,17 +1625,51 @@ async function handleCreateFlagSubmission(payload: SlackInteractivePayload) {
             total_flags: flags.length
         });
         
+        // Refresh Settings modal in background if we have the view ID
+        if (settingsViewId && workspace.botToken) {
+            after(async () => {
+                await refreshSettingsModal(settingsViewId, userId, user.workspaceId, workspace.botToken);
+            });
+        }
+        
+        // Build updated Edit Flags modal content with new flag
+        const flagBlocks = flags.map((flag, index) => ({
+            type: 'section',
+            text: {
+                type: 'mrkdwn',
+                text: `*${flag.name}*\n${flag.description}`
+            },
+            accessory: {
+                type: 'overflow',
+                action_id: `flag_overflow_${index}`,
+                options: [
+                    { text: { type: 'plain_text', text: '✏️ Edit' }, value: `edit_${index}` },
+                    { text: { type: 'plain_text', text: '🗑️ Delete' }, value: `delete_${index}` }
+                ]
+            }
+        }));
+        
+        // Return updated Edit Flags modal (replaces create form)
         return NextResponse.json({
             response_action: 'update',
             view: {
                 type: 'modal',
-                callback_id: 'create_flag_modal',
-                title: { type: 'plain_text', text: 'Flag Created!' },
+                callback_id: 'manage_flags_modal',
+                private_metadata: JSON.stringify({ settingsViewId }), // Preserve for subsequent operations
+                title: { type: 'plain_text', text: 'Edit Flags' },
+                close: { type: 'plain_text', text: 'Back' },
                 blocks: [
                     {
                         type: 'section',
-                        text: { type: 'mrkdwn', text: `✅ *${name}* has been created and enabled.\n\nUse \`/clarity-settings\` to manage your flags.` }
-                    }
+                        text: { type: 'mrkdwn', text: `✅ *${name}* created\n\n*${flags.length}/${MAX_COACHING_FLAGS} flags*` },
+                        accessory: flags.length < MAX_COACHING_FLAGS ? {
+                            type: 'button',
+                            action_id: 'add_custom_flag',
+                            text: { type: 'plain_text', text: '➕ Add Flag', emoji: true }
+                        } : undefined
+                    },
+                    { type: 'divider' },
+                    ...flagBlocks
                 ]
             }
         });
@@ -1498,6 +1698,7 @@ async function handleEditFlagSubmission(payload: SlackInteractivePayload) {
         
         const metadata = view.private_metadata ? JSON.parse(view.private_metadata) : {};
         const flagIndex = metadata.flagIndex;
+        const settingsViewId = metadata.settingsViewId; // For refreshing parent Settings modal
         
         const name = view.state?.values?.flag_name?.name_input?.value?.trim();
         const description = view.state?.values?.flag_description?.description_input?.value?.trim();
@@ -1520,6 +1721,14 @@ async function handleEditFlagSubmission(payload: SlackInteractivePayload) {
             });
         }
         
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        if (!workspace) {
+            return NextResponse.json({
+                response_action: 'errors',
+                errors: { flag_name: 'Workspace not found' }
+            });
+        }
+        
         const flags: CoachingFlag[] = user.coachingFlags?.length ? user.coachingFlags : [...DEFAULT_COACHING_FLAGS];
         
         if (typeof flagIndex !== 'number' || flagIndex < 0 || flagIndex >= flags.length) {
@@ -1532,8 +1741,9 @@ async function handleEditFlagSubmission(payload: SlackInteractivePayload) {
         flags[flagIndex].name = name;
         flags[flagIndex].description = description;
         
+        // Update with workspaceId filter to ensure we update the correct user
         await slackUserCollection.updateOne(
-            { slackId: userId },
+            { slackId: userId, workspaceId: user.workspaceId },
             { $set: { coachingFlags: flags, updatedAt: new Date() } }
         );
         
@@ -1543,17 +1753,51 @@ async function handleEditFlagSubmission(payload: SlackInteractivePayload) {
             flag_name: name
         });
         
+        // Refresh Settings modal in background if we have the view ID
+        if (settingsViewId && workspace.botToken) {
+            after(async () => {
+                await refreshSettingsModal(settingsViewId, userId, user.workspaceId, workspace.botToken);
+            });
+        }
+        
+        // Build updated Edit Flags modal content to replace edit confirmation
+        const flagBlocks = flags.map((flag, index) => ({
+            type: 'section',
+            text: {
+                type: 'mrkdwn',
+                text: `*${flag.name}*\n${flag.description}`
+            },
+            accessory: {
+                type: 'overflow',
+                action_id: `flag_overflow_${index}`,
+                options: [
+                    { text: { type: 'plain_text', text: '✏️ Edit' }, value: `edit_${index}` },
+                    { text: { type: 'plain_text', text: '🗑️ Delete' }, value: `delete_${index}` }
+                ]
+            }
+        }));
+        
+        // Return updated Edit Flags modal (replaces edit form)
         return NextResponse.json({
             response_action: 'update',
             view: {
                 type: 'modal',
-                callback_id: 'edit_flag_modal',
-                title: { type: 'plain_text', text: 'Flag Updated!' },
+                callback_id: 'manage_flags_modal',
+                private_metadata: JSON.stringify({ settingsViewId }), // Preserve for subsequent operations
+                title: { type: 'plain_text', text: 'Edit Flags' },
+                close: { type: 'plain_text', text: 'Back' },
                 blocks: [
                     {
                         type: 'section',
-                        text: { type: 'mrkdwn', text: `✅ *${name}* has been updated.\n\nUse \`/clarity-settings\` to manage your flags.` }
-                    }
+                        text: { type: 'mrkdwn', text: `✅ *${name}* updated\n\n*${flags.length}/${MAX_COACHING_FLAGS} flags*` },
+                        accessory: flags.length < MAX_COACHING_FLAGS ? {
+                            type: 'button',
+                            action_id: 'add_custom_flag',
+                            text: { type: 'plain_text', text: '➕ Add Flag', emoji: true }
+                        } : undefined
+                    },
+                    { type: 'divider' },
+                    ...flagBlocks
                 ]
             }
         });
@@ -1587,9 +1831,13 @@ async function handleDeleteFlagSubmission(payload: SlackInteractivePayload) {
         
         const metadata = view.private_metadata ? JSON.parse(view.private_metadata) : {};
         const flagIndex = metadata.flagIndex;
+        const settingsViewId = metadata.settingsViewId; // For refreshing parent Settings modal
+        
+        logInfo('Delete flag submission', { user_id: userId, flagIndex, settingsViewId, metadata });
         
         const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
         if (!user) {
+            logError('Delete flag - user not found', new Error('User not found'), { user_id: userId });
             return NextResponse.json({
                 response_action: 'update',
                 view: {
@@ -1601,9 +1849,31 @@ async function handleDeleteFlagSubmission(payload: SlackInteractivePayload) {
             });
         }
         
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        if (!workspace) {
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'delete_flag_modal',
+                    title: { type: 'plain_text', text: 'Error' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Workspace not found' } }]
+                }
+            });
+        }
+        
         const flags: CoachingFlag[] = user.coachingFlags?.length ? user.coachingFlags : [...DEFAULT_COACHING_FLAGS];
         
+        logInfo('Delete flag - current flags', { 
+            user_id: userId, 
+            workspace_id: user.workspaceId,
+            current_flag_count: flags.length, 
+            flagIndex,
+            flag_names: flags.map(f => f.name)
+        });
+        
         if (typeof flagIndex !== 'number' || flagIndex < 0 || flagIndex >= flags.length) {
+            logError('Delete flag - invalid index', new Error('Flag not found'), { flagIndex, flags_length: flags.length });
             return NextResponse.json({
                 response_action: 'update',
                 view: {
@@ -1633,10 +1903,20 @@ async function handleDeleteFlagSubmission(payload: SlackInteractivePayload) {
         
         flags.splice(flagIndex, 1);
         
-        await slackUserCollection.updateOne(
-            { slackId: userId },
+        // Update with workspaceId filter to ensure we update the correct user
+        const updateResult = await slackUserCollection.updateOne(
+            { slackId: userId, workspaceId: user.workspaceId },
             { $set: { coachingFlags: flags, updatedAt: new Date() } }
         );
+        
+        logInfo('Delete flag - DB update result', { 
+            user_id: userId,
+            workspace_id: user.workspaceId,
+            deleted_flag: deletedFlag.name,
+            new_flag_count: flags.length,
+            matched_count: updateResult.matchedCount,
+            modified_count: updateResult.modifiedCount
+        });
         
         trackEvent(userId, EVENTS.FEATURE_COACHING_FLAGS_UPDATED, {
             action: 'delete',
@@ -1645,17 +1925,51 @@ async function handleDeleteFlagSubmission(payload: SlackInteractivePayload) {
             remaining_flags: flags.length
         });
         
+        // Refresh Settings modal in background if we have the view ID
+        if (settingsViewId && workspace.botToken) {
+            after(async () => {
+                await refreshSettingsModal(settingsViewId, userId, user.workspaceId, workspace.botToken);
+            });
+        }
+        
+        // Build updated Edit Flags modal content to replace delete confirmation
+        const flagBlocks = flags.map((flag, index) => ({
+            type: 'section',
+            text: {
+                type: 'mrkdwn',
+                text: `*${flag.name}*\n${flag.description}`
+            },
+            accessory: {
+                type: 'overflow',
+                action_id: `flag_overflow_${index}`,
+                options: [
+                    { text: { type: 'plain_text', text: '✏️ Edit' }, value: `edit_${index}` },
+                    { text: { type: 'plain_text', text: '🗑️ Delete' }, value: `delete_${index}` }
+                ]
+            }
+        }));
+        
+        // Return updated Edit Flags modal (replaces delete confirmation)
         return NextResponse.json({
             response_action: 'update',
             view: {
                 type: 'modal',
-                callback_id: 'delete_flag_modal',
-                title: { type: 'plain_text', text: 'Flag Deleted' },
+                callback_id: 'manage_flags_modal',
+                private_metadata: JSON.stringify({ settingsViewId }), // Preserve for subsequent operations
+                title: { type: 'plain_text', text: 'Edit Flags' },
+                close: { type: 'plain_text', text: 'Back' },
                 blocks: [
                     {
                         type: 'section',
-                        text: { type: 'mrkdwn', text: `✅ *${deletedFlag.name}* has been deleted.\n\nUse \`/clarity-settings\` to manage your flags.` }
-                    }
+                        text: { type: 'mrkdwn', text: `✅ *${deletedFlag.name}* deleted\n\n*${flags.length}/${MAX_COACHING_FLAGS} flags*` },
+                        accessory: flags.length < MAX_COACHING_FLAGS ? {
+                            type: 'button',
+                            action_id: 'add_custom_flag',
+                            text: { type: 'plain_text', text: '➕ Add Flag', emoji: true }
+                        } : undefined
+                    },
+                    { type: 'divider' },
+                    ...flagBlocks
                 ]
             }
         });
