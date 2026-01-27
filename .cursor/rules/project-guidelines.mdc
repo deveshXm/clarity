@@ -235,10 +235,12 @@ Only you can see this
 
 ## Slack Modal Constraints ⚠️ IMPORTANT
 - **Overflow menu limit**: Maximum 5 options per overflow menu
-- **Modal stacking**: Use `views.push` when opening modal from within another modal
+- **Modal stack limit**: Maximum 3 modals deep - use `views.update` for sub-operations to avoid `push_limit_reached` error
 - **Use `views.open`**: Only for opening fresh modals (e.g., from slash commands)
 - **Use `views.push`**: When button inside modal opens another modal (pushes onto stack)
+- **Use `views.update`**: To replace current modal content (avoids adding to stack)
 - **Close button text**: Use "Back" for pushed modals, "Cancel" for root modals
+- **Stale parent data**: When child modal modifies data, refresh parent modal via `after()` + `views.update` to prevent user from saving stale data. Pass parent `view_id` through `private_metadata` chain.
 
 ## Using `after()` for Background Tasks
 - Use Next.js `after()` from `next/server` for async work after HTTP response

@@ -121,7 +121,41 @@ if (callbackId === 'onboarding_modal') {
 ### Modal Stacking Pattern
 - **`views.open`**: Use for fresh modals from slash commands or message buttons
 - **`views.push`**: Use when opening a modal from within another modal (e.g., "Edit Flags" button in settings)
+- **`views.update`**: Use to replace current modal content (avoids stack overflow, max 3 levels)
 - **Close button**: Use "Back" for pushed modals (returns to previous), "Cancel" for root modals
+
+### Stale Parent Modal Problem ⚠️ CRITICAL
+When user modifies data in a child modal (e.g., delete flag in Edit Flags), the parent modal (Settings) has stale data. If user clicks Save on parent, it overwrites the changes.
+
+**Solution: Pass parent view ID and refresh after changes**
+```typescript
+// 1. When opening child modal, store parent view_id in private_metadata
+await workspaceSlack.views.push({
+  trigger_id: triggerId,
+  view: {
+    callback_id: 'child_modal',
+    private_metadata: JSON.stringify({ parentViewId: payload.view?.id }),
+    // ...
+  }
+});
+
+// 2. After successful operation in child, refresh parent via after()
+const metadata = JSON.parse(view.private_metadata);
+if (metadata.parentViewId) {
+  after(async () => {
+    await workspaceSlack.views.update({
+      view_id: metadata.parentViewId,
+      view: { /* rebuilt parent modal with fresh data */ }
+    });
+  });
+}
+```
+
+### Modal Stack Overflow Prevention
+Slack limits modal stack to 3 levels. When nesting modals (e.g., Settings → Edit Flags → Delete confirmation):
+- **Don't**: Use `views.push` for every sub-operation (causes `push_limit_reached` error)
+- **Do**: Use `views.update` to replace current modal content for sub-operations
+- **Pattern**: Push once for main child modal, update in-place for further actions
 
 ### Email Collection
 - ❌ Don't ask for email in modal
