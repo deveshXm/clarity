@@ -7,7 +7,6 @@ const BASE_URL = process.env.TEST_BASE_URL || 'https://clarity.rocktangle.com';
 
 interface EvaluateRequest {
     message: string;
-    history?: string[];
     coachingFlags?: Array<{
         name: string;
         description: string;
@@ -17,11 +16,7 @@ interface EvaluateRequest {
 
 interface EvaluateResponse {
     flagged: boolean;
-    flags: Array<{
-        type: string;
-        confidence: number;
-        explanation: string;
-    }>;
+    flags: string[];
     rephrasedMessage: string | null;
 }
 
@@ -123,27 +118,11 @@ const testCases: TestCase[] = [
         shouldHaveRephrase: true,
     },
     
-    // ============ WITH CONVERSATION HISTORY ============
+    // ============ PUSHY ESCALATION ============
     {
-        name: '12. Message with history context - professional response',
-        request: {
-            message: 'Sounds good, I\'ll take a look at it tomorrow.',
-            history: [
-                'Hey team, I pushed the new feature branch',
-                'Can someone review it when they have time?',
-            ],
-        },
-        expectedFlagged: false,
-    },
-    {
-        name: '13. Message with history context - pushy escalation',
+        name: '12. Pushy escalation message',
         request: {
             message: 'I\'ve asked THREE times now. Just do it already!',
-            history: [
-                'Can you update the docs?',
-                'Hey, any update on the docs?',
-                'Still waiting on those docs...',
-            ],
         },
         expectedFlagged: true,
         shouldHaveRephrase: true,
@@ -151,7 +130,7 @@ const testCases: TestCase[] = [
     
     // ============ CUSTOM FLAGS ============
     {
-        name: '14. Custom flags - only check enabled flags',
+        name: '13. Custom flags - only check enabled flags',
         request: {
             message: 'I need this done NOW! This is urgent!',
             coachingFlags: [
@@ -163,7 +142,7 @@ const testCases: TestCase[] = [
         // This tests that custom flags are respected
     },
     {
-        name: '15. Custom flags - all disabled should not flag',
+        name: '14. Custom flags - all disabled should not flag',
         request: {
             message: 'Do this NOW or else!',
             coachingFlags: [
@@ -176,21 +155,21 @@ const testCases: TestCase[] = [
     
     // ============ EDGE CASES ============
     {
-        name: '16. Very long message',
+        name: '15. Very long message',
         request: {
             message: 'I really need you to understand that this is extremely important and urgent. '.repeat(20),
         },
         // Just testing it doesn't error
     },
     {
-        name: '17. Message with special characters and emojis',
+        name: '16. Message with special characters and emojis',
         request: {
             message: 'Hey @john! 🎉 Can you check the PR? Here\'s the link: https://github.com/test <#C123456>',
         },
         expectedFlagged: false,
     },
     {
-        name: '18. Message with code blocks',
+        name: '17. Message with code blocks',
         request: {
             message: 'Found the bug in src/auth/session.ts line 42. The getUser function returns null instead of the user object:\n```\nfunction getUser() { return null; }\n```\nIt should return req.session.user instead. Can you fix this?',
         },
@@ -254,11 +233,11 @@ async function runTests() {
             
             // Check flag types (case-insensitive)
             if (testCase.expectedFlagTypes !== undefined && response.flagged) {
-                const actualTypes = response.flags.map(f => f.type.toLowerCase());
+                const actualTypes = response.flags.map(f => f.toLowerCase());
                 for (const expectedType of testCase.expectedFlagTypes) {
                     if (!actualTypes.includes(expectedType.toLowerCase())) {
                         testPassed = false;
-                        failures.push(`Expected flag type "${expectedType}" not found. Got: [${response.flags.map(f => f.type).join(', ')}]`);
+                        failures.push(`Expected flag type "${expectedType}" not found. Got: [${response.flags.join(', ')}]`);
                     }
                 }
             }
@@ -277,7 +256,7 @@ async function runTests() {
                 console.log(`  ✅ PASS`);
                 console.log(`     Flagged: ${response.flagged}`);
                 if (response.flags.length > 0) {
-                    console.log(`     Flags: [${response.flags.map(f => `${f.type}(${f.confidence.toFixed(2)})`).join(', ')}]`);
+                    console.log(`     Flags: [${response.flags.join(', ')}]`);
                 }
                 if (response.rephrasedMessage) {
                     console.log(`     Rephrase: "${response.rephrasedMessage.slice(0, 60)}..."`);

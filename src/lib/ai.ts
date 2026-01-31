@@ -1,26 +1,6 @@
-import { 
-    ExampleTaskInput,
-    MessageAnalysisResult,
-    ImprovedMessageResult,
-    ComprehensiveAnalysisResult,
-    CoachingFlag
-} from "@/types";
+import { CoachingFlag } from "@/types";
 import Portkey from 'portkey-ai';
-import { IMPROVEMENT_PROMPT_TEMPLATE, IMPROVEMENT_WITH_CONTEXT_PROMPT_TEMPLATE, BASIC_REPHRASE_ANALYSIS_PROMPT, CONTEXTUAL_REPHRASE_ANALYSIS_PROMPT, AUTO_COACHING_ANALYSIS_PROMPT } from "@/lib/prompts";
-
-export const exampleTask = async (payload: ExampleTaskInput) => {
-    console.log('Example task called with payload:', payload);
-    
-    // Example implementation
-    return {
-        success: true,
-        message: "Example task completed successfully",
-        data: {
-            taskId: payload.taskId,
-            status: "completed"
-        }
-    };
-};
+import { MESSAGE_ANALYSIS_PROMPT } from "@/lib/prompts";
 
 // ------------- Portkey client setup ---------------
 
@@ -28,7 +8,7 @@ const portkey = new Portkey({
     apiKey: process.env.PORTKEY_AI_KEY || '',
 });
 
-const modelName = '@azure-openai/gpt-5-mini';
+const modelName = '@azure-openai/gpt-oss-120b';
 
 async function chatCompletion(messages: Array<{role: string; content: string}>): Promise<string> {
     const response = await portkey.chat.completions.create({
@@ -40,134 +20,78 @@ async function chatCompletion(messages: Array<{role: string; content: string}>):
     return String(response.choices[0]?.message?.content ?? '');
 }
 
-// ------------------- Auto-coaching logic -------------------
+// ------------- Simple Message Analysis Result ---------------
 
-function parseFlags(raw: unknown) {
-    try {
-        const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        return data as { flags: MessageAnalysisResult['flags']; target?: MessageAnalysisResult['target'] };
-    } catch {
-        return { flags: [] };
-    }
+export interface SimpleAnalysisResult {
+    shouldFlag: boolean;
+    flags: Array<{
+        flagIndex: number;
+        flagName: string;
+    }>;
+    suggestedRephrase: string | null;
 }
 
-export const generateImprovedMessage = async (message: string, flagType: string): Promise<ImprovedMessageResult> => {
-    const prompt = IMPROVEMENT_PROMPT_TEMPLATE.replace('{{FLAG}}', flagType);
-    const raw = await chatCompletion([
-        { role: 'system', content: prompt },
-        { role: 'user', content: message },
-    ]);
-    return JSON.parse(raw) as ImprovedMessageResult;
-};
+// ------------- Single Analysis Function ---------------
 
-// ------------------- Rephrase-specific functions -------------------
-
-// Helper to build categories string from coaching flags
-function buildCategoriesString(flags: CoachingFlag[]): string {
+function buildFlagsString(flags: CoachingFlag[]): string {
     const enabledFlags = flags.filter(f => f.enabled);
     return enabledFlags
         .map((f, i) => `${i + 1}: ${f.name} - ${f.description}`)
-        .join(', ');
+        .join('\n');
 }
 
-export const analyzeMessageForRephraseWithoutContext = async (
-    message: string,
-    coachingFlags: CoachingFlag[],
-): Promise<MessageAnalysisResult> => {
-    const categoriesStr = buildCategoriesString(coachingFlags);
-    const systemPrompt = BASIC_REPHRASE_ANALYSIS_PROMPT.replace('{{CATEGORIES}}', categoriesStr);
-    const userPrompt = `Message to analyze: "${message.replace(/\n/g, ' ')}"`;
-    const raw = await chatCompletion([
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-    ]);
-    const { flags } = parseFlags(raw);
-    return { flags: flags ?? [], target: undefined }; // No target identification without context
-};
-
-export const analyzeMessageForRephraseWithContext = async (
-    message: string,
-    context: string[],
-    coachingFlags: CoachingFlag[],
-): Promise<MessageAnalysisResult> => {
-    const categoriesStr = buildCategoriesString(coachingFlags);
-    const systemPrompt = CONTEXTUAL_REPHRASE_ANALYSIS_PROMPT.replace('{{CATEGORIES}}', categoriesStr);
-    const history = context.slice(0, 10).join('\n'); // Last 10 messages for context
-    const userPrompt = `CURRENT MESSAGE TO ANALYZE: "${message.replace(/\n/g, ' ')}"\n\nCONVERSATION HISTORY (for context only):\n${history || 'None.'}`;
-    const raw = await chatCompletion([
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-    ]);
-    const { flags, target } = parseFlags(raw);
-    return { flags: flags ?? [], target };
-};
-
-export const generateImprovedMessageWithContext = async (
-    message: string, 
-    flagType: string, 
-    context: string[]
-): Promise<ImprovedMessageResult> => {
-    const prompt = IMPROVEMENT_WITH_CONTEXT_PROMPT_TEMPLATE.replace('{{FLAG}}', flagType);
-    const history = context.slice(0, 10).join('\n'); // Last 10 messages for context
-    const userPrompt = `MESSAGE TO IMPROVE: "${message}"\n\nCONVERSATION HISTORY (for context):\n${history || 'None.'}`;
-    const raw = await chatCompletion([
-        { role: 'system', content: prompt },
-        { role: 'user', content: userPrompt },
-    ]);
-    return JSON.parse(raw) as ImprovedMessageResult;
-};
-
-// ------------------- Optimized Auto-Coaching (Single AI Call) -------------------
-
-function parseComprehensiveAnalysis(raw: unknown, enabledFlags: CoachingFlag[]): ComprehensiveAnalysisResult {
+function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[]): SimpleAnalysisResult {
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data: any = typeof raw === 'string' ? JSON.parse(raw) : raw;
         
-        // Map flagIndex (1-based) back to actual flag names from input
-        const mappedFlags = (data.flags || [])
-            .filter((f: { flagIndex: number }) => f.flagIndex >= 1 && f.flagIndex <= enabledFlags.length)
-            .map((f: { flagIndex: number; confidence: number; explanation: string }) => ({
-                typeId: f.flagIndex,
-                type: enabledFlags[f.flagIndex - 1].name,
-                confidence: f.confidence,
-                explanation: f.explanation,
+        // Flags are now just an array of indices [1, 2, 3]
+        const flagIndices: number[] = Array.isArray(data.flags) ? data.flags : [];
+        const mappedFlags = flagIndices
+            .filter((idx: number) => idx >= 1 && idx <= enabledFlags.length)
+            .map((idx: number) => ({
+                flagIndex: idx,
+                flagName: enabledFlags[idx - 1].name,
             }));
         
         return {
-            needsCoaching: data.needsCoaching ?? false,
+            shouldFlag: data.shouldFlag ?? false,
             flags: mappedFlags,
-            targetIds: data.targetIds || [],
-            improvedMessage: data.improvedMessage || null,
-            reasoning: data.reasoning || { whyNeedsCoaching: '', primaryIssue: 'none', contextInfluence: '' }
+            suggestedRephrase: data.suggestedRephrase || null,
         };
     } catch (error) {
-        console.error('Failed to parse comprehensive analysis:', error);
+        console.error('Failed to parse analysis:', error);
         return {
-            needsCoaching: false,
+            shouldFlag: false,
             flags: [],
-            targetIds: [],
-            improvedMessage: null,
-            reasoning: { whyNeedsCoaching: 'Parse error', primaryIssue: 'none', contextInfluence: '' }
+            suggestedRephrase: null,
         };
     }
 }
 
-export const comprehensiveMessageAnalysis = async (
+/**
+ * Analyzes a message for communication issues based on user's coaching flags.
+ * Returns whether it should be flagged, which flags apply, and a suggested rephrase.
+ */
+export async function analyzeMessage(
     message: string,
-    conversationHistory: string[],
     coachingFlags: CoachingFlag[]
-): Promise<ComprehensiveAnalysisResult> => {
+): Promise<SimpleAnalysisResult> {
     const enabledFlags = coachingFlags.filter(f => f.enabled);
-    const categoriesStr = buildCategoriesString(coachingFlags);
-    const systemPrompt = AUTO_COACHING_ANALYSIS_PROMPT.replace('{{CATEGORIES}}', categoriesStr);
-    const history = conversationHistory.slice(0, 15).join('\n'); // Last 15 messages for context
-    const userPrompt = `CURRENT MESSAGE TO ANALYZE: "${message.replace(/\n/g, ' ')}"\n\nCONVERSATION HISTORY (for context only):\n${history || 'None.'}`;
     
+    if (enabledFlags.length === 0) {
+        return { shouldFlag: false, flags: [], suggestedRephrase: null };
+    }
+    
+    const flagsString = buildFlagsString(coachingFlags);
+
+    const systemPrompt = MESSAGE_ANALYSIS_PROMPT.replace('{{FLAGS}}', flagsString);
+    
+    console.log('systemPrompt', systemPrompt);
     const raw = await chatCompletion([
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        { role: 'user', content: message.replace(/"/g, '\\"') },
     ]);
     
-    return parseComprehensiveAnalysis(raw, enabledFlags);
-};
+    return parseAnalysisResult(raw, enabledFlags);
+}

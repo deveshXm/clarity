@@ -7,38 +7,38 @@
     },
     "features": {
         "bot_user": {
-            "display_name": "Clarity-Dev",
+            "display_name": "Clarity-Devesh",
             "always_online": true
         },
         "slash_commands": [
             {
                 "command": "/clarity-help",
-                "url": "https://a94125eb05fd.ngrok-free.app/api/slack/commands",
+                "url": "https://642747e46e84.ngrok-free.app/api/slack/commands",
                 "description": "Show all available Clarity commands and features",
                 "should_escape": false
             },
             {
                 "command": "/clarity-rephrase",
-                "url": "https://a94125eb05fd.ngrok-free.app/api/slack/commands",
+                "url": "https://642747e46e84.ngrok-free.app/api/slack/commands",
                 "description": "Get improved versions of your messages",
                 "usage_hint": "[message to improve]",
                 "should_escape": false
             },
             {
                 "command": "/clarity-settings",
-                "url": "https://a94125eb05fd.ngrok-free.app/api/slack/commands",
+                "url": "https://642747e46e84.ngrok-free.app/api/slack/commands",
                 "description": "Configure your AI coach preferences",
                 "should_escape": false
             },
             {
                 "command": "/clarity-status",
-                "url": "https://a94125eb05fd.ngrok-free.app/api/slack/commands",
+                "url": "https://642747e46e84.ngrok-free.app/api/slack/commands",
                 "description": "Check if Clarity is installed and monitoring current channel",
                 "should_escape": false
             },
             {
                 "command": "/clarity-feedback",
-                "url": "https://a94125eb05fd.ngrok-free.app/api/slack/commands",
+                "url": "https://642747e46e84.ngrok-free.app/api/slack/commands",
                 "description": "Send feedback to the Clarity team",
                 "usage_hint": "[your feedback]",
                 "should_escape": false
@@ -47,7 +47,7 @@
     },
     "oauth_config": {
         "redirect_urls": [
-            "https://a94125eb05fd.ngrok-free.app/api/auth/slack/callback"
+            "https://642747e46e84.ngrok-free.app/api/auth/slack/callback"
         ],
         "scopes": {
             "user": [
@@ -75,7 +75,7 @@
     },
     "settings": {
         "event_subscriptions": {
-            "request_url": "https://a94125eb05fd.ngrok-free.app/api/slack/events",
+            "request_url": "https://642747e46e84.ngrok-free.app/api/slack/events",
             "bot_events": [
                 "app_mention",
                 "app_uninstalled",
@@ -89,7 +89,7 @@
         },
         "interactivity": {
             "is_enabled": true,
-            "request_url": "https://a94125eb05fd.ngrok-free.app/api/slack/interactive"
+            "request_url": "https://642747e46e84.ngrok-free.app/api/slack/interactive"
         },
         "org_deploy_enabled": false,
         "socket_mode_enabled": false,

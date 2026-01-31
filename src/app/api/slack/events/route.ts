@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, fetchConversationHistory, sendEphemeralMessage, isChannelAccessible, getSlackUserInfoWithEmail, sendChannelOptInMessage } from '@/lib/slack';
+import { verifySlackSignature, sendEphemeralMessage, isChannelAccessible, getSlackUserInfoWithEmail, sendChannelOptInMessage } from '@/lib/slack';
 import { workspaceCollection, slackUserCollection, botChannelsCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackEventSchema, Workspace, SlackUser, DEFAULT_COACHING_FLAGS } from '@/types';
-import { comprehensiveMessageAnalysis } from '@/lib/ai';
+import { analyzeMessage } from '@/lib/ai';
 import { validateWorkspaceAccess, incrementWorkspaceUsage } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
@@ -240,34 +240,18 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             ? '🔍 New user detected, analyzing for discovery...' 
             : '✅ Auto-coaching enabled for this channel, proceeding with analysis');
         
-        // Comprehensive AI analysis
-        console.log('🔍 Starting comprehensive message analysis...');
-        
-        const conversationHistory = await fetchConversationHistory(
-            validatedEvent.channel,
-            workspace.botToken,
-            validatedEvent.ts,
-            15
-        );
-        
-        console.log('Fetched conversation history:', conversationHistory.length, 'messages');
+        // Simple AI analysis - just message + flags
+        console.log('🔍 Analyzing message...');
         
         // Get user's coaching flags (or defaults if not set or new user)
         const flags = user?.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
         
-        const analysis = await comprehensiveMessageAnalysis(
-            validatedEvent.text,
-            conversationHistory,
-            flags
-        );
+        const analysis = await analyzeMessage(validatedEvent.text, flags);
         
-        console.log('Comprehensive analysis result:', {
-            needsCoaching: analysis.needsCoaching,
+        console.log('Analysis result:', {
+            shouldFlag: analysis.shouldFlag,
             flagsFound: analysis.flags.length,
-            hasTargets: analysis.targetIds && analysis.targetIds.length > 0,
-            targetCount: analysis.targetIds ? analysis.targetIds.length : 0,
-            hasImprovement: !!analysis.improvedMessage,
-            reasoning: analysis.reasoning.primaryIssue
+            hasRephrase: !!analysis.suggestedRephrase,
         });
 
         // Track AI analysis completion
@@ -278,28 +262,16 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             message_length: validatedEvent.text.length,
             analysis_type: isNewUser ? 'discovery' : 'auto_coaching',
             flags_found: analysis.flags.length,
-            needs_coaching: analysis.needsCoaching,
-            has_targets: analysis.targetIds && analysis.targetIds.length > 0,
-            target_count: analysis.targetIds ? analysis.targetIds.length : 0,
-            has_improvement: !!analysis.improvedMessage,
-            context_messages: conversationHistory.length,
-            primary_issue: analysis.reasoning.primaryIssue,
+            needs_coaching: analysis.shouldFlag,
+            has_improvement: !!analysis.suggestedRephrase,
             subscription_tier: workspace.subscription?.tier || 'FREE',
             is_new_user: isNewUser,
         });
         
         // If no coaching needed, exit early
-        if (!analysis.needsCoaching || analysis.flags.length === 0) {
+        if (!analysis.shouldFlag || analysis.flags.length === 0 || !analysis.suggestedRephrase) {
             return;
         }
-        
-        if (!analysis.improvedMessage) {
-            console.log('❌ No improved message generated, skipping feedback');
-            return;
-        }
-        
-        const primaryFlag = analysis.flags[0];
-        const improvedMessage = analysis.improvedMessage;
         
         // For new users (discovery), create them now that they've been flagged
         if (isNewUser) {
@@ -337,7 +309,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: `"${originalTruncated}" → "${improvedMessage.improvedMessage}"`
+                    text: `"${originalTruncated}" → "${analysis.suggestedRephrase}"`
                 }
             },
             {
@@ -345,7 +317,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                 elements: [
                     {
                         type: "mrkdwn",
-                        text: `*${primaryFlag.type}* — ${primaryFlag.explanation}`
+                        text: analysis.flags.map(f => `*${f.flagName}*`).join(' · ')
                     }
                 ]
             },
@@ -364,7 +336,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                             original_ts: validatedEvent.ts,
                             channel: validatedEvent.channel,
                             original_text: validatedEvent.text,
-                            improved_text: improvedMessage.improvedMessage,
+                            improved_text: analysis.suggestedRephrase,
                             user: validatedEvent.user
                         })
                     },
@@ -376,7 +348,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                         },
                         action_id: "dismiss_suggestion",
                         value: JSON.stringify({
-                            flag_type: primaryFlag.type,
+                            flag_type: analysis.flags[0]?.flagName,
                             user: validatedEvent.user
                         })
                     }
@@ -465,22 +437,14 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                 workspaceId: String(workspace._id),
                 channelId: validatedEvent.channel,
                 messageTs: validatedEvent.ts,
-                flagIds: analysis.flags.map(f => f.typeId),
-                targetIds: analysis.targetIds || [],
+                flagIds: analysis.flags.map(f => f.flagIndex),
                 originalMessage: validatedEvent.text,
-                rephrasedMessage: improvedMessage.improvedMessage,
+                rephrasedMessage: analysis.suggestedRephrase,
                 createdAt: new Date(),
-                aiMetadata: {
-                    primaryFlagId: primaryFlag.typeId,
-                    confidence: primaryFlag.confidence,
-                    reasoning: analysis.reasoning.whyNeedsCoaching,
-                    suggestedTone: analysis.reasoning.primaryIssue,
-                },
             };
             
             console.log('💾 Storing analysis instance:', {
                 flagIds: instanceData.flagIds,
-                targetIds: instanceData.targetIds
             });
             
             await analysisInstanceCollection.insertOne(instanceData);
@@ -490,10 +454,8 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                 user_name: currentUser.name,
                 workspace_id: String(workspace._id),
                 channel_id: validatedEvent.channel,
-                flags_found: analysis.flags.map(f => f.type),
-                primary_issue: analysis.reasoning.primaryIssue,
-                has_targets: analysis.targetIds && analysis.targetIds.length > 0,
-                target_count: analysis.targetIds ? analysis.targetIds.length : 0,
+                flags_found: analysis.flags.map(f => f.flagName),
+                primary_flag: analysis.flags[0]?.flagName,
                 message_length: validatedEvent.text.length,
                 subscription_tier: workspace.subscription?.tier || 'FREE',
                 is_discovery: isNewUser,

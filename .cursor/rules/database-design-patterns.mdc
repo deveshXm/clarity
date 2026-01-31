@@ -101,17 +101,10 @@ AnalysisInstance {
   workspaceId: string,
   channelId: string,
   messageTs: string,        // Slack timestamp for deep linking
-  flagIds: number[],        // Array of flag type IDs (1-8)
-  targetIds: string[],      // Slack user IDs mentioned/targeted
+  flagIds: number[],        // Array of flag indices (1-15)
   originalMessage: string,  // Original message text that was analyzed
   rephrasedMessage: string, // AI-generated improved message
-  createdAt: Date,
-  aiMetadata?: {
-    primaryFlagId: number,
-    confidence: number,
-    reasoning: string,
-    suggestedTone?: string
-  }
+  createdAt: Date
 }
 ```
 
@@ -225,17 +218,10 @@ const instanceData = {
   workspaceId: String(workspace._id),
   channelId: channelId,
   messageTs: event.ts,  // or Date.now().toString() for manual rephrase
-  flagIds: analysis.flags.map(f => f.typeId),
-  targetIds: analysis.targetIds || [],
+  flagIds: analysis.flags.map(f => f.flagIndex),
   originalMessage: messageText,
-  rephrasedMessage: improvedMessage.improvedMessage,
+  rephrasedMessage: analysis.suggestedRephrase,
   createdAt: new Date(),
-  aiMetadata: {
-    primaryFlagId: primaryFlag.typeId,
-    confidence: primaryFlag.confidence,
-    reasoning: analysis.reasoning.whyNeedsCoaching,
-    suggestedTone: analysis.reasoning.primaryIssue,
-  },
 };
 await analysisInstanceCollection.insertOne(instanceData);
 ```

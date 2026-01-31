@@ -1,24 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { comprehensiveMessageAnalysis } from '@/lib/ai';
+import { analyzeMessage } from '@/lib/ai';
 import { CoachingFlagSchema, DEFAULT_COACHING_FLAGS, CoachingFlag } from '@/types';
 import { logInfo, logDebug, logWarn, logError } from '@/lib/logger';
 
 // Request schema
 const EvaluateRequestSchema = z.object({
     message: z.string().min(1, 'Message is required'),
-    history: z.array(z.string()).optional().default([]),
     coachingFlags: z.array(CoachingFlagSchema).optional(),
 });
 
 // Response type
 interface EvaluateResponse {
     flagged: boolean;
-    flags: Array<{
-        type: string;
-        confidence: number;
-        explanation: string;
-    }>;
+    flags: string[];
     rephrasedMessage: string | null;
 }
 
@@ -40,7 +35,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
             return NextResponse.json({ error: errorMessage }, { status: 400 });
         }
         
-        const { message, history, coachingFlags } = parseResult.data;
+        const { message, coachingFlags } = parseResult.data;
         
         // Use provided flags or defaults
         const flags: CoachingFlag[] = coachingFlags || DEFAULT_COACHING_FLAGS;
@@ -49,33 +44,28 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
         logInfo('[Evaluate API] Starting analysis', {
             requestId,
             messageLength: message.length,
-            historyLength: history.length,
             enabledFlagsCount: enabledFlags.length,
             enabledFlags: enabledFlags.map(f => f.name),
         });
         
         // Run AI analysis
         const startTime = Date.now();
-        const analysisResult = await comprehensiveMessageAnalysis(message, history, flags);
+        const analysisResult = await analyzeMessage(message, flags);
         const duration = Date.now() - startTime;
         
         logInfo('[Evaluate API] Analysis complete', {
             requestId,
             duration: `${duration}ms`,
-            needsCoaching: analysisResult.needsCoaching,
+            shouldFlag: analysisResult.shouldFlag,
             flagsFound: analysisResult.flags.length,
-            flagTypes: analysisResult.flags.map(f => f.type),
+            flagNames: analysisResult.flags.map(f => f.flagName),
         });
         
-        // Build response (flag names already mapped in comprehensiveMessageAnalysis)
+        // Build response
         const response: EvaluateResponse = {
-            flagged: analysisResult.needsCoaching,
-            flags: analysisResult.flags.map(f => ({
-                type: f.type,
-                confidence: f.confidence,
-                explanation: f.explanation,
-            })),
-            rephrasedMessage: analysisResult.improvedMessage?.improvedMessage || null,
+            flagged: analysisResult.shouldFlag,
+            flags: analysisResult.flags.map(f => f.flagName),
+            rephrasedMessage: analysisResult.suggestedRephrase,
         };
         
         logDebug('[Evaluate API] Response', { requestId, response });

@@ -128,17 +128,10 @@ export const AnalysisInstanceSchema = z.object({
     workspaceId: z.string(),
     channelId: z.string(),
     messageTs: z.string(), // Slack timestamp for deep linking
-    flagIds: z.array(z.number().min(1).max(8)), // 🎯 Multiple flags per message
-    targetIds: z.array(z.string()).default([]), // 🎯 Multiple target Slack user IDs
+    flagIds: z.array(z.number().min(1).max(15)), // Multiple flags per message (up to 15 custom flags)
     originalMessage: z.string(), // Original message text that was analyzed
     rephrasedMessage: z.string(), // AI-generated improved message
     createdAt: z.coerce.date(),
-    aiMetadata: z.object({
-        primaryFlagId: z.number().min(1).max(8),
-        confidence: z.number().min(0).max(1),
-        reasoning: z.string(),
-        suggestedTone: z.string().optional(),
-    }).optional(),
 });
 
 export const CreateAnalysisInstanceSchema = AnalysisInstanceSchema.omit({ _id: true, createdAt: true });
@@ -161,55 +154,6 @@ export const InvitationSchema = z.object({
 });
 
 export const CreateInvitationSchema = InvitationSchema.omit({ _id: true, createdAt: true });
-
-// AI FUNCTION TYPES
-
-// Message Analysis Result
-export const MessageAnalysisResultSchema = z.object({
-    flags: z.array(z.object({
-        typeId: z.number().min(1).max(8),
-        type: z.enum(['pushiness', 'vagueness', 'nonObjective', 'circular', 'rudeness', 'passiveAggressive', 'fake', 'oneLiner']),
-        confidence: z.number().min(0).max(1),
-        explanation: z.string(),
-    })),
-    target: z.object({
-        name: z.string(),
-        slackId: z.string(),
-    }).optional(),
-});
-
-// Improved Message Result
-export const ImprovedMessageResultSchema = z.object({
-    originalMessage: z.string(),
-    improvedMessage: z.string(),
-    improvements: z.array(z.string()),
-    tone: z.enum(['professional', 'friendly', 'direct', 'collaborative']),
-});
-
-// Comprehensive Analysis Result (Single AI Call)
-// Note: type is now a string (mapped from flagIndex to actual flag name)
-export const ComprehensiveAnalysisResultSchema = z.object({
-    needsCoaching: z.boolean(),
-    flags: z.array(z.object({
-        typeId: z.number().min(1).max(15), // Up to 15 custom flags
-        type: z.string(), // Dynamic flag name from coaching flags
-        confidence: z.number().min(0).max(1),
-        explanation: z.string(),
-    })),
-    targetIds: z.array(z.string()).default([]), // Multiple target Slack user IDs
-    improvedMessage: z.object({
-        originalMessage: z.string(),
-        improvedMessage: z.string(),
-        improvements: z.array(z.string()),
-        tone: z.string(), // Dynamic tone from AI
-    }).nullable(),
-    reasoning: z.object({
-        whyNeedsCoaching: z.string(),
-        primaryIssue: z.string(),
-        contextInfluence: z.string(),
-    }),
-});
-
 
 // SLACK API TYPES
 
@@ -292,11 +236,6 @@ export type AnalysisInstance = z.infer<typeof AnalysisInstanceSchema>;
 export type CreateAnalysisInstanceInput = z.infer<typeof CreateAnalysisInstanceSchema>;
 export type Invitation = z.infer<typeof InvitationSchema>;
 export type CreateInvitationInput = z.infer<typeof CreateInvitationSchema>;
-
-// AI Function Types
-export type MessageAnalysisResult = z.infer<typeof MessageAnalysisResultSchema>;
-export type ImprovedMessageResult = z.infer<typeof ImprovedMessageResultSchema>;
-export type ComprehensiveAnalysisResult = z.infer<typeof ComprehensiveAnalysisResultSchema>;
 
 // Slack Channel Selection Types
 export const SlackChannelSchema = z.object({

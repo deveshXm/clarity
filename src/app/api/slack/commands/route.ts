@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, fetchConversationHistory, isChannelAccessible, getSlackOAuthUrl, openOnboardingModal, getWorkspaceChannels, getSlackUserInfoWithEmail } from '@/lib/slack';
+import { verifySlackSignature, isChannelAccessible, getSlackOAuthUrl, openOnboardingModal, getWorkspaceChannels, getSlackUserInfoWithEmail } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection, botChannelsCollection, feedbackCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
-import { generateImprovedMessage, analyzeMessageForRephraseWithoutContext, analyzeMessageForRephraseWithContext, generateImprovedMessageWithContext } from '@/lib/ai';
+import { analyzeMessage } from '@/lib/ai';
 import { SlackUser, Workspace, getTierConfig, DEFAULT_COACHING_FLAGS } from '@/types';
 import { validateWorkspaceAccess, incrementWorkspaceUsage, generateUpgradeMessage, generateLimitReachedMessage, generateProLimitReachedMessage } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
@@ -262,20 +262,11 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
         // Schedule background analysis
         after(async () => {
             try {
-                const hasChannelAccess = await isChannelAccessible(channelId, String(workspace._id));
-                
-                let analysisResult;
-                let conversationHistory: string[] = [];
-                
                 // Get user's coaching flags (or defaults if not set)
                 const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
                 
-                if (hasChannelAccess) {
-                    conversationHistory = await fetchConversationHistory(channelId, workspace.botToken, undefined, 10);
-                    analysisResult = await analyzeMessageForRephraseWithContext(text, conversationHistory, flags);
-                } else {
-                    analysisResult = await analyzeMessageForRephraseWithoutContext(text, flags);
-                }
+                // Simple analysis - just message + flags
+                const analysis = await analyzeMessage(text, flags);
                 
                 const workspaceSlack = new WebClient(workspace.botToken);
                 
@@ -285,43 +276,28 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                     channel_id: channelId,
                     message_length: text.length,
                     analysis_type: 'manual_rephrase',
-                    flags_found: analysisResult.flags.length,
-                    has_context: hasChannelAccess,
+                    flags_found: analysis.flags.length,
+                    should_flag: analysis.shouldFlag,
                 });
 
-                if (analysisResult.flags.length === 0) {
+                if (!analysis.shouldFlag || analysis.flags.length === 0 || !analysis.suggestedRephrase) {
                     await workspaceSlack.chat.postEphemeral({
                         channel: channelId,
                         user: userId,
                         text: 'Your message looks good — no issues found.'
                     });
                 } else {
-                    const primaryFlag = analysisResult.flags[0];
-                    let improvedMessage;
-                    
-                    if (hasChannelAccess && conversationHistory.length > 0) {
-                        improvedMessage = await generateImprovedMessageWithContext(text, primaryFlag.type, conversationHistory);
-                    } else {
-                        improvedMessage = await generateImprovedMessage(text, primaryFlag.type);
-                    }
-                    
                     // Save analysis instance for manual rephrase
                     const instanceData = {
                         _id: new ObjectId(),
                         userId: user._id,
                         workspaceId: String(workspace._id),
                         channelId: channelId,
-                        messageTs: new Date().getTime().toString(), // Use current timestamp since no original message ts
-                        flagIds: analysisResult.flags.map(f => f.typeId),
-                        targetIds: analysisResult.target ? [analysisResult.target.slackId] : [],
+                        messageTs: new Date().getTime().toString(),
+                        flagIds: analysis.flags.map(f => f.flagIndex),
                         originalMessage: text,
-                        rephrasedMessage: improvedMessage.improvedMessage,
+                        rephrasedMessage: analysis.suggestedRephrase,
                         createdAt: new Date(),
-                        aiMetadata: {
-                            primaryFlagId: primaryFlag.typeId,
-                            confidence: primaryFlag.confidence,
-                            reasoning: primaryFlag.explanation,
-                        },
                     };
                     
                     await analysisInstanceCollection.insertOne(instanceData);
@@ -338,7 +314,7 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                             type: "section",
                             text: {
                                 type: "mrkdwn",
-                                text: `"${originalTruncated}" → "${improvedMessage.improvedMessage}"`
+                                text: `"${originalTruncated}" → "${analysis.suggestedRephrase}"`
                             }
                         },
                         {
@@ -346,7 +322,7 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                             elements: [
                                 {
                                     type: "mrkdwn",
-                                    text: `*${primaryFlag.type}* — ${primaryFlag.explanation}`
+                                    text: analysis.flags.map(f => `*${f.flagName}*`).join(' · ')
                                 }
                             ]
                         },
@@ -362,7 +338,7 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                                     style: "primary",
                                     action_id: "send_improved_message",
                                     value: JSON.stringify({
-                                        improvedMessage: improvedMessage.improvedMessage,
+                                        improvedMessage: analysis.suggestedRephrase,
                                         channelId: channelId,
                                         userId: userId
                                     })
@@ -375,7 +351,7 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                                     },
                                     action_id: "dismiss_suggestion",
                                     value: JSON.stringify({
-                                        flag_type: primaryFlag.type,
+                                        flag_type: analysis.flags[0]?.flagName,
                                         user: userId
                                     })
                                 }
