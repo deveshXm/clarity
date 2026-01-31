@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
     const error = searchParams.get('error');
     const state = searchParams.get('state');
 
+    console.log('[AUTH] OAuth callback:', { hasCode: !!code, hasError: !!error });
+
     logInfo('OAuth callback received', { 
         has_code: !!code,
         has_error: !!error,
@@ -29,6 +31,7 @@ export async function GET(request: NextRequest) {
 
     // Handle OAuth error
     if (error) {
+        console.log('[AUTH] OAuth error:', error);
         logError('Slack OAuth error', new Error(error), { state });
         trackError('anonymous', new Error(`OAuth error: ${error}`), { oauth_error: error, state });
         return NextResponse.redirect(new URL('/?error=oauth_error', request.url));
@@ -36,6 +39,7 @@ export async function GET(request: NextRequest) {
 
     // Handle missing code
     if (!code) {
+        console.log('[AUTH] Missing authorization code');
         logError('No authorization code received', undefined, { state });
         trackError('anonymous', new Error('Missing authorization code'), { state });
         return NextResponse.redirect(new URL('/?error=missing_code', request.url));
@@ -44,17 +48,17 @@ export async function GET(request: NextRequest) {
     try {
         // Exchange authorization code for access token
         const oauthResponse = await exchangeOAuthCode(code);
-        console.log('OAuth response:', JSON.stringify(oauthResponse, null, 2));
+        console.log('[AUTH] OAuth exchange:', { ok: oauthResponse.ok, team: oauthResponse.team?.id });
         
         // Basic validation
         if (!oauthResponse.ok) {
-            console.error('Slack OAuth failed:', oauthResponse);
+            console.log('[AUTH] OAuth failed');
             return NextResponse.redirect(new URL('/?error=oauth_failed', request.url));
         }
 
         // Check if we have the required fields
         if (!oauthResponse.team || !oauthResponse.authed_user) {
-            console.error('Missing required OAuth fields:', oauthResponse);
+            console.log('[AUTH] Missing required OAuth fields');
             return NextResponse.redirect(new URL('/?error=invalid_oauth_response', request.url));
         }
 
@@ -101,6 +105,8 @@ export async function GET(request: NextRequest) {
         const existingWorkspace = await workspaceCollection.findOne({ workspaceId: team.id });
         let workspaceObjectId: ObjectId;
         let isNewWorkspace = false;
+
+        console.log('[AUTH] Workspace lookup:', { teamId: team.id, exists: !!existingWorkspace });
 
         if (existingWorkspace) {
             // Update existing workspace - preserve subscription if exists
@@ -174,6 +180,8 @@ export async function GET(request: NextRequest) {
 
         // Get user token from OAuth response (needed for editing user's messages)
         const userToken = authed_user.access_token || null;
+        
+        console.log('[AUTH] Admin user:', { slackId: authed_user.id, exists: !!existingUser, hasToken: !!userToken });
         
         if (!existingUser) {
             // Import DEFAULT_COACHING_FLAGS inline to avoid circular deps
@@ -264,6 +272,8 @@ export async function GET(request: NextRequest) {
 
         // Redirect to docs page instead of onboarding webpage
         // Admin will complete onboarding via Slack modal when they try a command
+        console.log('[AUTH] OAuth complete:', { teamId: team.id, isNew: isNewWorkspace });
+        
         logInfo('OAuth callback successful - redirecting to docs', { 
             slack_user_id: authed_user.id,
             workspace_id: workspaceObjectId.toString(),

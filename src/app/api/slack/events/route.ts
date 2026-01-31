@@ -116,15 +116,11 @@ export async function POST(request: NextRequest) {
             
             // Only process message events in channels and groups (not DMs)
             if (event.type === 'message' && (event.channel_type === 'channel' || event.channel_type === 'group')) {
-                console.log('🚀 Scheduling background processing for message event');
-                
                 after(async () => {
                     try {
-                        console.log('🔄 Starting background message processing...');
                         await handleMessageEvent(event, eventData.team_id);
-                        console.log('✅ Background message processing completed');
                     } catch (error) {
-                        console.error('❌ Background message processing error:', error);
+                        console.error('[MSG] Background error:', error);
                     }
                 });
             }
@@ -145,7 +141,6 @@ export async function POST(request: NextRequest) {
         }
         
         // Return immediate response to Slack
-        console.log('⚡ Sending immediate response to Slack');
         return NextResponse.json({ ok: true });
         
     } catch (error) {
@@ -156,6 +151,8 @@ export async function POST(request: NextRequest) {
 
 async function handleMessageEvent(event: Record<string, unknown>, teamId: string) {
     try {
+        console.log('[MSG] Processing:', { user: event.user, channel: event.channel, teamId });
+        
         logSlackEvent('message_received', {
             user: event.user,
             text: typeof event.text === 'string' ? event.text.substring(0, 100) + '...' : '',
@@ -167,6 +164,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         
         // Skip bot messages and system messages
         if (event.bot_id || event.subtype) {
+            console.log('[MSG] Skip: bot/system message');
             return;
         }
         
@@ -176,6 +174,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         const timeDifference = currentTime - messageTimestamp;
         
         if (timeDifference > 10000) {
+            console.log('[MSG] Skip: old message', { timeDifference });
             return;
         }
 
@@ -189,13 +188,13 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         }) as Workspace | null;
         
         if (!workspace) {
-            console.log('⏭️ Workspace not found or inactive, skipping');
+            console.log('[MSG] Skip: workspace not found');
             return;
         }
         
         // Check if workspace has completed onboarding
         if (!workspace.hasCompletedOnboarding) {
-            console.log('⏭️ Workspace has not completed onboarding, skipping auto coaching');
+            console.log('[MSG] Skip: onboarding incomplete');
             return;
         }
         
@@ -203,6 +202,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         const accessCheck = await validateWorkspaceAccess(workspace, 'autoCoaching');
         
         if (!accessCheck.allowed) {
+            console.log('[MSG] Skip: access denied', { reason: accessCheck.reason });
             trackEvent(validatedEvent.user, EVENTS.API_SLACK_EVENT_PROCESSED, {
                 event_type: 'message',
                 channel_id: validatedEvent.channel,
@@ -216,7 +216,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         // Check if bot is active in this channel first
         const isChannelActive = await isChannelAccessible(validatedEvent.channel, String(workspace._id));
         if (!isChannelActive) {
-            console.log('⏭️ Bot not active in this channel, skipping analysis');
+            console.log('[MSG] Skip: bot not in channel');
             return;
         }
         
@@ -231,28 +231,21 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         
         // For existing users, check if they have auto-coaching enabled for this channel
         if (user && !user.autoCoachingEnabledChannels.includes(validatedEvent.channel)) {
-            console.log('⏭️ Auto-coaching not enabled for this channel, skipping analysis');
+            console.log('[MSG] Skip: auto-coaching disabled for channel');
             return;
         }
         
-        // If user exists with channel enabled OR user doesn't exist (discovery mode), proceed
-        console.log(isNewUser 
-            ? '🔍 New user detected, analyzing for discovery...' 
-            : '✅ Auto-coaching enabled for this channel, proceeding with analysis');
+        console.log('[MSG] Proceeding to AI analysis', { isNewUser });
         
         // Simple AI analysis - just message + flags
-        console.log('🔍 Analyzing message...');
+        console.log('[MSG] Calling analyzeMessage...');
         
         // Get user's coaching flags (or defaults if not set or new user)
         const flags = user?.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
         
         const analysis = await analyzeMessage(validatedEvent.text, flags);
         
-        console.log('Analysis result:', {
-            shouldFlag: analysis.shouldFlag,
-            flagsFound: analysis.flags.length,
-            hasRephrase: !!analysis.suggestedRephrase,
-        });
+        console.log('[MSG] AI result:', { shouldFlag: analysis.shouldFlag, flagCount: analysis.flags.length });
 
         // Track AI analysis completion
         trackEvent(validatedEvent.user, EVENTS.API_AI_ANALYSIS_COMPLETED, {
@@ -294,7 +287,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             
             await slackUserCollection.insertOne(newUser);
             user = newUser as unknown as SlackUser;
-            console.log('🆕 Created user after flagging (discovery):', validatedEvent.user);
+            console.log('[MSG] Created discovery user:', validatedEvent.user);
         }
         
         // Truncate original message for compact display
@@ -414,7 +407,6 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         }
         
         // Send ephemeral message with interactive components
-        console.log('📤 Sending interactive coaching feedback...');
         const success = await sendEphemeralMessage(
             validatedEvent.channel,
             validatedEvent.user,
@@ -425,7 +417,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         );
         
         if (success) {
-            console.log('✅ Ephemeral feedback sent successfully');
+            console.log('[MSG] Coaching sent successfully');
             
             // User is guaranteed to exist at this point (either existing or just created)
             const currentUser = user!;
@@ -443,10 +435,6 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                 createdAt: new Date(),
             };
             
-            console.log('💾 Storing analysis instance:', {
-                flagIds: instanceData.flagIds,
-            });
-            
             await analysisInstanceCollection.insertOne(instanceData);
 
             // Track successful auto coaching trigger
@@ -463,13 +451,12 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
 
             // Track usage at workspace level
             await incrementWorkspaceUsage(workspace, 'autoCoaching');
-            console.log('📊 Usage tracked for autoCoaching feature');
         } else {
-            console.error('❌ Failed to send ephemeral feedback');
+            console.error('[MSG] Failed to send ephemeral');
         }
         
     } catch (error) {
-        console.error('Error handling message event:', error);
+        console.error('[MSG] Error:', error);
     }
 }
 

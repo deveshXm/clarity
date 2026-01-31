@@ -285,15 +285,15 @@ export const SUBSCRIPTION_TIERS = {
                 name: 'Auto coaching suggestions',
                 description: 'Get instant, private suggestions to improve your messages',
                 included: true,
-                limit: 20,
-                limitLabel: 'Limited auto coaching'
+                limit: 500,
+                limitLabel: '50 auto coaching suggestions. Only counts when message is flagged.'
             },
             {
                 name: 'Manual rephrase',
                 description: 'Use /rephrase command to improve specific messages',
                 included: true,
-                limit: 50,
-                limitLabel: 'Limited manual rephrase'
+                limit: 500,
+                limitLabel: '50 manual rephrase uses'
             },
             {
                 name: 'Default coaching flags',
@@ -320,15 +320,15 @@ export const SUBSCRIPTION_TIERS = {
                 name: 'Auto coaching suggestions',
                 description: 'Get instant, private suggestions to improve your messages',
                 included: true,
-                limit: 200,
-                limitLabel: 'Expanded auto coaching'
+                limit: 500,
+                limitLabel: '50 auto coaching suggestions'
             },
             {
                 name: 'Manual rephrase',
                 description: 'Use /rephrase command to improve specific messages',
                 included: true,
-                limit: 200,
-                limitLabel: 'Expanded manual rephrase'
+                limit: 500,
+                limitLabel: '50 manual rephrase uses'
             },
             {
                 name: 'Custom coaching flags',

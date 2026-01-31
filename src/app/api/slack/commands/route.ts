@@ -51,6 +51,8 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
+        console.log('[CMD] Received:', { command, userId, channelId, teamId });
+
         logInfo('Slack command received', { 
             command,
             user_id: userId,
@@ -67,6 +69,7 @@ export async function POST(request: NextRequest) {
         }) as Workspace | null;
 
         if (!workspace) {
+            console.log('[CMD] Workspace not found');
             // Workspace not found - show install message
             const authUrl = getSlackOAuthUrl();
             
@@ -126,6 +129,7 @@ export async function POST(request: NextRequest) {
             
             await slackUserCollection.insertOne(newUser);
             user = newUser as unknown as SlackUser;
+            console.log('[CMD] Auto-created user:', userId);
             
             logInfo('Auto-created user on first command', {
                 user_id: userId,
@@ -149,6 +153,7 @@ export async function POST(request: NextRequest) {
         const isAdmin = workspace.adminSlackId === userId;
         
         if (!workspace.hasCompletedOnboarding) {
+            console.log('[CMD] Onboarding incomplete', { isAdmin });
             if (isAdmin && triggerId) {
                 // Admin can complete onboarding - open modal
                 const channels = await getWorkspaceChannels(workspace.botToken);
@@ -175,6 +180,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Step 4: Process command normally (workspace is onboarded)
+        console.log('[CMD] Processing:', command);
         let response;
         switch (command) {
             case '/clarity-rephrase':
@@ -224,6 +230,8 @@ export async function POST(request: NextRequest) {
 
 async function handleRephrase(text: string, userId: string, channelId: string, workspace: Workspace, user: SlackUser) {
     try {
+        console.log('[CMD] Rephrase:', { userId, textLen: text.length });
+        
         if (!text.trim()) {
             return {
                 text: 'Please provide a message to rephrase. Example: `/clarity-rephrase Can you get this done ASAP?`',
@@ -235,6 +243,7 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
         const accessCheck = await validateWorkspaceAccess(workspace, 'manualRephrase');
         
         if (!accessCheck.allowed) {
+            console.log('[CMD] Rephrase access denied:', accessCheck.reason);
             if (accessCheck.upgradeRequired) {
                 return generateUpgradeMessage('manualRephrase', accessCheck.reason || 'Feature requires upgrade', String(workspace._id));
             }
@@ -262,11 +271,13 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
         // Schedule background analysis
         after(async () => {
             try {
+                console.log('[CMD] Rephrase: analyzing...');
                 // Get user's coaching flags (or defaults if not set)
                 const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
                 
                 // Simple analysis - just message + flags
                 const analysis = await analyzeMessage(text, flags);
+                console.log('[CMD] Rephrase AI result:', { shouldFlag: analysis.shouldFlag, flagCount: analysis.flags.length });
                 
                 const workspaceSlack = new WebClient(workspace.botToken);
                 

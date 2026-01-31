@@ -146,7 +146,7 @@ async function refreshSettingsModal(
             } as typeof blocks[0]);
         }
         
-        // Build updated Settings modal
+        // Build updated Settings modal - MUST include private_metadata with updated flags
         await workspaceSlack.views.update({
             view_id: settingsViewId,
             view: {
@@ -154,6 +154,11 @@ async function refreshSettingsModal(
                 callback_id: 'settings_modal',
                 title: { type: 'plain_text', text: 'Settings' },
                 submit: { type: 'plain_text', text: 'Save' },
+                private_metadata: JSON.stringify({
+                    workspaceId,
+                    isAdmin: user.isAdmin || workspace.adminSlackId === userId,
+                    coachingFlags: flags
+                }),
                 blocks
             }
         });
@@ -192,6 +197,8 @@ export async function POST(request: NextRequest) {
         // Parse interactive payload (Slack sends it as form data)
         const payload = JSON.parse(new URLSearchParams(body).get('payload') || '{}');
         
+        console.log('[INT] Received:', { type: payload.type, action: payload.actions?.[0]?.action_id, user: payload.user?.id });
+
         logInfo('Interactive component triggered', {
             type: payload.type,
             action_id: payload.actions?.[0]?.action_id,
@@ -238,6 +245,7 @@ export async function POST(request: NextRequest) {
         } else if (payload.type === 'view_submission') {
             // Handle modal form submissions
             const callbackId = payload.view?.callback_id;
+            console.log('[INT] View submission:', { callbackId, user: payload.user?.id });
             logInfo('View submission received', { callback_id: callbackId, user_id: payload.user?.id });
             
             if (callbackId === 'settings_modal') {
@@ -293,12 +301,7 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         const data: MessageReplacementData = JSON.parse(action.value);
         const { original_ts, channel, original_text, improved_text, user } = data;
         
-        console.log('🔄 Updating message:', {
-            original: original_text.substring(0, 50) + '...',
-            improved: improved_text.substring(0, 50) + '...',
-            user,
-            channel
-        });
+        console.log('[INT] Replace message:', { user, channel });
         
         // Verify user has installed the app and get user token
         const appUser = await slackUserCollection.findOne({
@@ -321,7 +324,6 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         const userSlack = new WebClient(appUser.userToken);
         
         // Update the original message with improved text
-        console.log('📝 Updating message with improved text...');
         const updateResult = await userSlack.chat.update({
             channel: channel,
             ts: original_ts,
@@ -329,12 +331,12 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         });
         
         if (!updateResult.ok) {
-            console.error('Failed to update message:', updateResult.error);
+            console.error('[INT] Message update failed:', updateResult.error);
             await deleteEphemeral();
             return NextResponse.json({ ok: true });
         }
         
-        console.log('✅ Message update successful');
+        console.log('[INT] Message replaced successfully');
         
         // Track successful message replacement
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(appUser.workspaceId) });
@@ -394,11 +396,7 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         const data = JSON.parse(action.value);
         const { improvedMessage, channelId, userId } = data;
         
-        console.log('📤 Sending improved message:', {
-            improved: improvedMessage.substring(0, 50) + '...',
-            user: userId,
-            channel: channelId
-        });
+        console.log('[INT] Send improved:', { userId, channelId });
         
         // Verify user has installed the app and get workspace bot token
         const appUser = await slackUserCollection.findOne({
@@ -414,7 +412,7 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         // Get workspace bot token
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(appUser.workspaceId) });
         if (!workspace || !workspace.botToken) {
-            console.error('❌ Workspace not found or missing bot token for user:', userId);
+            console.log('[INT] Workspace not found for user:', userId);
             await deleteEphemeral();
             return NextResponse.json({ ok: true });
         }
@@ -423,7 +421,6 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         const workspaceSlack = new WebClient(workspace.botToken);
         
         // Post the improved message as the user (using bot with custom username)
-        console.log('📝 Posting improved message...');
         const postResult = await workspaceSlack.chat.postMessage({
             channel: channelId,
             text: improvedMessage,
@@ -432,12 +429,12 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         });
         
         if (!postResult.ok) {
-            console.error('Failed to post improved message:', postResult.error);
+            console.error('[INT] Post failed:', postResult.error);
             await deleteEphemeral();
             return NextResponse.json({ ok: true });
         }
         
-        console.log('✅ Improved message posted successfully');
+        console.log('[INT] Message sent successfully');
         
         // Delete the ephemeral message
         await deleteEphemeral();
@@ -525,7 +522,7 @@ async function handleEnableChannelMonitoring(payload: SlackInteractivePayload, a
             }
         );
         
-        console.log(`✅ Enabled channel monitoring for user ${userId} in channel ${channelId}`);
+        console.log('[INT] Enabled channel monitoring:', { userId, channelId });
         
         // Track event
         trackEvent(userId, EVENTS.FEATURE_SETTINGS_UPDATED, {
