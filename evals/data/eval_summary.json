@@ -1,0 +1,16 @@
+{
+  "total_messages": 101,
+  "detection_accuracy": 98.02,
+  "true_positives": 69,
+  "true_negatives": 30,
+  "false_positives": 0,
+  "false_negatives": 2,
+  "flagged_total": 69,
+  "exact_matches": 41,
+  "partial_matches": 28,
+  "no_overlap_matches": 0,
+  "exact_match_rate": 59.42,
+  "partial_match_rate": 40.58,
+  "no_overlap_rate": 0.0,
+  "timestamp": "2026-02-04T19:03:57.035532"
+}
