@@ -8,6 +8,8 @@ import { logInfo, logDebug, logWarn, logError } from '@/lib/logger';
 const EvaluateRequestSchema = z.object({
     message: z.string().min(1, 'Message is required'),
     coachingFlags: z.array(CoachingFlagSchema).optional(),
+    includeReasoning: z.boolean().optional().default(false),
+    prompt: z.string().optional(),  // Custom prompt for evals
 });
 
 // Response type
@@ -15,6 +17,7 @@ interface EvaluateResponse {
     flagged: boolean;
     flags: string[];
     rephrasedMessage: string | null;
+    reasoning?: string;
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse<EvaluateResponse | { error: string }>> {
@@ -35,7 +38,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
             return NextResponse.json({ error: errorMessage }, { status: 400 });
         }
         
-        const { message, coachingFlags } = parseResult.data;
+        const { message, coachingFlags, includeReasoning, prompt: customPrompt } = parseResult.data;
         
         // Use provided flags or defaults
         const flags: CoachingFlag[] = coachingFlags || DEFAULT_COACHING_FLAGS;
@@ -46,11 +49,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
             messageLength: message.length,
             enabledFlagsCount: enabledFlags.length,
             enabledFlags: enabledFlags.map(f => f.name),
+            includeReasoning,
+            hasCustomPrompt: !!customPrompt,
         });
         
         // Run AI analysis
         const startTime = Date.now();
-        const analysisResult = await analyzeMessage(message, flags);
+        const analysisResult = await analyzeMessage(message, flags, { 
+            includeReasoning, 
+            customPrompt 
+        });
         const duration = Date.now() - startTime;
         
         logInfo('[Evaluate API] Analysis complete', {
@@ -67,6 +75,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
             flags: analysisResult.flags.map(f => f.flagName),
             rephrasedMessage: analysisResult.suggestedRephrase,
         };
+        
+        // Include reasoning only when requested (for evals)
+        if (includeReasoning && analysisResult.reasoning) {
+            response.reasoning = analysisResult.reasoning;
+        }
         
         logDebug('[Evaluate API] Response', { requestId, response });
         

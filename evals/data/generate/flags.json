@@ -1,0 +1,92 @@
+[
+  {
+    "name": "Apology Hedge",
+    "description": "Messages that lead with unnecessary apologies or self-blame before asking/saying something. Look for phrases like \u201csorry to bother,\u201d \u201cmy bad,\u201d \u201cI\u2019m probably missing something,\u201d used as a preface rather than to correct a real mistake.",
+    "examples": [
+      "Sorry to bother\u2014quick question: where is the config for the staging DB connection?",
+      "My bad if this is obvious, but how do I run the full test suite locally?",
+      "Sorry, I might be misunderstanding\u2014should this endpoint return 401 or 403?"
+    ],
+    "persona": "Anxious Junior Developer (afraid to ask for help)"
+  },
+  {
+    "name": "Over-Justifying",
+    "description": "Asks for help but adds lots of extra explanation to defend the question (what they already tried, why they\u2019re asking, why they\u2019re blocked) in a way that\u2019s longer than needed. It reads like they\u2019re proving they \u201cdeserve\u201d help.",
+    "examples": [
+      "I\u2019ve been digging into this for a while and tried changing the env vars, restarting Docker, and re-pulling images, but I still get the same error\u2014am I missing a step to get migrations running?",
+      "I know everyone\u2019s busy and I\u2019ve read the docs + searched Slack, but I can\u2019t find where we define the feature flags\u2014could someone point me to the file?",
+      "I don\u2019t want to waste anyone\u2019s time, but after trying three different approaches and rereading the PR, I\u2019m still not sure why the CI job is failing\u2014any ideas?"
+    ],
+    "persona": "Anxious Junior Developer (afraid to ask for help)"
+  },
+  {
+    "name": "Vague Help Ask",
+    "description": "Requests help without a clear question or concrete details, making it hard to respond. Look for broad asks like \u201canyone know what\u2019s wrong?\u201d or \u201ccan someone help?\u201d without error text, what they\u2019re trying to do, or the exact decision needed.",
+    "examples": [
+      "Can someone help me with this? It\u2019s not working.",
+      "Anyone know what I\u2019m doing wrong here?",
+      "I\u2019m stuck on the build\u2014any suggestions?"
+    ],
+    "persona": "Anxious Junior Developer (afraid to ask for help)"
+  },
+  {
+    "name": "Hard Commit",
+    "description": "Messages that make an unqualified promise about delivery (date/feature/outcome) with definitive language and no caveats\u2014e.g., \u201cwill,\u201d \u201cguaranteed,\u201d \u201clocked,\u201d \u201c100%,\u201d or exact dates\u2014even when scope sounds uncertain.",
+    "examples": [
+      "Yep \u2014 we\u2019ll have the new onboarding flow shipped by Friday EOD, guaranteed.",
+      "No worries, we can definitely include SSO + audit logs in this release. Consider it locked.",
+      "I\u2019ve confirmed we\u2019ll hit 99.99% uptime starting next week."
+    ],
+    "persona": "Passionate Product Manager (tends to over-promise)"
+  },
+  {
+    "name": "Scope Creep",
+    "description": "Messages that add extra features or requirements on top of what was discussed in the same message (often with \u201cwhile we\u2019re at it,\u201d \u201calso,\u201d \u201cquick add\u201d) without acknowledging tradeoffs, time, or resourcing.",
+    "examples": [
+      "We\u2019ll ship the dashboard redesign next sprint \u2014 and while we\u2019re at it, let\u2019s add custom filters + export to CSV.",
+      "Let\u2019s do the pricing page refresh. Also can we sneak in the new trial flow and the referral banner? Should be quick.",
+      "We\u2019re fixing the search bug; might as well improve ranking, add synonyms, and build a new empty-state too."
+    ],
+    "persona": "Passionate Product Manager (tends to over-promise)"
+  },
+  {
+    "name": "Unverified Assurance",
+    "description": "Statements that present assumptions as facts: \u201calready approved,\u201d \u201cengineering said yes,\u201d \u201clegal is fine,\u201d \u201ccustomers will love it,\u201d without citing a source, link, or confirmation (no \u201cI think/maybe\u201d).",
+    "examples": [
+      "Engineering is good with this approach \u2014 we can start building today.",
+      "Legal already signed off on the new tracking events, so we\u2019re clear to launch.",
+      "This will definitely reduce churn by 10% once it goes out."
+    ],
+    "persona": "Passionate Product Manager (tends to over-promise)"
+  },
+  {
+    "name": "Abrupt Commands",
+    "description": "Messages that are mostly directives with no greeting, softener, or collaboration language. Look for imperatives (\u201cdo X\u201d, \u201cship it\u201d), short sentences, and lack of \u201cplease/can we\u201d or any rationale.",
+    "examples": [
+      "Fix the failing build and redeploy. Now.",
+      "Get me the numbers by EOD. Don\u2019t overthink it.",
+      "Stop the rollout. Revert and open a postmortem doc."
+    ],
+    "persona": "Direct CTO (brief, borders on rude)"
+  },
+  {
+    "name": "Public Callouts",
+    "description": "Calling out a person or team in a channel in a corrective/blaming way. Look for @mentions paired with criticism or \u201cwhy didn\u2019t you\u2026\u201d phrasing, especially in public channels instead of a neutral request.",
+    "examples": [
+      "@maria why is the API still timing out? This has been broken all morning.",
+      "@backend this is the third time we\u2019ve missed the SLA this week. What are you doing?",
+      "@jon you said this would be done Friday. It\u2019s Monday. Explain."
+    ],
+    "persona": "Direct CTO (brief, borders on rude)"
+  },
+  {
+    "name": "Dismissive Replies",
+    "description": "Responses that shut down discussion without engaging the content. Look for terse negations or minimizing phrases like \u201cno\u201d, \u201cnot happening\u201d, \u201cwhatever\u201d, \u201cobviously\u201d, \u201cdon\u2019t care\u201d, with little or no explanation.",
+    "examples": [
+      "No. That\u2019s not the right approach.",
+      "We\u2019re not debating this. Just ship it.",
+      "This is obvious. Read the doc and stop pinging me."
+    ],
+    "persona": "Direct CTO (brief, borders on rude)"
+  }
+]

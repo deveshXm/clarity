@@ -27,8 +27,9 @@ Content-Type: application/json
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `message` | `string` | Yes | The message to analyze |
-| `history` | `string[]` | No | Conversation history for context (most recent last) |
 | `coachingFlags` | `CoachingFlag[]` | No | Custom coaching flags (uses defaults if omitted) |
+| `includeReasoning` | `boolean` | No | If true, includes reasoning in response (default: false) |
+| `prompt` | `string` | No | Custom system prompt (must contain `{{FLAGS}}` placeholder) |
 
 ### CoachingFlag Object
 
@@ -61,13 +62,10 @@ If `coachingFlags` is not provided, these defaults are used:
 
 ```typescript
 {
-  flagged: boolean;           // Whether the message has communication issues
-  flags: Array<{
-    type: string;             // Flag name (e.g., "Pushiness", "Rudeness") - exact match from input flags
-    confidence: number;       // Confidence score (0-1)
-    explanation: string;      // Why this flag was triggered
-  }>;
+  flagged: boolean;              // Whether the message has communication issues
+  flags: string[];               // Flag names that were triggered (e.g., ["Pushiness", "Rudeness"])
   rephrasedMessage: string | null;  // Improved version if flagged, null otherwise
+  reasoning?: string;            // Why the AI made its decision (only when includeReasoning is true)
 }
 ```
 
@@ -95,29 +93,30 @@ curl -X POST https://clarity.rocktangle.com/api/evaluate \
 ```json
 {
   "flagged": true,
-  "flags": [
-    {
-      "type": "Pushiness",
-      "confidence": 0.95,
-      "explanation": "Message uses demanding tone with 'NOW' in all caps"
-    }
-  ],
+  "flags": ["Pushiness"],
   "rephrasedMessage": "I need this done as soon as possible."
 }
 ```
 
-### With Conversation History
+### With Reasoning (for evals)
 
 ```bash
 curl -X POST https://clarity.rocktangle.com/api/evaluate \
   -H "Content-Type: application/json" \
   -d '{
     "message": "I already asked twice. Just do it!",
-    "history": [
-      "Can you update the docs?",
-      "Hey, any update on the docs?"
-    ]
+    "includeReasoning": true
   }'
+```
+
+**Response:**
+```json
+{
+  "flagged": true,
+  "flags": ["Pushiness", "Rudeness"],
+  "rephrasedMessage": "I mentioned this a couple of times already — could you take a look when you get a chance?",
+  "reasoning": "The message uses a demanding tone with 'Just do it!' and implies frustration with 'I already asked twice', which triggers Pushiness and Rudeness flags."
+}
 ```
 
 ### With Custom Flags
@@ -131,6 +130,17 @@ curl -X POST https://clarity.rocktangle.com/api/evaluate \
       { "name": "Pushiness", "description": "Demanding tone", "enabled": true },
       { "name": "Rudeness", "description": "Impolite communication", "enabled": false }
     ]
+  }'
+```
+
+### With Custom Prompt
+
+```bash
+curl -X POST https://clarity.rocktangle.com/api/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Fix this ASAP",
+    "prompt": "You are a communication coach. Analyze the message.\n\nFlags:\n{{FLAGS}}\n\nOutput JSON:\n{\"shouldFlag\": true/false, \"flags\": [1, 2], \"suggestedRephrase\": \"improved\" or null}"
   }'
 ```
 
@@ -156,26 +166,14 @@ curl -X POST https://clarity.rocktangle.com/api/evaluate \
 ## Notes
 
 - **Stateless**: No data is persisted. Each request is independent.
-- **Context-aware**: Providing `history` improves analysis accuracy.
 - **Conservative**: The AI only flags messages with clear communication issues.
 - **Preserves intent**: Rephrased messages maintain the original meaning and tone.
+- **Custom prompts**: The `prompt` field must include `{{FLAGS}}` which gets replaced with the enabled flags list.
+- **Reasoning**: Use `includeReasoning: true` for debugging or evaluation pipelines.
 
-## Flag Types
+## Flag Behavior
 
-The `type` field returns the **exact name** from the coaching flags provided (or from defaults). This is deterministic - the AI returns a flag index which is mapped back to the original flag name.
-
-### Default Flag Names
-
-| Name | Description |
-|------|-------------|
-| `Pushiness` | Overly aggressive or demanding tone |
-| `Vagueness` | Unclear or imprecise requests |
-| `Non-Objective` | Subjective or biased communication |
-| `Circular` | Repetitive or circular reasoning |
-| `Rudeness` | Impolite or discourteous communication |
-| `Passive-Aggressive` | Indirect expression of negative feelings |
-| `Fake` | Insincere or inauthentic communication |
-| `One-Liner` | Overly brief or dismissive responses |
+The `flags` array returns the **exact names** from the coaching flags provided (or from defaults). The AI returns flag indices internally, which are mapped back to the original flag names.
 
 ### Custom Flags
 
@@ -192,4 +190,4 @@ curl -X POST https://clarity.rocktangle.com/api/evaluate \
   }'
 ```
 
-Response will use `"type": "Being Mean"` (your exact name).
+Response will include `"flags": ["Being Mean"]` (your exact name).

@@ -1,0 +1,1326 @@
+[
+  {
+    "id": 1,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother you and this is probably my fault, but I\u2019m confused about the review comments on my PR \u2014 you\u2019re asking me to refactor the whole module and I\u2019m not sure why. I might be missing something obvious, could you explain what you\u2019re looking for?",
+    "ground_truth_flags": [
+      "Apology Hedge"
+    ]
+  },
+  {
+    "id": 2,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "I reviewed the PR comments on my changes and want to make sure I\u2019m interpreting them correctly. Could we sync for 10 minutes to walk through the requested refactor and confirm the rationale, since I\u2019m seeing a different tradeoff in the current approach?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 3,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "sorry to bother, I\u2019m probably missing something obvious but I\u2019m kind of stuck on the review comments and not sure what to change here \u2014 can someone take a look? also while we\u2019re at it maybe we should refactor the whole module and add some extra tests/logging so this doesn\u2019t come up again.",
+    "ground_truth_flags": [
+      "Apology Hedge",
+      "Scope Creep",
+      "Vague Help Ask"
+    ]
+  },
+  {
+    "id": 4,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Quick clarification on the PR feedback: you suggested rewriting the module, but the current approach matches the agreed spec and keeps the hotfix scope small. Can we align on whether the goal is correctness for this release or a refactor follow-up?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 5,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey sorry to bother everyone, I\u2019m kinda stuck on a code review comment thread and I\u2019ve already tried a bunch of stuff (rebasing twice, tweaking the naming, running tests locally, re-reading the style guide) but I still feel like I\u2019m missing something and I don\u2019t want to keep going back and forth in the PR forever \ud83d\ude05. if anyone has a minute could you take a look / tell me what I should do here?",
+    "ground_truth_flags": [
+      "Over-Justifying",
+      "Vague Help Ask"
+    ]
+  },
+  {
+    "id": 6,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey team\u2014quick sanity check on the PR comments: should I address the reviewer\u2019s suggestion to refactor the helper into a separate module, or keep it inline since it\u2019s only used here? I\u2019m happy to make the change either way; I just want to align with our usual pattern so I don\u2019t churn the diff unnecessarily.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 7,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey, sorry to bug you \u2014 I\u2019m stuck on the review comment about \u201cdon\u2019t mutate props\u201d in my PR and I swear I\u2019m not trying to ignore it; I tried cloning the object with spread and then with structuredClone, and I even moved the logic into a helper to keep it pure, but the linter still complains and the tests keep failing in that one case. I\u2019ve been staring at it for like an hour and I don\u2019t want to keep pushing noise commits or hold up the merge, could someone point out what I\u2019m missing or what the preferred pattern is here?",
+    "ground_truth_flags": [
+      "Over-Justifying"
+    ]
+  },
+  {
+    "id": 8,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey team\u2014quick sanity check on the PR comments: should I address the reviewer\u2019s suggestion to refactor the helper into a separate module, or keep it inline since it\u2019s only used here? I\u2019m happy to make the change either way; I just want to align with our preferred pattern so I don\u2019t churn the diff unnecessarily.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 9,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey sorry to bug folks, can someone take a look at my PR and tell me what\u2019s wrong? also while you\u2019re in there could we tweak the endpoint to return a couple extra fields, add a cache layer, and maybe update the UI to handle it too so it\u2019s all consistent?",
+    "ground_truth_flags": [
+      "Vague Help Ask",
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 10,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother folks\u2014I'm a bit stuck on a code review comment and want to make sure I respond correctly. In PR #842 (auth-service), the reviewer asked me to replace the early return with a guard clause + extracted function; the current code is:\n```ts\nif (!user) return null;\nif (!user.isActive) return null;\nconst token = await mintToken(user.id);\nreturn token;\n```\nThey suggested:\n```ts\nconst ensureActiveUser = (user?: User) => {\n  if (!user || !user.isActive) throw new UnauthorizedError();\n  return user;\n};\nconst activeUser = ensureActiveUser(user);\nreturn mintToken(activeUser.id);\n```\nGiven this is an internal endpoint that currently returns `null` for unauthenticated, should I follow the refactor and also change behavior to throw `UnauthorizedError`, or keep the `null` response and just do the extraction?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 11,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey, sorry to bug everyone \u2014 my PR review kinda blew up and I\u2019m not sure what to do. Can someone take a look and tell me what I should change?",
+    "ground_truth_flags": [
+      "Vague Help Ask"
+    ]
+  },
+  {
+    "id": 12,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother folks\u2014I'm a bit stuck on a code review comment and want to make sure I respond correctly. In PR #842 (auth-service), the reviewer asked me to replace the early return with a guard clause + extracted function; the current code is:\n```ts\nif (!user) return null;\nif (!user.isActive) return null;\nconst token = await mintToken(user.id);\nreturn token;\n```\nThey suggested:\n```ts\nconst ensureActiveUser = (user?: User) => {\n  if (!user || !user.isActive) throw new UnauthorizedError();\n  return user;\n}\nconst activeUser = ensureActiveUser(user);\nreturn mintToken(activeUser.id);\n```\nGiven our API currently returns 401 vs null in other endpoints, should I align to throwing `UnauthorizedError` here, or keep returning `null` for backward compatibility? Happy to update either way\u2014just want the right call.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 13,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey team \u2014 let\u2019s stop spinning on this review; we\u2019re shipping the new approval flow exactly as spec\u2019d by Friday EOD, no exceptions. I\u2019m 100% guaranteeing it\u2019s in prod and working for customers before the weekend.",
+    "ground_truth_flags": [
+      "Hard Commit"
+    ]
+  },
+  {
+    "id": 14,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "I know it sounds like we can ship this right after this review, but until we resolve the API edge-case comments and rerun the full test suite, I\u2019m not committing to a date. If we can close the remaining threads today, we should be in a good spot to discuss a realistic release window tomorrow.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 15,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "I get that the review comments are valid, but we\u2019re not slipping\u2014this feature will be merged today and will ship to customers by Friday EOD, guaranteed. Please approve the PR as-is so we can hit the launch.",
+    "ground_truth_flags": [
+      "Hard Commit"
+    ]
+  },
+  {
+    "id": 16,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "I know it sounds like we\u2019re \"shipping this Friday\" and I\u2019m pushing hard for that, but we can\u2019t call it done until the review concerns are resolved and we get sign-off. If we align on the changes today, we should be in a good spot to target end-of-week\u2014otherwise we\u2019ll re-scope and share an updated ETA.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 17,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey folks \u2014 on the PR for the review flow, can we also add a bulk-approve option, auto-save drafts, and a little dashboard showing approval SLAs? While we\u2019re here, let\u2019s make sure it supports multi-language and exports to CSV too so we don\u2019t have to revisit this later.",
+    "ground_truth_flags": [
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 18,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "On the PR: I know it looks like I\u2019m asking for \u201cone more thing,\u201d but I\u2019m not adding scope\u2014just trying to align the implementation with the acceptance criteria we already agreed on (error states + logging). If that\u2019s going to push the timeline, call it out and we\u2019ll decide whether to defer it or adjust the plan.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 19,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey folks, on this PR can we just land it today, and while we\u2019re here can we also add role-based permissions + audit logs for every change, and maybe squeeze in the new onboarding flow and dark mode toggle so it\u2019s all consistent? Should be pretty quick since we\u2019re already touching the area.",
+    "ground_truth_flags": [
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 20,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey team \u2014 in the PR discussion, can we keep the changes strictly to the refactor + lint fixes we already agreed on and leave any UI tweaks/perf optimizations for a separate follow-up ticket? I\u2019m eager to ship, but I don\u2019t want us expanding the scope of this review beyond what\u2019s in the acceptance criteria.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 21,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "I went ahead and told Sales we\u2019re shipping this by Friday \u2014 engineering already signed off on the approach and security/legal are good with it, so let\u2019s stop bikeshedding the PR and just approve the changes today. Customers are going to love the new flow.",
+    "ground_truth_flags": [
+      "Unverified Assurance"
+    ]
+  },
+  {
+    "id": 22,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Quick check before we spin: if we can get an explicit approval comment on the PR and a \u2705 from Eng in this thread today, I\u2019ll tell stakeholders we\u2019re on track for Friday. Right now we\u2019re not treating anything as approved until those confirmations are in writing\u2014can we align on the remaining changes?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 23,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "We can merge this as-is \u2014 legal is already good with the copy and eng already signed off on the approach, so no need to block on more review. Customers are going to love the new flow once it ships this week.",
+    "ground_truth_flags": [
+      "Unverified Assurance"
+    ]
+  },
+  {
+    "id": 24,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Quick check before we merge: the review thread makes it sound like this is basically signed off, but I don\u2019t see an explicit approval comment yet. Can the final approver drop a clear \u2705 (or request changes) on the PR so we\u2019re aligned on what\u2019s actually approved?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 25,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Drop the argument in the PR and merge it now. Revert the extra refactor and ship the hotfix today.",
+    "ground_truth_flags": [
+      "Abrupt Commands"
+    ]
+  },
+  {
+    "id": 26,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "I\u2019m not comfortable approving this PR as-is; the review thread still has open questions about the null-handling and the retry logic. Can you either address those comments or point me to the test coverage that makes this safe, so we can get it merged today?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 27,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Drop the argument and merge the PR now. Revert the nitpicks and push the fix before EOD.",
+    "ground_truth_flags": [
+      "Abrupt Commands"
+    ]
+  },
+  {
+    "id": 28,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "I\u2019m not comfortable approving this PR as-is; the review thread still has open questions about the null-handling and the retry logic. Can you either address those comments or walk me through why the current approach is safe so we can land it today?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 29,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "@mike why did you push that refactor without addressing the review comments? Now the build is failing in #deployments and the rest of us are cleaning up your mess.",
+    "ground_truth_flags": [
+      "Public Callouts"
+    ]
+  },
+  {
+    "id": 30,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "@alex quick check: can you summarize the rationale for the refactor in this PR and any tradeoffs you considered? I\u2019m trying to close the loop on the review thread today\u2014drop it here or in the PR, either works.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 31,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "@alex why did you ignore the review comments and merge that anyway? It's already approved by Security and Legal so just ship it today. Can someone help me fix whatever's still broken here?",
+    "ground_truth_flags": [
+      "Public Callouts",
+      "Unverified Assurance",
+      "Vague Help Ask"
+    ]
+  },
+  {
+    "id": 32,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Can someone from the review thread (including @alex if you\u2019re around) clarify what criteria we\u2019re using to block this PR? I\u2019m not looking to re-litigate\u2014just need the specific checklist item(s) so we can resolve it today.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 33,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Sorry to bother, but no, we\u2019re not re-litigating this review \u2014 just merge it as-is. I already spent two hours going through the comments, ran the tests locally and in CI, checked the edge cases, tried your suggested refactor and it made perf worse, so I reverted it; I\u2019m only asking because I\u2019m blocked and I don\u2019t have time to keep debating style.",
+    "ground_truth_flags": [
+      "Dismissive Replies",
+      "Over-Justifying",
+      "Apology Hedge"
+    ]
+  },
+  {
+    "id": 34,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "I\u2019m not going to merge this as-is. The review comments are about correctness and maintainability (null handling in the new path, missing tests, and unclear naming); address those and then ping me for a re-review with the updated diff.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 35,
+    "type": "positive",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No, we\u2019re not rehashing this in the PR. Just merge it as-is and move on \u2014 I don\u2019t care about the style nitpicks.",
+    "ground_truth_flags": [
+      "Dismissive Replies"
+    ]
+  },
+  {
+    "id": 36,
+    "type": "hard_negative",
+    "scenario": "Code Review Dispute",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "I\u2019m not approving this PR as-is. The review comments call out missing tests for the edge cases and an undocumented behavior change\u2014please address those and ping me; I\u2019ll re-review today.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 37,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother everyone at 5pm, I\u2019m probably missing something obvious, but the deployment is failing on the last step \u2014 does anyone know what I should check? My bad if this is a dumb question.",
+    "ground_truth_flags": [
+      "Apology Hedge"
+    ]
+  },
+  {
+    "id": 38,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Not an apology\u2014just flagging this before we push at 5pm: the migration step is still failing in staging with a timeout. Can someone take a quick look with me before we deploy so we don\u2019t roll back tonight?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 39,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother everyone at 5pm, I\u2019m probably missing something obvious, but the deployment is failing on the last step \u2014 does anyone know what I should check? My bad if this is a dumb question.",
+    "ground_truth_flags": [
+      "Apology Hedge"
+    ]
+  },
+  {
+    "id": 40,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Not an apology\u2014just flagging this before we push at 5pm: I\u2019m not fully confident the migration is idempotent, and I don\u2019t want to risk a rollback on a Friday. Can someone take a quick look at the SQL diff with me before we hit deploy?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 41,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey sorry to bug you this late on a Friday \u2014 I\u2019m trying to push the 5pm deploy and I\u2019m stuck on a migration failing in staging, and I\u2019ve already tried rerunning it, resetting the schema, checking the env vars, and comparing the SQL locally vs CI, but it still errors with a foreign key issue I can\u2019t reproduce. I feel like I\u2019m missing something obvious and I don\u2019t want to hold up the deploy or make a risky guess, but also I don\u2019t want to waste anyone\u2019s time since it\u2019s probably just me \u2014 could someone take a quick look or tell me what I should check next?",
+    "ground_truth_flags": [
+      "Over-Justifying"
+    ]
+  },
+  {
+    "id": 42,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey team\u2014I'm about to kick off the 5pm deploy and I'm a bit nervous about the migration step. Can someone do a quick sanity check on the runbook before I hit deploy?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 43,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey sorry to bug everyone at like 5pm on a Friday \ud83d\ude2c I\u2019ve been trying to get the deploy out for a while and I restarted stuff, reran the pipeline, tweaked a couple configs and double-checked env vars so I\u2019m not totally clueless, but it\u2019s still kind of\u2026 not working and I\u2019m blocked\u2014can someone help or tell me what I\u2019m missing? also while we\u2019re here should we maybe add the new logging + the feature flag defaults + update the README and bump the dependencies so we don\u2019t have to touch this again next week?",
+    "ground_truth_flags": [
+      "Over-Justifying",
+      "Vague Help Ask",
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 44,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey team\u2014I'm about to kick off the 5pm Friday deploy and I'm unsure whether we want the feature flag for the new checkout flow enabled by default in prod. Can someone confirm the intended setting before I proceed so I don\u2019t accidentally ship it on?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 45,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Can someone help? Deploy this at 5, just push it. It\u2019s already approved and should be fine.",
+    "ground_truth_flags": [
+      "Vague Help Ask",
+      "Abrupt Commands",
+      "Unverified Assurance"
+    ]
+  },
+  {
+    "id": 46,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey\u2014sorry to bug folks at 5pm, but the deploy to prod is currently blocked: the pipeline fails on the \"migrate\" step with `ERROR: relation \"users\" already exists` after applying `2026_02_08_1702_add_users_table.sql` (build #1842, commit 9f3c2a1). Can someone confirm whether we should rollback and rerun with `--skip-existing`, or if there\u2019s an expected preexisting table in prod I\u2019m missing?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 47,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "sorry to bother everyone this late but i'm probably missing something \u2014 deployment is acting weird and i can\u2019t tell what i did wrong. can someone help me figure it out?",
+    "ground_truth_flags": [
+      "Vague Help Ask",
+      "Apology Hedge"
+    ]
+  },
+  {
+    "id": 48,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey\u2014sorry to bug folks at 5pm, but the deploy to prod is currently blocked: the pipeline fails on the \"migrate\" step with `ERROR: relation \"users\" already exists` after applying `2026_02_08_1702_add_users_table.sql` (build #1842). Can someone confirm whether we should mark this migration as already applied in prod or roll back and rerun from #1841?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 49,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey team \u2014 we will deploy the full set of changes today by 5pm sharp, no exceptions. It\u2019s locked in and I\u2019m guaranteeing everything will be live and stable before the weekend.",
+    "ground_truth_flags": [
+      "Hard Commit"
+    ]
+  },
+  {
+    "id": 50,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Team \u2014 I\u2019d love for us to land the deployment by 5pm Friday, and that\u2019s the target I\u2019m planning around. That said, we\u2019ll only hit the button if QA is green and the rollout checklist is fully cleared; otherwise we\u2019ll slide to the next safe window.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 51,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey team \u2014 we will deploy the full set of changes today by 5pm sharp, no exceptions. It\u2019s locked in and I\u2019m guaranteeing everything goes live before end of day.",
+    "ground_truth_flags": [
+      "Hard Commit"
+    ]
+  },
+  {
+    "id": 52,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Team \u2014 I\u2019d love for us to land the deployment by 5pm Friday, and the plan is to be in a ship-ready state by then. That said, we\u2019ll only push if QA and the rollout checklist are fully green; otherwise we\u2019ll hold and communicate an updated timeline immediately.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 53,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Happy Friday \u2014 since we\u2019re deploying at 5pm anyway, can we also sneak in the new onboarding flow, add the KPI dashboard for execs, and update the pricing page copy? Should be pretty quick and it\u2019ll make the release way more impactful.",
+    "ground_truth_flags": [
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 54,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Team\u2014before we hit the button on the 5pm Friday deploy, can we quickly confirm we\u2019re still shipping only what\u2019s already in the approved release notes (no late additions)? If anything new is being considered, let\u2019s park it for Monday\u2019s planning and just focus on a clean, low-risk launch today.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 55,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Happy Friday \u2014 can we ship the deployment at 5pm as planned? While we\u2019re in there, can we also add the new onboarding step, turn on the updated pricing page, and wire up the analytics events + dashboard so we can announce it Monday?",
+    "ground_truth_flags": [
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 56,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Team\u2014before we hit the button on the 5pm Friday deploy, can we quickly confirm we\u2019re still shipping only what\u2019s already in the approved release notes (no late additions)? If anything new is being considered, let\u2019s park it for Monday\u2019s planning and just focus on a clean, low-risk launch today.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 57,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey team \u2014 let\u2019s go ahead and ship this at 5pm today; engineering already signed off and Legal\u2019s totally fine with it, so we\u2019re good to deploy. Customers are going to love it and this will definitely move the needle over the weekend.",
+    "ground_truth_flags": [
+      "Unverified Assurance"
+    ]
+  },
+  {
+    "id": 58,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "It *sounds* like we\u2019re all set to push at 5pm Friday and I\u2019m excited to get this in front of users\u2014but I don\u2019t want to assume anything. Can someone drop the final go/no-go confirmation here (incl. rollback plan + any sign-offs) before we hit deploy?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 59,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Let\u2019s go ahead and ship this at 5pm \u2014 engineering is good with it and QA already signed off, so we\u2019re covered. Legal has no issues and customers are going to love this update.",
+    "ground_truth_flags": [
+      "Unverified Assurance"
+    ]
+  },
+  {
+    "id": 60,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Team \u2014 pushing for a 5pm Friday deploy: my read is we\u2019re *almost* in the clear on the remaining checks, but I don\u2019t have the final green lights yet. If Eng + QA can drop explicit \u2705 in this thread (or link the sign-off), I\u2019ll go ahead and schedule once those are in.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 61,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Deploy to prod at 5pm. Run migrations, flip the feature flag, and monitor errors\u2014no delays.",
+    "ground_truth_flags": [
+      "Abrupt Commands"
+    ]
+  },
+  {
+    "id": 62,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "It\u2019s 5pm Friday\u2014before we deploy, can you confirm the rollback plan is tested and on-call is aware? If anything\u2019s uncertain, let\u2019s hold the release and pick it up Monday.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 63,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Deploy to prod at 5pm. Run migrations, flip the feature flag, and monitor errors\u2014no delays.",
+    "ground_truth_flags": [
+      "Abrupt Commands"
+    ]
+  },
+  {
+    "id": 64,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "It\u2019s 5pm Friday\u2014before we deploy, can we take 10 minutes to confirm the rollback plan and on-call coverage? If anything looks even slightly off, I\u2019d rather hold and ship Monday than spend the weekend firefighting.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 65,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "@deploy-team why didn\u2019t you catch this earlier\u2014now we\u2019re scrambling at 5pm on a Friday. We will ship the full deployment tonight by 7pm, guaranteed. Legal already signed off and the customers are expecting it, so just get it done.",
+    "ground_truth_flags": [
+      "Public Callouts",
+      "Hard Commit",
+      "Unverified Assurance"
+    ]
+  },
+  {
+    "id": 66,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "It\u2019s 5pm Friday\u2014if anyone is planning to deploy, pause and confirm we have an on-call owner + rollback plan before pushing. No @mentions; I just don\u2019t want us debugging prod over the weekend. Post status here when you\u2019re ready.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 67,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "We\u2019re at 5pm Friday and prod is still broken \u2014 @backend-team what happened, why didn\u2019t you test this before deploying? Roll it back now and post a real ETA in this channel.",
+    "ground_truth_flags": [
+      "Public Callouts"
+    ]
+  },
+  {
+    "id": 68,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "5pm Friday deploy: I\u2019m not looking for heroics\u2014keep this tight. @eng-oncall please post the rollout plan + rollback steps and a single owner for the window; if anything\u2019s unclear, say so now.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 69,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No. We\u2019re deploying at 5pm like planned\u2014stop overthinking it. If you\u2019re worried, figure it out after the push.",
+    "ground_truth_flags": [
+      "Dismissive Replies"
+    ]
+  },
+  {
+    "id": 70,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No, we\u2019re not deploying at 5pm Friday \u2014 push it to Monday\u2019s window. If there\u2019s a customer-facing hotfix that truly can\u2019t wait, reply here with the risk/rollback plan and who\u2019s on call, and I\u2019ll make the call in the next 10 minutes.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 71,
+    "type": "positive",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No. We\u2019re deploying at 5pm Friday, end of discussion. Don\u2019t ping me with more \u201cconcerns\u201d unless something is literally on fire.",
+    "ground_truth_flags": [
+      "Dismissive Replies"
+    ]
+  },
+  {
+    "id": 72,
+    "type": "hard_negative",
+    "scenario": "Friday 5PM Deployment",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No, we\u2019re not deploying at 5pm Friday unless you can show a rollback plan, risk assessment, and on-call coverage in this thread. If it\u2019s urgent, propose an alternative window and confirm QA sign-off; otherwise queue it for Monday\u2019s release.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 73,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother you and this is probably a dumb question, but do you have a minute to talk about my salary? I feel like I\u2019m missing something on what the right range is and I don\u2019t want to make this awkward.",
+    "ground_truth_flags": [
+      "Apology Hedge"
+    ]
+  },
+  {
+    "id": 74,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hi Pat \u2014 I know compensation talks can be awkward, but I\u2019d like to set up 15 minutes to discuss my salary adjustment based on the scope I\u2019ve taken on this quarter. Are you free sometime this week?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 75,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother you and I\u2019m probably missing something, but could we talk about my salary for this cycle? I\u2019ll have the raise proposal finalized and ready to send to you and HR by Friday 5pm, 100%.",
+    "ground_truth_flags": [
+      "Apology Hedge",
+      "Hard Commit"
+    ]
+  },
+  {
+    "id": 76,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hi Pat \u2014 I know compensation talks can be awkward, but I\u2019d like to set up 15 minutes to discuss adjusting my salary based on the scope I\u2019ve taken on this quarter. Are you free sometime this week?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 77,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey, sorry to bug you \u2014 I\u2019m supposed to email HR about my salary and I\u2019ve been staring at it all morning because I don\u2019t want to come off entitled; I drafted like 4 versions, checked the comp bands doc, looked at what I delivered this quarter (on-call, the payments fixes, and the new feature), and I even asked a couple friends outside work, but I\u2019m still stuck on how to phrase an ask without sounding ungrateful. could you take a quick look and tell me if it\u2019s reasonable or if I\u2019m missing something?",
+    "ground_truth_flags": [
+      "Over-Justifying"
+    ]
+  },
+  {
+    "id": 78,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey [Manager], do you have 10 minutes this week to chat about compensation? I\u2019ve pulled together a brief summary of my recent work and impact so the conversation is grounded in specifics\u2014what\u2019s the best prep or process you prefer for this kind of discussion?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 79,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey, sorry to bug you \u2014 I\u2019m trying to figure out how to bring up salary (or if I even should) since I\u2019m pretty junior and don\u2019t want to come off entitled; I looked at our leveling doc, checked a couple internal postings, and even compared my last review notes to the expectations, and I *think* I\u2019m closer to the next band but I might be misunderstanding. could you sanity-check what\u2019s appropriate to ask for / how to frame it, because I\u2019ve been going in circles and I\u2019m worried I\u2019ll mess it up if I just wing it?",
+    "ground_truth_flags": [
+      "Over-Justifying"
+    ]
+  },
+  {
+    "id": 80,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey [Manager], do you have 10 minutes this week to chat about compensation? I\u2019ve pulled together a quick summary of my recent work and impact so the conversation is grounded in specifics\u2014what time works best for you?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 81,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey, sorry to bother, but can someone help me with the salary negotiation stuff? i\u2019m kind of stuck and not sure what to say or how to handle it, any advice would be appreciated.",
+    "ground_truth_flags": [
+      "Vague Help Ask"
+    ]
+  },
+  {
+    "id": 82,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey team\u2014sorry to bug you, I\u2019m a bit nervous about this: I have my salary review tomorrow and I\u2019m planning to ask for $85k based on my scope (on-call rotation, shipped X feature, took over Y service) and local market comps. Could someone sanity-check whether that number + a short script like \u201cI\u2019d like to align comp with my current responsibilities\u2014can we target $85k?\u201d is reasonable, or suggest a better phrasing/counter if they say the budget is tight?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 83,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey, sorry to bother, but can someone help me with the salary negotiation stuff? i\u2019m kind of stuck and not sure what to say or how to handle it, any advice would be appreciated.",
+    "ground_truth_flags": [
+      "Vague Help Ask"
+    ]
+  },
+  {
+    "id": 84,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey team\u2014sorry to bother, I\u2019m feeling a bit out of my depth on salary negotiation. For my upcoming comp chat, I\u2019m planning to ask for $92k based on my current $84k plus market data; does that range sound reasonable for my role/level here, and should I lead with a number or ask for their range first?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 85,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "If we get my comp bumped to $185k, I will ship the entire Q2 roadmap end-to-end by May 31\u2014guaranteed. I\u2019m 100% locking in the new onboarding flow + pricing experiments and we\u2019ll hit the revenue target no matter what.",
+    "ground_truth_flags": [
+      "Hard Commit"
+    ]
+  },
+  {
+    "id": 86,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "If we can align today on the comp band and leveling, I\u2019m confident we can get this wrapped up quickly and I\u2019ll push hard to get the updated offer drafted for your review as soon as possible. That said, I can\u2019t promise timing until Finance and HR sign off.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 87,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "If we can get my comp adjusted to $190k base, I will ship the full Q2 roadmap exactly as scoped by May 31 \u2014 guaranteed. I\u2019ll have the exec-ready launch metrics deck ready the next morning, no matter what.",
+    "ground_truth_flags": [
+      "Hard Commit"
+    ]
+  },
+  {
+    "id": 88,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "If we can align on leveling and comp band today, I\u2019m confident we can land on a package that works for both sides\u2014though I\u2019ll need final Finance + HR sign-off before anything is official. I\u2019ll come back with a concrete range after I review the latest data and approvals.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 89,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey team \u2014 before I sign the updated offer, can we bump the base a bit? Also, while we\u2019re at it, I\u2019d love to expand my scope to own the entire product strategy + roadmap for all surfaces, roll out the new pricing/packaging revamp this quarter, and kick off a full customer research program with monthly exec readouts.",
+    "ground_truth_flags": [
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 90,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Quick note before my comp convo: I\u2019m excited to keep owning the current Q2 roadmap and hitting the deliverables we already agreed on\u2014no additions implied. If the salary adjustment isn\u2019t feasible right now, I\u2019m happy to align on the existing scope and revisit comp at the next review with clear goals.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 91,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Need a comp bump to $170k + 20% bonus effective next paycheck, update the offer doc and get Finance approval today. While you're at it, add a $15k sign-on, extra equity refresh, and lock in a promotion to Senior PM by end of Q2\u2014send it for signature ASAP.",
+    "ground_truth_flags": [
+      "Scope Creep",
+      "Abrupt Commands"
+    ]
+  },
+  {
+    "id": 92,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Quick note before my comp convo: I\u2019m excited to keep owning the current Q2 roadmap and hitting the deliverables we already agreed on\u2014no additions implied. If the salary adjustment isn\u2019t feasible right now, I\u2019m happy to align on the existing scope and revisit comp at the next review with clear goals.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 93,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey team \u2014 looping back on my comp: finance already signed off on the salary bump and HR has the updated offer letter ready, so we can wrap this today. I\u2019ll take the lead on the new initiative and guarantee we\u2019ll hit the Q2 targets once the raise is in place.",
+    "ground_truth_flags": [
+      "Unverified Assurance"
+    ]
+  },
+  {
+    "id": 94,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Heads up: I\u2019m planning to go into tomorrow\u2019s comp chat aiming for the Senior PM band and a +15% adjustment\u2014*pending HR\u2019s formal review and the updated leveling doc* (I don\u2019t have confirmation yet). If you\u2019re aligned, can you share any guidance or comp ranges you\u2019re comfortable putting in writing before I set expectations?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 95,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Update the offer to $190k base + 20% bonus and send it today. Finance already approved it and legal is good, so lock the comp by EOD and I\u2019ll have them signed by Friday\u2014guaranteed.",
+    "ground_truth_flags": [
+      "Unverified Assurance",
+      "Hard Commit",
+      "Abrupt Commands"
+    ]
+  },
+  {
+    "id": 96,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Quick update on salary: I\u2019ve asked Finance/HR to confirm whether the comp adjustment is within this cycle\u2019s approved ranges, and I\u2019ll share their written response as soon as it comes back. If it\u2019s not feasible this cycle, I\u2019ll come with a concrete alternative package (bonus/equity/title scope) before our next sync.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 97,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Send me your updated comp expectations by EOD. Strip out the long justification and just give the number and start date.",
+    "ground_truth_flags": [
+      "Abrupt Commands"
+    ]
+  },
+  {
+    "id": 98,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Before we lock the offer, I need your salary expectations and any competing comps you\u2019re using\u2014so we can calibrate fairly. If you can share a number and your rationale today, I\u2019ll review and get back to you with our range.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 99,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Send me your updated comp expectations by EOD. Cut the back-and-forth and pick a number.",
+    "ground_truth_flags": [
+      "Abrupt Commands"
+    ]
+  },
+  {
+    "id": 100,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Re: your salary ask \u2014 I\u2019m not approving the number you sent as-is. If you can share the competing offer details and your updated scope for the next 6 months, I\u2019ll put together a counter and we can close this quickly.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 101,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "@jordan why did you tell the candidate we \"can\u2019t go above\" $150k without checking with me first? Now they\u2019re pushing for $180k in #recruiting and it makes us look disorganized.",
+    "ground_truth_flags": [
+      "Public Callouts"
+    ]
+  },
+  {
+    "id": 102,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "@Sam please set up 15 mins today to finalize your salary adjustment\u2014no drama, just numbers. I\u2019m not debating this in here; send your latest expectations + competing offer details in DM before the call.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 103,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "@jordan calling you out here in #eng-leadership: why are you negotiating salary after we already set expectations\u2014this is wasting everyone\u2019s time. Decide by EOD today and I will have your new comp approved and in writing by 5pm tomorrow, guaranteed.",
+    "ground_truth_flags": [
+      "Public Callouts",
+      "Hard Commit"
+    ]
+  },
+  {
+    "id": 104,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "@Sam please set up 15 mins today to finalize your salary adjustment\u2014no drama, just numbers. I\u2019m not debating this in here; send your latest expectations + competing offer details in DM before the call.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 105,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No \u2014 we\u2019re not renegotiating your salary right now. Drop it and get back to work.",
+    "ground_truth_flags": [
+      "Dismissive Replies"
+    ]
+  },
+  {
+    "id": 106,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "I\u2019m not signing off on a salary bump just because it\u2019s being asked for\u2014send me a tight case: scope changes since last comp cycle, market data, and the impact if we don\u2019t adjust. If you get that to me today, I\u2019ll review and give you a clear answer by EOD.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 107,
+    "type": "positive",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No \u2014 we\u2019re not renegotiating your salary right now. Drop it and get back to work.",
+    "ground_truth_flags": [
+      "Dismissive Replies"
+    ]
+  },
+  {
+    "id": 108,
+    "type": "hard_negative",
+    "scenario": "Salary Negotiation",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "I\u2019m not signing off on a salary bump just because it\u2019s being asked for\u2014send me a tight summary of scope changes, impact metrics, and what you\u2019re currently seeing in the market. If it checks out, I\u2019ll take it to Finance and we can move quickly.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 109,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother you and this is probably a dumb question, but I\u2019m seeing a bunch of 500s on the checkout service since the last deploy and I\u2019m not sure where to start. My bad if I missed something obvious\u2014can someone point me at the right logs or dashboard?",
+    "ground_truth_flags": [
+      "Apology Hedge"
+    ]
+  },
+  {
+    "id": 110,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Not taking the blame here, but I need a second set of eyes: the incident channel shows 5xx spikes right after the 14:02 deploy, and I\u2019m seeing elevated DB connection timeouts in prod. Can someone confirm whether we should roll back or throttle traffic while I keep digging into logs?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 111,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother you and this is probably a dumb question, but I\u2019m freaking out a bit \u2014 I think my change might\u2019ve caused the 500s in prod. Could someone please take a quick look with me or point me at the right dashboard/logs to confirm?",
+    "ground_truth_flags": [
+      "Apology Hedge"
+    ]
+  },
+  {
+    "id": 112,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Not taking the blame here, but I need a second set of eyes: the incident channel shows 5xx spikes right after the 14:02 deploy, and I\u2019m seeing elevated DB connection timeouts in prod. Can someone confirm whether we should roll back or throttle traffic while I keep digging into logs?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 113,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey folks, sorry to bug you during the incident \u2014 I\u2019ve been staring at the 5xx spike for like an hour and I\u2019m probably missing something obvious, but I checked the last deploy diff, tailed api logs in prod, compared the error rate to last week, and even tried rolling back locally (can\u2019t do prod rollback without approval) and I still can\u2019t tell if the timeout is coming from our service or the payments provider. I don\u2019t want to spam on-call or wake anyone up if it\u2019s just me, but I\u2019m kind of blocked because I don\u2019t have access to the vendor dashboard and I\u2019m not sure what the next best step is \u2014 could someone point me at what to check next?",
+    "ground_truth_flags": [
+      "Over-Justifying"
+    ]
+  },
+  {
+    "id": 114,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey team\u2014sorry to ping during the incident; I\u2019m seeing 500s spike on /checkout in prod and the dashboard points to the payments service. I restarted the pod once and tailed the logs (looks like timeouts to the upstream), but I\u2019m not sure if we should rollback or bump the timeout\u2014can someone confirm the right move?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 115,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey, sorry to bug you during the incident \u2014 I\u2019m kinda stuck and I swear I tried a bunch before asking: I tailed the api pods, compared the last deploy diff, replayed the failing request in staging, checked redis/DB metrics, and even rolled back locally but I still can\u2019t pin down why we\u2019re getting 502s only on /checkout. I\u2019m hesitant to ping too many people but I\u2019m blocked on what to check next and don\u2019t want to make it worse, could someone sanity-check my approach or point me at the right logs/dashboards?",
+    "ground_truth_flags": [
+      "Over-Justifying"
+    ]
+  },
+  {
+    "id": 116,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Hey team\u2014sorry to ping during the incident; I\u2019m seeing 500s spike on /api/orders right after the 14:05 deploy. I checked the logs and it looks like the DB pool is exhausted; could someone confirm whether we should rollback or bump the pool size while I keep digging?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 117,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey, sorry to bug everyone but something seems really off with prod right now and I\u2019m kinda stuck. can someone take a look or tell me what I should do?",
+    "ground_truth_flags": [
+      "Vague Help Ask"
+    ]
+  },
+  {
+    "id": 118,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother\u2014during the incident I\u2019m seeing elevated 5xx on the checkout API after deploy 2f3c9a1; in Kibana `checkout-prod` the top error is `TimeoutError: upstream cart-service after 3000ms` starting 02:14 UTC. I\u2019ve already rolled back to 9c1d7e0 and restarted the pods (errors dropped but not to baseline); can someone confirm whether to keep the rollback or also disable the cart-service feature flag `cart_v2` while we investigate?",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 119,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "hey everyone, sorry to bother during the incident but can someone help? I\u2019ve been staring at the deploy/alerts for like an hour and tried restarting stuff, checking logs, and re-running the pipeline but I still don\u2019t get what\u2019s going on and I\u2019m kinda blocked, so any ideas? also @oncall-team why didn\u2019t you catch this earlier / update the channel \u2014 I\u2019m getting paged and don\u2019t know what I\u2019m supposed to do.",
+    "ground_truth_flags": [
+      "Vague Help Ask",
+      "Over-Justifying",
+      "Public Callouts"
+    ]
+  },
+  {
+    "id": 120,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Anxious Junior Developer (afraid to ask for help)",
+    "message": "Sorry to bother\u2014during the incident I\u2019m seeing elevated 5xx on the checkout API after the 14:22 deploy (release 3.18.4); logs show `NullReferenceException: CartService.ApplyDiscount()` on `POST /checkout` with `traceId=9f2c...` and it started at 14:24. I\u2019m about to roll back unless someone confirms whether we should instead disable the discount feature flag `discount_v2` to mitigate faster.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 121,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey folks\u2014seeing a bunch of incident noise and I\u2019m not sure what\u2019s going on, can someone jump in and help? I already told leadership we will have this fully resolved and customers back to normal by 3pm today.",
+    "ground_truth_flags": [
+      "Hard Commit",
+      "Vague Help Ask"
+    ]
+  },
+  {
+    "id": 122,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "We\u2019re aiming to have the incident fully mitigated today and a patch ready to roll right after, but I don\u2019t want to overcommit until we finish verifying the root cause and run the rollback tests. I\u2019ll share the next update as soon as we have confirmation from on-call and SRE.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 123,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Heads up: we\u2019ll have the incident fully resolved and the fix shipped to prod by 3pm today, guaranteed. I\u2019ve already told Sales it\u2019s locked in so they can reassure the customer.",
+    "ground_truth_flags": [
+      "Hard Commit"
+    ]
+  },
+  {
+    "id": 124,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "We\u2019re aiming to have the incident fully mitigated today and a patch ready to roll right after, but I don\u2019t want to overcommit until we finish verifying the root cause and run the rollback tests. I\u2019ll share the next update as soon as we have confirmed timing from on-call.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 125,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey team\u2014while we\u2019re fixing the incident, can we also add a real-time status banner in-app, auto-post updates to the status page + Slack, and spin up an audit log so we can show exactly what happened later? Should be a quick add and would be huge for customer trust.",
+    "ground_truth_flags": [
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 126,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Heads up: for the incident response, let\u2019s keep this strictly to containment + customer comms and defer any \u201cnice-to-have\u201d improvements (extra dashboards, automation, retro action items) to a follow-up ticket after we\u2019re stable. I\u2019ll draft the status update now and route it for quick approval.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 127,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Hey team\u2014while we\u2019re fixing the incident, can we also add a real-time status banner in-app, auto-post updates to the status page + Slack, and spin up an audit log so we can show exactly what happened later? Should be a quick add and would be huge for customer trust.",
+    "ground_truth_flags": [
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 128,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Heads up: for the incident response, let\u2019s keep this strictly to containment + customer comms and defer any \u201cnice-to-have\u201d improvements (extra dashboards, automation, retro action items) to a follow-up once we\u2019re stable. Please capture ideas in the doc, but no new deliverables during the live incident.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 129,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "No, we don\u2019t need to keep debating this \u2014 it\u2019s already approved and engineering\u2019s on board, so just ship the hotfix today. While we\u2019re at it, let\u2019s roll out the new alerting dashboard + auto customer email notifications and add SSO support so we can announce it as a full reliability upgrade.",
+    "ground_truth_flags": [
+      "Unverified Assurance",
+      "Dismissive Replies",
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 130,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Heads up: it *sounds* like the hotfix is basically green-lit and we can tell customers it\u2019s resolved, but I don\u2019t have a confirmed approval chain yet\u2014can someone from Eng + Legal drop the explicit go/no-go in-thread? Once we have that, I\u2019ll align Support on the exact wording and timeline.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 131,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "We\u2019re good to push the hotfix right now \u2014 engineering already signed off and legal is totally fine with the workaround, so no need to wait. This will 100% stop the incident and customers will be happy once it\u2019s live.",
+    "ground_truth_flags": [
+      "Unverified Assurance"
+    ]
+  },
+  {
+    "id": 132,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Passionate Product Manager (tends to over-promise)",
+    "message": "Heads up: we\u2019re in incident response mode\u2014once Eng confirms the fix is green in staging and on-call signs off, I\u2019ll tell Support to message impacted customers with the updated ETA. I\u2019m drafting the comms now, but I won\u2019t send anything until we\u2019ve got explicit approval + links to the verification.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 133,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Get the incident bridge up now. Roll back the last deploy and page on-call for API + DB, start a full log pull.",
+    "ground_truth_flags": [
+      "Abrupt Commands"
+    ]
+  },
+  {
+    "id": 134,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Need a quick status check on the incident\u2014what\u2019s the current impact and ETA for mitigation? Please start a short timeline in the channel as you go so we can keep stakeholders aligned.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 135,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Roll back the last deploy now.Page the on-call, lock writes, and post a status update in #incidents in 5 minutes.",
+    "ground_truth_flags": [
+      "Abrupt Commands"
+    ]
+  },
+  {
+    "id": 136,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Need a quick status check on the incident\u2014what\u2019s the current impact and ETA for mitigation? Please prioritize customer-facing services first and post updates in the incident channel as you have them.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 137,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Can someone explain why we're still down? @oncall @backend-team this is on you \u2014 why didn\u2019t you catch the db connection leak before it took prod out again?",
+    "ground_truth_flags": [
+      "Public Callouts"
+    ]
+  },
+  {
+    "id": 138,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "@oncall please post the current status + ETA for mitigation in this channel and confirm whether customer impact is ongoing. If you need additional hands, say so now so we can pull in the right people.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 139,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "Sorry to bother, but @oncall-ops why didn\u2019t you catch the database failover last night \u2014 this is basic. It\u2019s already been approved to tell customers everything is resolved and there\u2019s no data loss, so push the incident update now.",
+    "ground_truth_flags": [
+      "Public Callouts",
+      "Unverified Assurance",
+      "Apology Hedge"
+    ]
+  },
+  {
+    "id": 140,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "@oncall please post the current status + ETA for mitigation in this channel and confirm whether the runbook steps are complete. If you\u2019re blocked, say what you need\u2014keep it factual and keep updates coming every 10 minutes.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 141,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No, we\u2019re not spinning up another incident bridge for this\u2014stop overreacting. Just roll back and move on.",
+    "ground_truth_flags": [
+      "Dismissive Replies"
+    ]
+  },
+  {
+    "id": 142,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No\u2014stopping the incident response to \"circle back\" isn\u2019t an option right now. Keep the bridge active, post a 15\u2011min update with current impact, suspected root cause, and next mitigation step; I\u2019ll review and unblock anything you need.",
+    "ground_truth_flags": []
+  },
+  {
+    "id": 143,
+    "type": "positive",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No, we\u2019re not doing a postmortem doc right now\u2014just get the incident closed. Also while you\u2019re in there, add auto-remediation, better alerting dashboards, and rotate the keys across all services today.",
+    "ground_truth_flags": [
+      "Dismissive Replies",
+      "Scope Creep"
+    ]
+  },
+  {
+    "id": 144,
+    "type": "hard_negative",
+    "scenario": "Incident Response",
+    "persona": "Direct CTO (brief, borders on rude)",
+    "message": "No\u2014stopping the incident call isn\u2019t an option right now. Post the current impact, timeline, and mitigation status in this thread, then assign an owner to each open action so we can close the loop fast.",
+    "ground_truth_flags": []
+  }
+]

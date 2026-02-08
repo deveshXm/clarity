@@ -1,6 +1,6 @@
 import { CoachingFlag } from "@/types";
 import Portkey from 'portkey-ai';
-import { MESSAGE_ANALYSIS_PROMPT } from "@/lib/prompts";
+import { MESSAGE_ANALYSIS_PROMPT, MESSAGE_ANALYSIS_PROMPT_WITH_REASONING } from "@/lib/prompts";
 
 // ------------- Portkey client setup ---------------
 
@@ -29,6 +29,7 @@ export interface SimpleAnalysisResult {
         flagName: string;
     }>;
     suggestedRephrase: string | null;
+    reasoning?: string;
 }
 
 // ------------- Single Analysis Function ---------------
@@ -40,7 +41,7 @@ function buildFlagsString(flags: CoachingFlag[]): string {
         .join('\n');
 }
 
-function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[]): SimpleAnalysisResult {
+function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[], includeReasoning: boolean): SimpleAnalysisResult {
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data: any = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -54,11 +55,17 @@ function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[]): Simple
                 flagName: enabledFlags[idx - 1].name,
             }));
         
-        return {
+        const result: SimpleAnalysisResult = {
             shouldFlag: data.shouldFlag ?? false,
             flags: mappedFlags,
             suggestedRephrase: data.suggestedRephrase || null,
         };
+        
+        if (includeReasoning && data.reasoning) {
+            result.reasoning = data.reasoning;
+        }
+        
+        return result;
     } catch (error) {
         console.error('Failed to parse analysis:', error);
         return {
@@ -69,14 +76,25 @@ function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[]): Simple
     }
 }
 
+export interface AnalyzeMessageOptions {
+    includeReasoning?: boolean;
+    customPrompt?: string;  // For evals - override default prompt
+}
+
 /**
  * Analyzes a message for communication issues based on user's coaching flags.
  * Returns whether it should be flagged, which flags apply, and a suggested rephrase.
+ * @param message - The message to analyze
+ * @param coachingFlags - The coaching flags to check against
+ * @param options.includeReasoning - If true, includes reasoning in the response (for evals)
+ * @param options.customPrompt - If provided, uses this prompt instead of default
  */
 export async function analyzeMessage(
     message: string,
-    coachingFlags: CoachingFlag[]
+    coachingFlags: CoachingFlag[],
+    options: AnalyzeMessageOptions = {}
 ): Promise<SimpleAnalysisResult> {
+    const { includeReasoning = false, customPrompt } = options;
     const enabledFlags = coachingFlags.filter(f => f.enabled);
     
     if (enabledFlags.length === 0) {
@@ -84,8 +102,17 @@ export async function analyzeMessage(
     }
     
     const flagsString = buildFlagsString(coachingFlags);
-
-    const systemPrompt = MESSAGE_ANALYSIS_PROMPT.replace('{{FLAGS}}', flagsString);
+    
+    // Use custom prompt if provided, otherwise use default
+    let promptTemplate: string;
+    if (customPrompt) {
+        promptTemplate = customPrompt;
+    } else {
+        promptTemplate = includeReasoning 
+            ? MESSAGE_ANALYSIS_PROMPT_WITH_REASONING 
+            : MESSAGE_ANALYSIS_PROMPT;
+    }
+    const systemPrompt = promptTemplate.replace('{{FLAGS}}', flagsString);
     
     console.log('systemPrompt', systemPrompt);
     const raw = await chatCompletion([
@@ -93,5 +120,5 @@ export async function analyzeMessage(
         { role: 'user', content: message.replace(/"/g, '\\"') },
     ]);
     
-    return parseAnalysisResult(raw, enabledFlags);
+    return parseAnalysisResult(raw, enabledFlags, includeReasoning);
 }

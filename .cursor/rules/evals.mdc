@@ -1,0 +1,87 @@
+---
+description: Evaluation framework conventions for synthetic dataset generation and prompt optimization
+globs: evals/**
+alwaysApply: false
+---
+
+# Evals Framework
+
+## Overview
+Python-based evaluation framework in `evals/` for testing Clarity's communication coaching AI. Uses Poetry for dependency management, OpenAI for LLM calls.
+
+## Code Style
+- **No types/Pydantic** — plain dicts, lists, and simple functions
+- **No unnecessary abstractions** — keep logic flat and readable
+- **Single file per pipeline** — each pipeline is one script (e.g., `generate.py`)
+- **Config and prompts are separate** — but logic stays in one file
+
+## Project Structure
+```
+evals/
+├── config/              # Config files (seeds, percentages, counts)
+│   └── generate.py      # Synthetic data generation config
+├── prompts/             # LLM prompt templates (Python strings)
+│   └── generate.py      # Prompts for flag + message generation
+├── data/
+│   └── generate/        # Generated outputs
+│       ├── flags.json   # Step 1: coaching flags (name, description, examples, persona)
+│       └── dataset.json # Step 2: test messages with ground truth
+└── generate.py          # Main generation pipeline (--step flags|messages|all)
+```
+
+## Synthetic Dataset Generation Pipeline
+
+### Step 1: Flags (`--step flags`)
+- For each persona seed → LLM generates `MAX_FLAGS_PER_PERSONA` flags
+- Each flag: `{ name, description, examples[], persona }`
+- Deduplicate across personas (remove semantic overlap like "Rude" vs "Impolite")
+- Output: `data/generate/flags.json`
+
+### Step 2: Messages (`--step messages`)
+- Builds **Scenario × Flag** matrix (every combination)
+- Per pair generates `MESSAGES_PER_FLAG_SCENARIO` of each type:
+  - **positive**: message that SHOULD be flagged (violates the flag)
+  - **hard_negative**: tricky clean message that LOOKS like the flag but isn't
+- `MULTI_FLAG_PERCENT`% of positives get 2-3 flags instead of 1
+- Output: `data/generate/dataset.json`
+
+### Dataset Entry Format
+```python
+{
+    "id": 1,                          # Sequential counter
+    "type": "positive",               # or "hard_negative"
+    "scenario": "Friday 5PM Deploy",
+    "persona": "Direct CTO",
+    "message": "Just ship it.",
+    "ground_truth_flags": ["Abrupt Commands"]  # [] for hard_negative
+}
+```
+
+## Config Pattern (`config/*.py`)
+- Use **percentages** not absolute counts (avoids dependent variables)
+- Seeds: `PERSONAS`, `SCENARIOS` (provided by us, not generated)
+- Counts: `MAX_FLAGS_PER_PERSONA`, `MESSAGES_PER_FLAG_SCENARIO`
+- `SEED` for reproducibility (same seed = same output)
+- `MODEL` for which OpenAI model to use
+
+## LLM Call Pattern
+```python
+def llm(prompt):
+    r = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        seed=SEED,
+    )
+    return json.loads(r.choices[0].message.content)
+```
+
+## Evaluate API (Production)
+- `POST https://clarity.rocktangle.com/api/evaluate`
+- Accepts: `message`, `coachingFlags[]`, `includeReasoning`, `prompt`
+- Returns: `{ flagged, flags[], rephrasedMessage, reasoning? }`
+- Stateless — no data persisted
+- See EVALUATION.md for full docs
+
+## Future Pipelines (Not Yet Built)
+- **Evaluation loop**: Run dataset through evaluate API → LLM-as-judge scoring → prompt optimization via DSPy → repeat until convergence
