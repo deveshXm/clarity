@@ -3,22 +3,6 @@
 Generates a synthetic dataset of Slack messages to test Clarity's communication coaching AI.
 
 ## How It Works
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                  STEP 1: Generate Flags                  │
-│                  (--step flags)                           │
-│                                                          │
-│   Personas ──► AI generates 3 flags per persona          │
-│   (e.g. "Anxious Dev",    (name + description + examples)│
-│    "Direct CTO")                                         │
-│                 │                                        │
-│                 ▼                                        │
-│        Remove duplicate flags                            │
-│                 │                                        │
-│                 ▼                                        │
-│        Save flags.json (~9 unique flags)                 │
-└────────────────────────────┬────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────┐
@@ -41,7 +25,6 @@ Generates a synthetic dataset of Slack messages to test Clarity's communication 
 │        Save dataset.json (~144 messages)                 │
 └─────────────────────────────────────────────────────────┘
 ```
-
 ## Quick Start
 
 ### 1. Setup (one time)
@@ -129,3 +112,4 @@ Each entry looks like this:
 - **Want more variety?** Add more personas or scenarios to the config.
 - **Want a bigger dataset?** Increase `MESSAGES_PER_FLAG_SCENARIO`.
 - **Want to regenerate just flags?** Run `--step flags`. Then re-run `--step messages` to get messages based on the new flags.
+

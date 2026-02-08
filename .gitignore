@@ -45,6 +45,7 @@ next-env.d.ts
 venv/
 __pycache__/
 
+manifest-dev.json
  
 
 .trigger

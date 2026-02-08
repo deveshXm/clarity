@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature, sendEphemeralMessage, isChannelAccessible, getSlackUserInfoWithEmail, sendChannelOptInMessage } from '@/lib/slack';
 import { workspaceCollection, slackUserCollection, botChannelsCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
-import { SlackEventSchema, Workspace, SlackUser, DEFAULT_COACHING_FLAGS } from '@/types';
+import { SlackEventSchema, Workspace, SlackUser, DEFAULT_COACHING_FLAGS, ContextMessage } from '@/types';
 import { analyzeMessage } from '@/lib/ai';
 import { validateWorkspaceAccess, incrementWorkspaceUsage } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
@@ -192,6 +192,21 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             return;
         }
         
+        // Check if bot is active in this channel
+        const isChannelActive = await isChannelAccessible(validatedEvent.channel, String(workspace._id));
+        if (!isChannelActive) {
+            console.log('[MSG] Skip: bot not in channel');
+            return;
+        }
+        
+        // Store message in channel context (FIFO 20) — runs unconditionally for all messages in bot channels
+        const channelDoc = await botChannelsCollection.findOneAndUpdate(
+            { channelId: validatedEvent.channel, workspaceId: String(workspace._id) },
+            { $push: { context: { $each: [{ text: validatedEvent.text, user: validatedEvent.user, ts: validatedEvent.ts }], $slice: -20 } } } as Record<string, unknown>,
+            { returnDocument: 'before' }
+        );
+        const channelContext: ContextMessage[] = (channelDoc?.context as ContextMessage[]) || [];
+        
         // Check if workspace has completed onboarding
         if (!workspace.hasCompletedOnboarding) {
             console.log('[MSG] Skip: onboarding incomplete');
@@ -213,13 +228,6 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             return;
         }
         
-        // Check if bot is active in this channel first
-        const isChannelActive = await isChannelAccessible(validatedEvent.channel, String(workspace._id));
-        if (!isChannelActive) {
-            console.log('[MSG] Skip: bot not in channel');
-            return;
-        }
-        
         // Find user (don't create yet - only create if flagged for discovery)
         let user = await slackUserCollection.findOne({
             slackId: validatedEvent.user,
@@ -235,17 +243,17 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             return;
         }
         
-        console.log('[MSG] Proceeding to AI analysis', { isNewUser });
-        
-        // Simple AI analysis - just message + flags
-        console.log('[MSG] Calling analyzeMessage...');
+        console.log('[MSG] Analyzing:', { isNewUser });
         
         // Get user's coaching flags (or defaults if not set or new user)
         const flags = user?.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
         
-        const analysis = await analyzeMessage(validatedEvent.text, flags);
+        const analysis = await analyzeMessage(validatedEvent.text, flags, {
+            context: channelContext,
+            messageTs: validatedEvent.ts,
+        });
         
-        console.log('[MSG] AI result:', { shouldFlag: analysis.shouldFlag, flagCount: analysis.flags.length });
+        console.log('[MSG] AI result:', { flagged: analysis.flags.length > 0, flagCount: analysis.flags.length });
 
         // Track AI analysis completion
         trackEvent(validatedEvent.user, EVENTS.API_AI_ANALYSIS_COMPLETED, {
@@ -255,14 +263,14 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             message_length: validatedEvent.text.length,
             analysis_type: isNewUser ? 'discovery' : 'auto_coaching',
             flags_found: analysis.flags.length,
-            needs_coaching: analysis.shouldFlag,
+            needs_coaching: analysis.flags.length > 0,
             has_improvement: !!analysis.suggestedRephrase,
             subscription_tier: workspace.subscription?.tier || 'FREE',
             is_new_user: isNewUser,
         });
         
         // If no coaching needed, exit early
-        if (!analysis.shouldFlag || analysis.flags.length === 0 || !analysis.suggestedRephrase) {
+        if (analysis.flags.length === 0 || !analysis.suggestedRephrase) {
             return;
         }
         
@@ -299,13 +307,6 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         // Build compact interactive message
         const blocks: Array<Record<string, unknown>> = [
             {
-                type: "section",
-                text: {
-                    type: "mrkdwn",
-                    text: `"${originalTruncated}" → "${analysis.suggestedRephrase}"`
-                }
-            },
-            {
                 type: "context",
                 elements: [
                     {
@@ -313,6 +314,13 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                         text: analysis.flags.map(f => `*${f.flagName}*`).join(' · ')
                     }
                 ]
+            },
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `"${originalTruncated}" → "${analysis.suggestedRephrase}"`
+                }
             },
             {
                 type: "actions",

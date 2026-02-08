@@ -1,4 +1,4 @@
-import { CoachingFlag } from "@/types";
+import { CoachingFlag, ContextMessage } from "@/types";
 import Portkey from 'portkey-ai';
 import { MESSAGE_ANALYSIS_PROMPT, MESSAGE_ANALYSIS_PROMPT_WITH_REASONING } from "@/lib/prompts";
 
@@ -23,13 +23,12 @@ async function chatCompletion(messages: Array<{role: string; content: string}>):
 // ------------- Simple Message Analysis Result ---------------
 
 export interface SimpleAnalysisResult {
-    shouldFlag: boolean;
     flags: Array<{
         flagIndex: number;
         flagName: string;
     }>;
     suggestedRephrase: string | null;
-    reasoning?: string;
+    reason?: string;
 }
 
 // ------------- Single Analysis Function ---------------
@@ -41,12 +40,22 @@ function buildFlagsString(flags: CoachingFlag[]): string {
         .join('\n');
 }
 
-function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[], includeReasoning: boolean): SimpleAnalysisResult {
+function formatContext(context: ContextMessage[], currentTs: string): string {
+    const past = context
+        .filter(m => m.ts < currentTs)
+        .sort((a, b) => a.ts.localeCompare(b.ts));
+    
+    if (past.length === 0) return '(no recent messages)';
+    
+    return past.map(m => `<${m.user}>: ${m.text}`).join('\n');
+}
+
+function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[], includeReason: boolean): SimpleAnalysisResult {
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data: any = typeof raw === 'string' ? JSON.parse(raw) : raw;
         
-        // Flags are now just an array of indices [1, 2, 3]
+        // Flags are just an array of indices [1, 2, 3]
         const flagIndices: number[] = Array.isArray(data.flags) ? data.flags : [];
         const mappedFlags = flagIndices
             .filter((idx: number) => idx >= 1 && idx <= enabledFlags.length)
@@ -56,20 +65,18 @@ function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[], include
             }));
         
         const result: SimpleAnalysisResult = {
-            shouldFlag: data.shouldFlag ?? false,
             flags: mappedFlags,
             suggestedRephrase: data.suggestedRephrase || null,
         };
         
-        if (includeReasoning && data.reasoning) {
-            result.reasoning = data.reasoning;
+        if (includeReason && data.reason) {
+            result.reason = data.reason;
         }
         
         return result;
     } catch (error) {
         console.error('Failed to parse analysis:', error);
         return {
-            shouldFlag: false,
             flags: [],
             suggestedRephrase: null,
         };
@@ -77,42 +84,40 @@ function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[], include
 }
 
 export interface AnalyzeMessageOptions {
-    includeReasoning?: boolean;
-    customPrompt?: string;  // For evals - override default prompt
+    includeReason?: boolean;    // For evals - include reason in response
+    customPrompt?: string;      // For evals - override default prompt
+    context?: ContextMessage[];  // Recent channel messages for context
+    messageTs?: string;          // Timestamp of current message (to filter context)
 }
 
-/**
- * Analyzes a message for communication issues based on user's coaching flags.
- * Returns whether it should be flagged, which flags apply, and a suggested rephrase.
- * @param message - The message to analyze
- * @param coachingFlags - The coaching flags to check against
- * @param options.includeReasoning - If true, includes reasoning in the response (for evals)
- * @param options.customPrompt - If provided, uses this prompt instead of default
- */
+/** Analyzes a message for communication issues based on coaching flags. */
 export async function analyzeMessage(
     message: string,
     coachingFlags: CoachingFlag[],
     options: AnalyzeMessageOptions = {}
 ): Promise<SimpleAnalysisResult> {
-    const { includeReasoning = false, customPrompt } = options;
+    const { includeReason = false, customPrompt, context = [], messageTs = '' } = options;
     const enabledFlags = coachingFlags.filter(f => f.enabled);
     
     if (enabledFlags.length === 0) {
-        return { shouldFlag: false, flags: [], suggestedRephrase: null };
+        return { flags: [], suggestedRephrase: null };
     }
     
     const flagsString = buildFlagsString(coachingFlags);
+    const contextString = formatContext(context, messageTs);
     
     // Use custom prompt if provided, otherwise use default
     let promptTemplate: string;
     if (customPrompt) {
         promptTemplate = customPrompt;
     } else {
-        promptTemplate = includeReasoning 
+        promptTemplate = includeReason 
             ? MESSAGE_ANALYSIS_PROMPT_WITH_REASONING 
             : MESSAGE_ANALYSIS_PROMPT;
     }
-    const systemPrompt = promptTemplate.replace('{{FLAGS}}', flagsString);
+    const systemPrompt = promptTemplate
+        .replace('{{FLAGS}}', flagsString)
+        .replace('{{CONTEXT}}', contextString);
     
     console.log('systemPrompt', systemPrompt);
     const raw = await chatCompletion([
@@ -120,5 +125,5 @@ export async function analyzeMessage(
         { role: 'user', content: message.replace(/"/g, '\\"') },
     ]);
     
-    return parseAnalysisResult(raw, enabledFlags, includeReasoning);
+    return parseAnalysisResult(raw, enabledFlags, includeReason);
 }

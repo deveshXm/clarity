@@ -8,7 +8,7 @@ import { logInfo, logDebug, logWarn, logError } from '@/lib/logger';
 const EvaluateRequestSchema = z.object({
     message: z.string().min(1, 'Message is required'),
     coachingFlags: z.array(CoachingFlagSchema).optional(),
-    includeReasoning: z.boolean().optional().default(false),
+    includeReason: z.boolean().optional().default(false),
     prompt: z.string().optional(),  // Custom prompt for evals
 });
 
@@ -17,7 +17,7 @@ interface EvaluateResponse {
     flagged: boolean;
     flags: string[];
     rephrasedMessage: string | null;
-    reasoning?: string;
+    reason?: string;
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse<EvaluateResponse | { error: string }>> {
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
             return NextResponse.json({ error: errorMessage }, { status: 400 });
         }
         
-        const { message, coachingFlags, includeReasoning, prompt: customPrompt } = parseResult.data;
+        const { message, coachingFlags, includeReason, prompt: customPrompt } = parseResult.data;
         
         // Use provided flags or defaults
         const flags: CoachingFlag[] = coachingFlags || DEFAULT_COACHING_FLAGS;
@@ -49,14 +49,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
             messageLength: message.length,
             enabledFlagsCount: enabledFlags.length,
             enabledFlags: enabledFlags.map(f => f.name),
-            includeReasoning,
+            includeReason,
             hasCustomPrompt: !!customPrompt,
         });
         
         // Run AI analysis
         const startTime = Date.now();
         const analysisResult = await analyzeMessage(message, flags, { 
-            includeReasoning, 
+            includeReason, 
             customPrompt 
         });
         const duration = Date.now() - startTime;
@@ -64,21 +64,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
         logInfo('[Evaluate API] Analysis complete', {
             requestId,
             duration: `${duration}ms`,
-            shouldFlag: analysisResult.shouldFlag,
+            flagged: analysisResult.flags.length > 0,
             flagsFound: analysisResult.flags.length,
             flagNames: analysisResult.flags.map(f => f.flagName),
         });
         
         // Build response
         const response: EvaluateResponse = {
-            flagged: analysisResult.shouldFlag,
+            flagged: analysisResult.flags.length > 0,
             flags: analysisResult.flags.map(f => f.flagName),
             rephrasedMessage: analysisResult.suggestedRephrase,
         };
         
-        // Include reasoning only when requested (for evals)
-        if (includeReasoning && analysisResult.reasoning) {
-            response.reasoning = analysisResult.reasoning;
+        // Include reason only when requested (for evals)
+        if (includeReason && analysisResult.reason) {
+            response.reason = analysisResult.reason;
         }
         
         logDebug('[Evaluate API] Response', { requestId, response });

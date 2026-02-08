@@ -78,8 +78,8 @@ def llm(prompt):
 
 ## Evaluate API (Production)
 - `POST https://clarity.rocktangle.com/api/evaluate`
-- Accepts: `message`, `coachingFlags[]`, `includeReasoning`, `prompt`
-- Returns: `{ flagged, flags[], rephrasedMessage, reasoning? }`
+- Accepts: `message`, `coachingFlags[]`, `includeReason`, `prompt`
+- Returns: `{ flagged, flags[], rephrasedMessage, reason? }`
 - Stateless — no data persisted
 - See EVALUATION.md for full docs
 

@@ -69,6 +69,18 @@ When you write code, ensure it is clean, minimal, and easy to read. Avoid unnece
   - `.env.production` - Production environment variables
 - **Script Pattern**: `tsx --env-file=.env.local src/scripts/script.ts`
 
+## Dev Setup Script (`npm run setup:app`)
+- **Script**: [scripts/setup-app.sh](mdc:scripts/setup-app.sh) - Automates local dev environment setup
+- **What it does**:
+  1. Rotates Slack config token via `tooling.tokens.rotate` (saves new refresh token to `.env.local`)
+  2. Starts ngrok on port 3000 (or reuses already running instance)
+  3. Replaces old ngrok URL with new one in `manifest-dev.json` and `.env.local`
+  4. Updates Slack app manifest via `apps.manifest.update` API
+- **Required env vars** (in `.env.local`):
+  - `SLACK_APP_ID` - From https://api.slack.com/apps → Basic Information
+  - `SLACK_CONFIG_REFRESH_TOKEN` - One-time generation from https://api.slack.com/apps → "Your App Configuration Tokens" → Generate Token. Script auto-rotates it after that.
+- **Manifest file**: [manifest-dev.json](mdc:manifest-dev.json) - Dev Slack app manifest with ngrok URLs
+
 ## Import Management & Performance
 - **Static imports only**: NEVER use dynamic imports in API routes
 - **Top-level imports**: All imports must be declared at the top of the file
@@ -169,19 +181,29 @@ export const SUBSCRIPTION_TIERS = {
 
 ### Auto Coaching Flow
 1. Bot receives message event (only from member channels)
-2. Validate workspace onboarding and subscription access
-3. Check `user.autoCoachingEnabledChannels.includes(channelId)`
-4. Call `analyzeMessage(message, coachingFlags)` - simple single AI call
-5. If flagged, send ephemeral coaching suggestion
-6. Save analysis instance with `originalMessage`, `rephrasedMessage`, `flagIds` to `analysisInstanceCollection`
+2. Check bot is in channel
+3. **Store message in channel context (FIFO 20)** — runs unconditionally, before any subscription/user gates
+4. Validate workspace onboarding and subscription access
+5. Check `user.autoCoachingEnabledChannels.includes(channelId)`
+6. Call `analyzeMessage(message, coachingFlags, { context, messageTs })` with channel context
+7. If flagged (`flags.length > 0`), send ephemeral coaching suggestion
+8. Save analysis instance with `originalMessage`, `rephrasedMessage`, `flagIds` to `analysisInstanceCollection`
 
-### AI Analysis Architecture ✅ SIMPLIFIED
-- **Single Function**: `analyzeMessage(message, coachingFlags)` in [src/lib/ai.ts](mdc:src/lib/ai.ts)
-- **No Context Fetching**: Does not fetch conversation history from Slack
-- **Simple Prompt**: System prompt with rules + flags, user message passed separately
-- **JSON Response**: `{ shouldFlag: bool, flags: [1, 2], suggestedRephrase: string | null }`
+### Channel Message Context ✅ FIFO QUEUE
+- **Storage**: `context` array on `botChannelsCollection` documents
+- **Format**: `{ text: string, user: string, ts: string }` per message
+- **Limit**: Last 20 messages per channel via `$push` + `$each` + `$slice: -20`
+- **Unconditional**: Context is stored for ALL non-bot messages in bot channels, regardless of subscription/onboarding/user status
+- **Used by**: Both auto-coaching (events) and manual rephrase (commands) when in a channel
+
+### AI Analysis Architecture ✅ CONTEXT-AWARE
+- **Single Function**: `analyzeMessage(message, coachingFlags, options)` in [src/lib/ai.ts](mdc:src/lib/ai.ts)
+- **Context**: Receives recent channel messages to understand tone and situation
+- **Prompt**: System prompt with rules + flags + context, user message passed separately
+- **JSON Response**: `{ flags: [1, 2], suggestedRephrase: string | null }` — no `shouldFlag`, empty flags = not flagged
+- **Optional reason**: `reason` field only included when `includeReason: true` (for evals)
 - **Prompt Location**: [src/lib/prompts/index.ts](mdc:src/lib/prompts/index.ts)
-- **No Explanations**: Flags are just indices, no explanations generated for speed
+- **Context Type**: `ContextMessage` from [src/types/index.ts](mdc:src/types/index.ts)
 
 ## Suggestion UI ✅ COMPACT DESIGN
 Coaching suggestions use a compact, minimal format for both auto-coaching and manual rephrase.

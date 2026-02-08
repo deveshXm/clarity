@@ -89,12 +89,20 @@ export const WorkspaceSchema = z.object({
 
 export const CreateWorkspaceSchema = WorkspaceSchema.omit({ _id: true, createdAt: true, updatedAt: true });
 
+// Context message stored per channel (FIFO queue of 20)
+export const ContextMessageSchema = z.object({
+    text: z.string(),
+    user: z.string(),
+    ts: z.string(),
+});
+
 // Bot Channels Schema (tracks which channels bot is active in)
 export const BotChannelSchema = z.object({
     _id: z.string(),
     workspaceId: z.string(),
     channelId: z.string(),
     channelName: z.string(),
+    context: z.array(ContextMessageSchema).default([]),
     addedAt: z.coerce.date(),
 });
 
@@ -228,6 +236,7 @@ export const ExampleTaskInputSchema = z.object({
 export type Workspace = z.infer<typeof WorkspaceSchema>;
 export type CreateWorkspaceInput = z.infer<typeof CreateWorkspaceSchema>;
 export type BotChannel = z.infer<typeof BotChannelSchema>;
+export type ContextMessage = z.infer<typeof ContextMessageSchema>;
 
 export type Subscription = z.infer<typeof SubscriptionSchema>;
 export type SlackUser = z.infer<typeof SlackUserSchema>;

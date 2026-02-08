@@ -4,7 +4,7 @@ import { slackUserCollection, workspaceCollection, botChannelsCollection, feedba
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
 import { analyzeMessage } from '@/lib/ai';
-import { SlackUser, Workspace, getTierConfig, DEFAULT_COACHING_FLAGS } from '@/types';
+import { SlackUser, Workspace, getTierConfig, DEFAULT_COACHING_FLAGS, ContextMessage } from '@/types';
 import { validateWorkspaceAccess, incrementWorkspaceUsage, generateUpgradeMessage, generateLimitReachedMessage, generateProLimitReachedMessage } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
@@ -275,9 +275,21 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                 // Get user's coaching flags (or defaults if not set)
                 const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
                 
-                // Simple analysis - just message + flags
-                const analysis = await analyzeMessage(text, flags);
-                console.log('[CMD] Rephrase AI result:', { shouldFlag: analysis.shouldFlag, flagCount: analysis.flags.length });
+                // Fetch channel context if in a channel
+                let channelContext: ContextMessage[] = [];
+                if (channelId.startsWith('C') || channelId.startsWith('G')) {
+                    const channelDoc = await botChannelsCollection.findOne({
+                        channelId,
+                        workspaceId: String(workspace._id)
+                    });
+                    channelContext = (channelDoc?.context as ContextMessage[]) || [];
+                }
+                
+                const analysis = await analyzeMessage(text, flags, {
+                    context: channelContext,
+                    messageTs: String(Date.now() / 1000),
+                });
+                console.log('[CMD] Rephrase AI result:', { flagged: analysis.flags.length > 0, flagCount: analysis.flags.length });
                 
                 const workspaceSlack = new WebClient(workspace.botToken);
                 
@@ -288,10 +300,10 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                     message_length: text.length,
                     analysis_type: 'manual_rephrase',
                     flags_found: analysis.flags.length,
-                    should_flag: analysis.shouldFlag,
+                    should_flag: analysis.flags.length > 0,
                 });
 
-                if (!analysis.shouldFlag || analysis.flags.length === 0 || !analysis.suggestedRephrase) {
+                if (analysis.flags.length === 0 || !analysis.suggestedRephrase) {
                     await workspaceSlack.chat.postEphemeral({
                         channel: channelId,
                         user: userId,
@@ -322,13 +334,6 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                     // Build compact interactive message with buttons
                     const blocks = [
                         {
-                            type: "section",
-                            text: {
-                                type: "mrkdwn",
-                                text: `"${originalTruncated}" → "${analysis.suggestedRephrase}"`
-                            }
-                        },
-                        {
                             type: "context",
                             elements: [
                                 {
@@ -336,6 +341,13 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                                     text: analysis.flags.map(f => `*${f.flagName}*`).join(' · ')
                                 }
                             ]
+                        },
+                        {
+                            type: "section",
+                            text: {
+                                type: "mrkdwn",
+                                text: `"${originalTruncated}" → "${analysis.suggestedRephrase}"`
+                            }
                         },
                         {
                             type: "actions",

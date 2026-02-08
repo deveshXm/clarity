@@ -316,6 +316,7 @@ async function handleBotJoinedChannel(event) {
     workspaceId: workspace._id.toString(),
     channelId: event.channel,
     channelName: channelInfo.name,
+    context: [],  // Empty context array, populated as messages arrive
     addedAt: new Date()
   });
 }
@@ -329,6 +330,36 @@ async function handleBotLeftChannel(event, teamId) {
   });
 }
 ```
+
+## Channel Message Context (FIFO Queue)
+
+Each bot channel stores the last 20 messages for AI context. **Must run unconditionally** — before any subscription, onboarding, or user-level checks.
+
+```typescript
+// Store message in context (atomic push + slice)
+const channelDoc = await botChannelsCollection.findOneAndUpdate(
+  { channelId, workspaceId },
+  { $push: { context: { $each: [{ text, user, ts }], $slice: -20 } } },
+  { returnDocument: 'before' }  // Returns pre-push state for AI context
+);
+const channelContext = channelDoc?.context || [];
+```
+
+### Context Document Shape
+```typescript
+// Stored in botChannelsCollection.context array
+{ text: string, user: string, ts: string }  // ContextMessage type
+```
+
+### ⚠️ CRITICAL: Ordering in Message Handler
+Context push MUST happen before subscription/onboarding gates:
+1. Find workspace
+2. Check bot is in channel
+3. **Push to context** ← here, unconditionally
+4. Check onboarding
+5. Check subscription access
+6. Check user opt-in
+7. AI analysis with context
 
 ## Index Recommendations
 

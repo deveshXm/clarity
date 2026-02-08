@@ -13,6 +13,7 @@
     "reports:monthly:prod": "tsx --env-file=.env.production src/app/scripts/generate-monthly-reports.ts",
     "test:evaluate:dev": "tsx --env-file=.env.local src/scripts/test-evaluate-api.ts",
     "test:evaluate:prod": "tsx --env-file=.env.production src/scripts/test-evaluate-api.ts",
+    "setup:slack": "bash scripts/setup-app.sh",
     "evals:setup": "bash evals/setup.sh",
     "evals:generate": "cd evals && poetry run python generate.py --step all",
     "evals:generate:flags": "cd evals && poetry run python generate.py --step flags",
