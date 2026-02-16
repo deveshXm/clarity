@@ -1,0 +1,114 @@
+{
+  "total": 500,
+  "passed": 236,
+  "overall_pass_rate": 47.2,
+  "by_case_type": {
+    "true_positive": {
+      "total": 200,
+      "passed": 69,
+      "pass_rate": 34.5
+    },
+    "true_negative": {
+      "total": 150,
+      "passed": 124,
+      "pass_rate": 82.7
+    },
+    "context_dependent": {
+      "total": 100,
+      "passed": 37,
+      "pass_rate": 37.0
+    },
+    "formality_mismatch": {
+      "total": 50,
+      "passed": 6,
+      "pass_rate": 12.0
+    }
+  },
+  "per_flag": {
+    "Circular": {
+      "precision": 1.0,
+      "recall": 0.952,
+      "tp": 20,
+      "fp": 0,
+      "fn": 1
+    },
+    "Condescending": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 19
+    },
+    "Dismissive": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 18
+    },
+    "Fake": {
+      "precision": 0.6,
+      "recall": 0.391,
+      "tp": 9,
+      "fp": 6,
+      "fn": 14
+    },
+    "Microaggressive": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 10
+    },
+    "Non-Objective": {
+      "precision": 0.256,
+      "recall": 0.222,
+      "tp": 10,
+      "fp": 29,
+      "fn": 35
+    },
+    "One-Liner": {
+      "precision": 0.167,
+      "recall": 0.5,
+      "tp": 4,
+      "fp": 20,
+      "fn": 4
+    },
+    "Overly-blunt": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2
+    },
+    "Passive-Aggressive": {
+      "precision": 0.494,
+      "recall": 0.848,
+      "tp": 128,
+      "fp": 131,
+      "fn": 23
+    },
+    "Rudeness": {
+      "precision": 0.584,
+      "recall": 0.815,
+      "tp": 66,
+      "fp": 47,
+      "fn": 15
+    },
+    "Sarcastic": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 4
+    },
+    "Vagueness": {
+      "precision": 0.564,
+      "recall": 0.71,
+      "tp": 22,
+      "fp": 17,
+      "fn": 9
+    }
+  },
+  "false_positive_rate_on_negatives": 17.3
+}

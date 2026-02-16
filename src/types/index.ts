@@ -3,7 +3,7 @@ import { z } from 'zod';
 // COACHING FLAGS SCHEMA & DEFAULTS
 export const CoachingFlagSchema = z.object({
     name: z.string().max(50),
-    description: z.string().max(200),
+    description: z.string().max(500),
     enabled: z.boolean(),
 });
 

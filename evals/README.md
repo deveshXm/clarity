@@ -1,115 +1,147 @@
-# Clarity Evaluation - Synthetic Dataset Generator
+# Clarity Evals — Dataset Generation & Training Loop
 
-Generates a synthetic dataset of Slack messages to test Clarity's communication coaching AI.
+Generates synthetic Slack messages and runs them through Clarity's AI to measure and improve flag accuracy.
 
-## How It Works
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────┐
-│                STEP 2: Generate Messages                  │
-│                (--step messages)                          │
-│                                                          │
-│   Build matrix: every Scenario × every Flag              │
-│   (e.g. "Code Review" × "Pushiness")                    │
-│                 │                                        │
-│                 ▼                                        │
-│   For each pair, generate:                               │
-│     • Positive — bad message that SHOULD be flagged      │
-│     • Hard Negative — tricky clean message that          │
-│       looks bad but should NOT be flagged                │
-│                 │                                        │
-│                 ▼                                        │
-│   20% of positive messages get 2-3 flags instead of 1   │
-│                 │                                        │
-│                 ▼                                        │
-│        Save dataset.json (~144 messages)                 │
-└─────────────────────────────────────────────────────────┘
+## Architecture
+
 ```
+generate.py                         train.py
+┌──────────────────────┐            ┌──────────────────────────────────┐
+│ Step 1: Scenarios     │            │ Step 1: Evaluate (20 concurrent) │
+│   100 rich stories    │            │   POST /api/evaluate per message │
+│                       │            │                                  │
+│ Step 2: Messages      │     ──►    │ Step 2: Score (math metrics)     │
+│   500 messages with   │            │   Precision, recall, pass rates  │
+│   context + ground    │            │                                  │
+│   truth flags         │            │ Step 3: LLM Judge (failures)     │
+└──────────────────────┘            │ Step 4: Error Taxonomy            │
+                                    │ Step 5: Prompt Optimizer          │
+                                    │ Step 6: Loop with new prompt      │
+                                    └──────────────────────────────────┘
+```
+
 ## Quick Start
 
-### 1. Setup (one time)
+### 1. Setup
 
 ```bash
 cd evals
 poetry install
 ```
 
-Create a `.env` file in the `evals/` folder:
+Create `.env` in the `evals/` folder:
 
 ```
 OPENAI_API_KEY=sk-your-key-here
 ```
 
-### 2. Run
+### 2. Generate Data
 
 ```bash
-# Generate everything (flags first, then messages)
+# Generate everything (scenarios first, then messages)
 poetry run python generate.py --step all
 
 # Or run steps individually:
-poetry run python generate.py --step flags      # Only generate flags
-poetry run python generate.py --step messages    # Only generate messages (needs flags first)
+poetry run python generate.py --step scenarios   # Generate 100 scenarios
+poetry run python generate.py --step messages    # Generate 500 messages (needs scenarios)
 ```
 
-### 3. Output
+### 3. Run Training Loop
 
-Results are saved in `data/generate/`:
+**Requires the Next.js dev server running** (`npm run dev` in the project root).
 
-| File | What's inside |
-|------|--------------|
-| `flags.json` | The coaching flags (e.g., "Pushiness", "Self-Deprecation") |
-| `dataset.json` | The final dataset of test messages |
+```bash
+# Single evaluation pass (no optimization)
+poetry run python train.py --step evaluate
 
-## Config Variables
+# Full training loop (evaluate → judge → optimize → repeat)
+poetry run python train.py --step full
 
-All config lives in `config/generate.py`. Here's what each variable does:
-
-| Variable | Default | What it controls |
-|----------|---------|-----------------|
-| `SEED` | `42` | Change this number to get a completely different dataset. Same number = same results. |
-| `MODEL` | `gpt-5.2` | Which AI model generates the data |
-| `PERSONAS` | 3 personas | Fictional workplace personalities used to brainstorm flags. Add more to get more diverse flags. |
-| `SCENARIOS` | 4 scenarios | Workplace situations (e.g., "Code Review Dispute"). Messages are generated in these contexts. |
-| `MAX_FLAGS_PER_PERSONA` | `3` | How many flags the AI creates per persona (before deduplication) |
-| `MESSAGES_PER_FLAG_SCENARIO` | `2` | For each (Flag × Scenario) pair, generate this many positive + this many hard negatives |
-| `MULTI_FLAG_PERCENT` | `20` | What % of positive messages should have 2-3 flags instead of 1 |
-
-### How many messages will I get?
-
-```
-Total = Scenarios × Flags × MESSAGES_PER_FLAG_SCENARIO × 2
-
-With defaults:  4 scenarios × ~9 flags × 2 per pair × 2 (positive + negative) = ~144 messages
+# Set max iterations
+poetry run python train.py --iterations 3
 ```
 
-## What's in the Dataset?
+## Data Format
 
-Each entry looks like this:
+### Scenarios (`data/generate/scenarios.json`)
 
 ```json
 {
-  "id": 101,
-  "type": "positive",
-  "scenario": "Friday 5PM Deployment",
-  "persona": "Direct CTO",
-  "message": "Just ship it. I don't care about the tests.",
-  "ground_truth_flags": ["Recklessness", "Dismissiveness"]
+    "id": 1,
+    "scenario": "A 15-person remote-first SaaS startup. In #engineering, a senior backend engineer is reviewing a PR from a junior developer...",
+    "workspace_type": "remote-first company",
+    "channel": "#engineering",
+    "participants": "Senior engineer reviewing junior's PR"
 }
 ```
 
-| Field | Meaning |
-|-------|---------|
-| `id` | Unique number for each test case |
-| `type` | `"positive"` = bad message (SHOULD be flagged), `"hard_negative"` = tricky clean message (should NOT be flagged) |
-| `scenario` | The workplace situation the message was written in |
-| `persona` | The fictional personality who "wrote" the message |
-| `message` | The actual Slack message to test |
-| `ground_truth_flags` | The correct answer — which flags should be triggered (empty `[]` for clean messages) |
+### Dataset (`data/generate/dataset.json`)
 
-## Re-running
+```json
+{
+    "id": 1,
+    "scenario": "A 15-person remote-first SaaS startup...",
+    "channel": "#engineering",
+    "case_type": "true_positive",
+    "category": "passive-aggressive",
+    "message": "Thanks for finally doing that",
+    "user": "jordan",
+    "context": [
+        {"text": "Can someone review my PR?", "user": "alex"},
+        {"text": "I'll take a look after standup", "user": "jordan"}
+    ],
+    "ground_truth_flags": ["Passive-Aggressive"]
+}
+```
 
-- **Want different data?** Change `SEED` in `config/generate.py` to any other number.
-- **Want more variety?** Add more personas or scenarios to the config.
-- **Want a bigger dataset?** Increase `MESSAGES_PER_FLAG_SCENARIO`.
-- **Want to regenerate just flags?** Run `--step flags`. Then re-run `--step messages` to get messages based on the new flags.
+### Case Types
 
+| Type | % | Description |
+|------|---|-------------|
+| `true_positive` | 40% | Messages that violate flags (passive-aggressive, condescending, dismissive, etc.) |
+| `true_negative` | 30% | Tricky clean messages (direct-but-not-rude, dry-humor, cultural-idiom, etc.) |
+| `context_dependent` | 20% | Same message text, different context = different label |
+| `formality_mismatch` | 10% | Same message, casual channel = fine, formal channel = flagged |
+
+### 7 Coaching Flags
+
+| Flag | Description |
+|------|-------------|
+| Vagueness | Unclear or imprecise requests lacking specific details |
+| Non-Objective | Personal opinions presented as facts without evidence |
+| Circular | Repeating the same point without adding new information |
+| Rudeness | Openly hostile, disrespectful, or demeaning language |
+| Passive-Aggressive | Indirect negativity through sarcasm or veiled digs |
+| Fake | Insincere or performative communication |
+| One-Liner | Responses too brief to engage with what was asked |
+
+## Training Output
+
+Each run saves to `data/train/run_N/`:
+
+| File | Contents |
+|------|----------|
+| `results.json` | Per-message predictions with pass/fail |
+| `metrics.json` | Aggregate pass rates, per-flag precision/recall, FP rate |
+| `failures.json` | LLM judge analysis of each failure |
+| `taxonomy.json` | Clustered error patterns with counts and fix directions |
+| `prompt.txt` | The prompt used (default on run 1, optimized on run 2+) |
+
+## Config
+
+All config in `config/generate.py` and `config/train.py`.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SEED` | `77` | Change for different data |
+| `MODEL` | `gpt-5.2` | Model for data generation |
+| `TOTAL_MESSAGES` | `500` | Total messages to generate |
+| `SCENARIOS_COUNT` | `100` | Number of scenarios to generate |
+| `API_URL` | `localhost:3000` | Evaluate API endpoint |
+| `CONCURRENCY` | `20` | Parallel requests to API |
+| `MAX_ITERATIONS` | `5` | Max training loop iterations |
+| `JUDGE_MODEL` | `gpt-5.2` | Model for judging (different from flagger) |
+
+## Hold-Out Hard Set
+
+Place hand-curated cases in `data/generate/hard_set.json` (same format as `dataset.json`). These are scored separately and never used for prompt optimization — they anchor your evaluation to human judgment.

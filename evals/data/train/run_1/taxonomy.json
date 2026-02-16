@@ -1,0 +1,164 @@
+{
+  "patterns": [
+    {
+      "pattern": "False positives on Passive-Aggressive from informal style, humor, idioms, emojis, or mild sarcasm (especially when not targeted at a person)",
+      "count": 52,
+      "example_ids": [
+        226,
+        451,
+        463
+      ],
+      "fix_direction": "Tighten Passive-Aggressive criteria: require a clear interpersonal target and an indirect/deniable jab (or resentful compliance) rather than generic venting/humor. Add channel-style calibration (e.g., #random/DM tolerates banter) and downweight single-token cues (\"lol\", emojis, quotes) unless supported by context (prior conflict, reprimand, exclusion)."
+    },
+    {
+      "pattern": "Passive-Aggressive vs Dismissive confusion (direct shutdown/minimization mislabeled as Passive-Aggressive and/or over-labeled with Rudeness)",
+      "count": 14,
+      "example_ids": [
+        22,
+        80,
+        95
+      ],
+      "fix_direction": "Add a decision rule: if the message explicitly closes debate, deprioritizes concerns, or instructs someone to stop raising an issue (\"not doing this\", \"just ship\", \"wait for post\"), prefer Dismissive. Only use Passive-Aggressive when hostility is indirect (sarcasm/backhandedness/resentful compliance)."
+    },
+    {
+      "pattern": "Missed Passive-Aggressive when expressed subtly as curt compliance/withdrawal (often short acknowledgements like \u201cGot it\u201d, \u201cSure\u201d, \u201cNoted\u201d) due to lack of context use",
+      "count": 20,
+      "example_ids": [
+        353,
+        377,
+        423
+      ],
+      "fix_direction": "Incorporate prior-turn tension and power dynamics: short assent after conflict + discourse markers (\"just\", \"then\", \"as I said\") should trigger Passive-Aggressive. Add a \u2018contextual subtext\u2019 check: if the message ends discussion without resolving objections, treat as possible PA rather than just One-Liner."
+    },
+    {
+      "pattern": "Condescending mislabeled as Rudeness/Passive-Aggressive (taxonomy granularity error; talking-down cues missed)",
+      "count": 17,
+      "example_ids": [
+        52,
+        125,
+        157
+      ],
+      "fix_direction": "Create explicit condescension detectors: competence-undermining, patronizing explanations, infantilizing metaphors, \u201cbasic/fundamentals\u201d, \u201cI can explain it slower\u201d, \u201cadults\u201d, \u201cexec-level thing\u201d. Prefer Condescending over generic Rudeness/Passive-Aggressive when the core stance is superiority/talking down."
+    },
+    {
+      "pattern": "Microaggression missed or replaced with generic tone flags (rude/PA) especially for role/status/location (remote, new hire, QA vs Eng, Sales stereotypes, \u201cadults\u201d)",
+      "count": 9,
+      "example_ids": [
+        4,
+        70,
+        145
+      ],
+      "fix_direction": "Expand microaggression coverage beyond protected classes to role/status marginalization: \u201cremote/local\u201d, \u201cnew here\u201d, \u201cpeople who actually build\u201d, \u201cQA panic\u201d, \u201cdesigner hill\u201d, \u201cusual sales thing\u201d. Add a power/role-sensitive rule: if disparagement ties to identity/status/role, emit Microaggressive even if also rude/PA."
+    },
+    {
+      "pattern": "Non-Objective over-flagged on normal risk judgments, forecasts, rhetoric, or impact framing (false positives on hedged hypotheses and decision language)",
+      "count": 14,
+      "example_ids": [
+        212,
+        223,
+        319
+      ],
+      "fix_direction": "Redefine Non-Objective threshold: allow hedged hypotheses (\"looks tied\"), forecasts (\"likely\"), and normative constraints in planning threads. Trigger Non-Objective primarily on mind-reading, scapegoating, unsupported certainty about causes, or inflammatory character judgments presented as facts\u2014especially without references when the channel requires them."
+    },
+    {
+      "pattern": "Non-Objective missed (false negatives) when messages include blame attribution, mind-reading, hyperbole, or unsupported causal claims (often overshadowed by tone flags)",
+      "count": 15,
+      "example_ids": [
+        134,
+        169,
+        480
+      ],
+      "fix_direction": "Add a separate content-quality pass after tone detection: if the message attributes fault/patterns (\u201cagain\u201d, \u201cbecause Sales wants\u201d, \u201con you\u201d, \u201ceng slipped\u201d) or asserts root cause without evidence, emit Non-Objective even when Rudeness/PA is already present."
+    },
+    {
+      "pattern": "Sarcasm label missed or collapsed into Passive-Aggressive (Sarcastic not emitted when expected as separate tag)",
+      "count": 6,
+      "example_ids": [
+        8,
+        34,
+        94
+      ],
+      "fix_direction": "When explicit sarcasm markers exist (ironic \u2018Awesome\u2019, scare quotes, eye-roll emoji, hyperbolic reversals), emit Sarcastic alongside Passive-Aggressive rather than treating it only as evidence for PA."
+    },
+    {
+      "pattern": "Rudeness over-flagged in sarcastic/passive-aggressive messages (double-counting snark as both PA and Rudeness)",
+      "count": 8,
+      "example_ids": [
+        32,
+        59,
+        181
+      ],
+      "fix_direction": "Clarify boundary: Rudeness requires explicit disrespect (insults, contempt labels, direct demeaning) vs snarky process critique. If sarcasm is indirect and not explicitly insulting a person/group, prefer PA without Rudeness."
+    },
+    {
+      "pattern": "Fake vs sarcasm/passive-aggressive confusion (Fake missed when praise is weaponized, or Fake over-flagged from ironic positivity)",
+      "count": 14,
+      "example_ids": [
+        31,
+        88,
+        184
+      ],
+      "fix_direction": "Define Fake narrowly as insincere/performative praise/consensus masking disagreement (not just sarcasm). Add cues: exaggerated compliment + contradiction, \u201clove the confidence\u201d used to shame, \u201cglad we\u2019re aligned\u201d in conflict. Avoid Fake when tone is transparently snarky and not plausibly intended to reassure/placate."
+    },
+    {
+      "pattern": "One-Liner mis-handling: missed when required, or over-flagged when brevity is appropriate (approvals/acks); sometimes PA misread as One-Liner or vice versa",
+      "count": 14,
+      "example_ids": [
+        105,
+        374,
+        419
+      ],
+      "fix_direction": "Make One-Liner conditional on harmful conversational effect (stops needed coordination, lacks required info in that channel) rather than length alone. If it\u2019s a go/no-go approval where context already has plan, don\u2019t flag. If it\u2019s terse shutdown in unresolved dispute, consider PA/Dismissive + One-Liner."
+    },
+    {
+      "pattern": "Vagueness misclassification: either Vagueness missed where operational specifics are required, or Vagueness over-flagged on context-anchored shorthand/pronouns",
+      "count": 12,
+      "example_ids": [
+        3,
+        191,
+        469
+      ],
+      "fix_direction": "Tie Vagueness to channel requirements: in incident/status channels, missing scope/ETA/owner/next-update triggers Vagueness; in casual channels, allow shorthand when referent is clear from context. Add a \u2018referent resolvable from thread?\u2019 check before flagging Vagueness."
+    },
+    {
+      "pattern": "Circular vs other labels confusion (Circular missed; or extra Non-Objective/Vagueness/PA added due to repetition or emphatic phrasing)",
+      "count": 12,
+      "example_ids": [
+        11,
+        78,
+        109
+      ],
+      "fix_direction": "Add a structural detection: if the message repeats premise=conclusion loops, emit Circular as primary. Prevent adding tone flags unless clear sarcasm/insult exists; prevent adding Vagueness/Non-Objective when the core defect is tautology already captured by Circular."
+    },
+    {
+      "pattern": "Rudeness vs Passive-Aggressive boundary errors (direct hostility misread as PA; or PA over-added to blunt directives)",
+      "count": 12,
+      "example_ids": [
+        10,
+        58,
+        97
+      ],
+      "fix_direction": "Require indirectness for PA. If the message contains direct imperatives/threats/insults (\u201cstop\u201d, \u201cI\u2019m not asking\u201d, \u201cfind someone who can\u201d), prefer Rudeness/Overly-blunt. Only add PA when aggression is veiled (sarcasm, faux politeness, backhanded compliance)."
+    },
+    {
+      "pattern": "Overflagging direct, process-enforcing or incident-management communication as toxic (PA/Rude/Non-Objective) when it is appropriate in context",
+      "count": 18,
+      "example_ids": [
+        206,
+        259,
+        300
+      ],
+      "fix_direction": "Add an \u201cops mode\u201d calibration: when messages contain concrete next steps, ownership, time bounds, and runbook/ticket guidance, treat directness as acceptable. Reduce sensitivity to phrases like \u201cI\u2019m going to be blunt\u201d, \u201cper my last message\u201d, and strong go/no-go criteria in incident/review contexts unless paired with personal put-downs."
+    },
+    {
+      "pattern": "Overflagging/underflagging due to ignoring channel norms and audience (public exec-visible channels vs #random/DM) leading to wrong severity/labels",
+      "count": 11,
+      "example_ids": [
+        12,
+        418,
+        434
+      ],
+      "fix_direction": "Explicitly condition classification on channel type: #client-updates/#general exec-visible => stricter on objectivity/actionability/blame; #random/DM => higher tolerance for banter. Add a step that uses channel metadata as a prior for expected formality and flag thresholds."
+    }
+  ]
+}

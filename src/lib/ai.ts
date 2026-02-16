@@ -8,7 +8,7 @@ const portkey = new Portkey({
     apiKey: process.env.PORTKEY_AI_KEY || '',
 });
 
-const modelName = '@azure-openai/gpt-oss-120b';
+const modelName = '@azure-openai/gpt-5-mini';
 
 async function chatCompletion(messages: Array<{role: string; content: string}>): Promise<string> {
     const response = await portkey.chat.completions.create({
@@ -41,13 +41,14 @@ function buildFlagsString(flags: CoachingFlag[]): string {
 }
 
 function formatContext(context: ContextMessage[], currentTs: string): string {
-    const past = context
-        .filter(m => m.ts < currentTs)
-        .sort((a, b) => a.ts.localeCompare(b.ts));
+    const messages = currentTs
+        ? context.filter(m => m.ts < currentTs)
+        : context;
+    const sorted = messages.sort((a, b) => a.ts.localeCompare(b.ts));
     
-    if (past.length === 0) return '(no recent messages)';
+    if (sorted.length === 0) return '(no recent messages)';
     
-    return past.map(m => `<${m.user}>: ${m.text}`).join('\n');
+    return sorted.map(m => `<${m.user}>: ${m.text}`).join('\n');
 }
 
 function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[], includeReason: boolean): SimpleAnalysisResult {

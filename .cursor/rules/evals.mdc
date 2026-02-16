@@ -7,81 +7,115 @@ alwaysApply: false
 # Evals Framework
 
 ## Overview
-Python-based evaluation framework in `evals/` for testing Clarity's communication coaching AI. Uses Poetry for dependency management, OpenAI for LLM calls.
+Python-based evaluation framework in `evals/` for testing Clarity's communication coaching AI. Two pipelines: **generate** (synthetic data) and **train** (eval loop + prompt optimization). Uses Poetry for dependency management, OpenAI for LLM calls.
 
 ## Code Style
 - **No types/Pydantic** — plain dicts, lists, and simple functions
 - **No unnecessary abstractions** — keep logic flat and readable
-- **Single file per pipeline** — each pipeline is one script (e.g., `generate.py`)
+- **Single file per pipeline** — `generate.py` and `train.py`
 - **Config and prompts are separate** — but logic stays in one file
 
 ## Project Structure
 ```
 evals/
-├── config/              # Config files (seeds, percentages, counts)
-│   └── generate.py      # Synthetic data generation config
-├── prompts/             # LLM prompt templates (Python strings)
-│   └── generate.py      # Prompts for flag + message generation
+├── config/
+│   ├── generate.py      # Flags, scenario axes, case type distribution
+│   └── train.py         # API URL, concurrency, iterations, judge model
+├── prompts/
+│   ├── generate.py      # Scenario + message generation prompts
+│   └── train.py         # Judge, taxonomy, optimizer prompts
 ├── data/
-│   └── generate/        # Generated outputs
-│       ├── flags.json   # Step 1: coaching flags (name, description, examples, persona)
-│       └── dataset.json # Step 2: test messages with ground truth
-└── generate.py          # Main generation pipeline (--step flags|messages|all)
+│   ├── generate/
+│   │   ├── flags.json       # Hardcoded 7 coaching flags (reference)
+│   │   ├── scenarios.json   # Generated rich scenarios
+│   │   └── dataset.json     # Messages with context + ground truth
+│   └── train/
+│       └── run_N/
+│           ├── results.json   # Per-message predictions
+│           ├── metrics.json   # Aggregate scores
+│           ├── failures.json  # Judge analysis per failure
+│           ├── taxonomy.json  # Clustered error patterns
+│           └── prompt.txt     # Prompt used or generated
+├── generate.py          # Data generation (--step scenarios|messages|all)
+└── train.py             # Training loop (--step evaluate|full)
 ```
 
-## Synthetic Dataset Generation Pipeline
+## 7 Coaching Flags (Hardcoded)
+Flags are NOT generated — they're hardcoded in `config/generate.py`. All set to `enabled: True` for evals:
+- Vagueness, Non-Objective, Circular, Rudeness, Passive-Aggressive, Fake, One-Liner
 
-### Step 1: Flags (`--step flags`)
-- For each persona seed → LLM generates `MAX_FLAGS_PER_PERSONA` flags
-- Each flag: `{ name, description, examples[], persona }`
-- Deduplicate across personas (remove semantic overlap like "Rude" vs "Impolite")
-- Output: `data/generate/flags.json`
+## Data Generation Pipeline (`generate.py`)
+
+### Step 1: Scenarios (`--step scenarios`)
+- Generates ~100 rich story-format scenario descriptions
+- Combines random workspace_type + channel + participant_template
+- Each scenario: `{ id, scenario, workspace_type, channel, participants }`
+- Output: `data/generate/scenarios.json`
 
 ### Step 2: Messages (`--step messages`)
-- Builds **Scenario × Flag** matrix (every combination)
-- Per pair generates `MESSAGES_PER_FLAG_SCENARIO` of each type:
-  - **positive**: message that SHOULD be flagged (violates the flag)
-  - **hard_negative**: tricky clean message that LOOKS like the flag but isn't
-- `MULTI_FLAG_PERCENT`% of positives get 2-3 flags instead of 1
+- For each case type, picks a random scenario and generates messages with 3-5 context messages
+- Four case types with configurable distribution:
+  - **true_positive** (40%): Messages that violate flags (passive-aggressive, condescending, dismissive, etc.)
+  - **true_negative** (30%): Tricky clean messages (direct-but-not-rude, dry-humor, cultural-idiom, etc.)
+  - **context_dependent** (20%): Same message, two contexts, different labels
+  - **formality_mismatch** (10%): Same message, casual vs formal channel
 - Output: `data/generate/dataset.json`
 
 ### Dataset Entry Format
 ```python
 {
-    "id": 1,                          # Sequential counter
-    "type": "positive",               # or "hard_negative"
-    "scenario": "Friday 5PM Deploy",
-    "persona": "Direct CTO",
-    "message": "Just ship it.",
-    "ground_truth_flags": ["Abrupt Commands"]  # [] for hard_negative
+    "id": 1,
+    "scenario": "A 15-person remote-first SaaS startup...",
+    "channel": "#engineering",
+    "case_type": "true_positive",
+    "category": "passive-aggressive",
+    "message": "Thanks for finally doing that",
+    "user": "jordan",
+    "context": [{"text": "...", "user": "alex"}],
+    "ground_truth_flags": ["Passive-Aggressive"]  # [] for true negatives
 }
 ```
 
+## Training Loop (`train.py`)
+
+### Step 1: Evaluate (20 concurrent)
+- Load dataset + flags → POST each to `/api/evaluate`
+- First run uses default prompt, subsequent runs use optimized prompt
+
+### Step 2: Score (math metrics)
+- Per-message binary pass/fail (exact flag match)
+- Aggregate: overall pass rate, per-case-type pass rate, per-flag precision/recall, FP rate on negatives
+
+### Step 3: LLM Judge (failures only)
+- Different model from flagger (avoid shared biases)
+- Analyzes what went wrong, why, categorizes failure pattern
+
+### Step 4: Error Taxonomy
+- Clusters all judge analyses into higher-level patterns with counts
+- Ranks by frequency, suggests fix directions
+
+### Step 5: Prompt Optimizer
+- Feeds current prompt + taxonomy + failures → LLM returns revised prompt
+
+### Step 6: Loop
+- Re-run with new prompt until max iterations or pass rate plateaus
+
 ## Config Pattern (`config/*.py`)
-- Use **percentages** not absolute counts (avoids dependent variables)
-- Seeds: `PERSONAS`, `SCENARIOS` (provided by us, not generated)
-- Counts: `MAX_FLAGS_PER_PERSONA`, `MESSAGES_PER_FLAG_SCENARIO`
-- `SEED` for reproducibility (same seed = same output)
-- `MODEL` for which OpenAI model to use
+- `SEED` for reproducibility
+- `MODEL` for generation LLM
+- `FLAGS` — hardcoded coaching flags with descriptions
+- Scenario axes: `WORKSPACE_TYPES`, `CHANNELS`, `PARTICIPANT_TEMPLATES`
+- `CASE_TYPES` with percentage distribution
+- `TOTAL_MESSAGES`, `SCENARIOS_COUNT`, `CONTEXT_MESSAGES_PER_ENTRY`
+- Training: `API_URL`, `CONCURRENCY`, `MAX_ITERATIONS`, `JUDGE_MODEL`
 
-## LLM Call Pattern
-```python
-def llm(prompt):
-    r = client.chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        seed=SEED,
-    )
-    return json.loads(r.choices[0].message.content)
-```
-
-## Evaluate API (Production)
-- `POST https://clarity.rocktangle.com/api/evaluate`
-- Accepts: `message`, `coachingFlags[]`, `includeReason`, `prompt`
+## Evaluate API
+- `POST /api/evaluate`
+- Accepts: `message`, `coachingFlags[]`, `context[]`, `includeReason`, `prompt`
 - Returns: `{ flagged, flags[], rephrasedMessage, reason? }`
-- Stateless — no data persisted
-- See EVALUATION.md for full docs
+- Context: array of `{ text, user, ts }` — passed through to AI analysis
 
-## Future Pipelines (Not Yet Built)
-- **Evaluation loop**: Run dataset through evaluate API → LLM-as-judge scoring → prompt optimization via DSPy → repeat until convergence
+## Hold-Out Hard Set
+- Optional `data/generate/hard_set.json` with hand-curated cases
+- Same format as dataset.json
+- Scored separately, never used for prompt optimization

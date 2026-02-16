@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { analyzeMessage } from '@/lib/ai';
-import { CoachingFlagSchema, DEFAULT_COACHING_FLAGS, CoachingFlag } from '@/types';
+import { CoachingFlagSchema, ContextMessageSchema, DEFAULT_COACHING_FLAGS, CoachingFlag } from '@/types';
 import { logInfo, logDebug, logWarn, logError } from '@/lib/logger';
 
 // Request schema
 const EvaluateRequestSchema = z.object({
     message: z.string().min(1, 'Message is required'),
     coachingFlags: z.array(CoachingFlagSchema).optional(),
+    context: z.array(ContextMessageSchema).optional(), // Channel context for evals
     includeReason: z.boolean().optional().default(false),
     prompt: z.string().optional(),  // Custom prompt for evals
 });
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
             return NextResponse.json({ error: errorMessage }, { status: 400 });
         }
         
-        const { message, coachingFlags, includeReason, prompt: customPrompt } = parseResult.data;
+        const { message, coachingFlags, context, includeReason, prompt: customPrompt } = parseResult.data;
         
         // Use provided flags or defaults
         const flags: CoachingFlag[] = coachingFlags || DEFAULT_COACHING_FLAGS;
@@ -57,7 +58,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<EvaluateR
         const startTime = Date.now();
         const analysisResult = await analyzeMessage(message, flags, { 
             includeReason, 
-            customPrompt 
+            customPrompt,
+            context,
         });
         const duration = Date.now() - startTime;
         

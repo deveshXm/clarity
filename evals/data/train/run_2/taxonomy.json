@@ -1,0 +1,153 @@
+{
+  "patterns": [
+    {
+      "pattern": "Over-flagging normal direct/process-oriented communication as Passive-Aggressive/Rude (tone oversensitivity; weak sarcasm/idiom triggers; ignores channel norms)",
+      "count": 44,
+      "example_ids": [
+        225,
+        251,
+        471
+      ],
+      "fix_direction": "Add a norm-calibration step: only emit tone flags when there is a clear target + clear hostile subtext (sarcasm/insinuation/blame) beyond normal urgency/process enforcement. Incorporate channel type (incident/status vs #random/DM), audience visibility, and whether the message is action-oriented with concrete asks; require \u22652 strong cues before Passive-Aggressive/Rudeness."
+    },
+    {
+      "pattern": "Over-flagging Non-Objective for risk assessments, forecasts, technical certainty, or incident attribution (treats strong wording/predictions as \u2018unverifiable\u2019)",
+      "count": 35,
+      "example_ids": [
+        58,
+        223,
+        341
+      ],
+      "fix_direction": "Tighten Non-Objective definition: distinguish (a) grounded risk judgments/forecasts common in ops from (b) evidence-free accusations or subjective character attacks. Use hedges, domain context, and presence of concrete evidence/plan as a \u2018grounding\u2019 signal to suppress Non-Objective."
+    },
+    {
+      "pattern": "Missing subtle Passive-Aggressive cues that require conversational context (polite-looking shutdowns, curt acknowledgments, resigned compliance)",
+      "count": 21,
+      "example_ids": [
+        353,
+        367,
+        399
+      ],
+      "fix_direction": "Use prior-turn context features: detect mismatch between surface politeness and interactional function (closing/stonewalling after conflict, \u2018thanks\u2019 after reprimand, \u2018got it\u2019 after being pressured). Add a rule: if message is short + ends discussion + follows disagreement/power pressure, increase Passive-Aggressive likelihood."
+    },
+    {
+      "pattern": "Condescending tone not recognized (often mislabeled as Rudeness/Passive-Aggressive/Non-Objective)",
+      "count": 18,
+      "example_ids": [
+        57,
+        126,
+        164
+      ],
+      "fix_direction": "Create a dedicated condescension detector: look for competence/shaming frames (\u2018basic stuff\u2019, \u2018explain it slower\u2019, \u2018welcome aboard but\u2026\u2019, \u2018grown-up solution\u2019) and superiority language. Add label-priority guidance to prefer Condescending over generic Rudeness when \u2018talking down\u2019 cues are present."
+    },
+    {
+      "pattern": "Non-Objective wrongly added on sarcasm/passive-aggressive rhetoric (double-counting sarcasm as epistemic violation)",
+      "count": 12,
+      "example_ids": [
+        43,
+        59,
+        132
+      ],
+      "fix_direction": "Add a sarcasm gate: if statement is clearly rhetorical/ironic (emoji, hyperbole, quotes, \u2018what could possibly go wrong\u2019), treat it as tone-only unless it also asserts a concrete disputed fact that would mislead decisions."
+    },
+    {
+      "pattern": "Dismissive vs Passive-Aggressive/Rudeness confusion (direct shutdowns mislabeled; Dismissive often missed)",
+      "count": 12,
+      "example_ids": [
+        66,
+        118,
+        124
+      ],
+      "fix_direction": "Define Dismissive as a speech-act: shutting down/minimizing/deferring engagement (\u2018we\u2019re not doing this\u2019, \u2018stop\u2019, \u2018move on\u2019, \u2018we\u2019ll look when we can\u2019) independent of sarcasm. Add decision rule: if primary function is conversation closure/minimization, emit Dismissive even if blunt."
+    },
+    {
+      "pattern": "Microaggressions missed or misrouted to generic toxicity/Non-Objective (role/status-based belittlement not recognized)",
+      "count": 10,
+      "example_ids": [
+        44,
+        70,
+        145
+      ],
+      "fix_direction": "Broaden microaggression scope beyond protected classes: include role-based othering, \u2018you\u2019re new\u2019, \u2018adults can jump in\u2019, \u2018people who actually build this\u2019. Add pattern library for status/tenure gatekeeping and in-group/out-group competence framing."
+    },
+    {
+      "pattern": "Rudeness under-detected when sarcasm or process-enforcement is present (model treats it as only Passive-Aggressive)",
+      "count": 10,
+      "example_ids": [
+        9,
+        183,
+        478
+      ],
+      "fix_direction": "Allow co-occurrence: when sarcasm includes mockery, contempt, public shaming, or demeaning descriptors, emit Rudeness in addition to Passive-Aggressive. Add threshold examples showing sarcasm can still be \u2018overtly rude\u2019 without profanity."
+    },
+    {
+      "pattern": "Over-flagging brevity/\u2018One-Liner\u2019 when short replies are acceptable (or redundant double-flagging with tone)",
+      "count": 10,
+      "example_ids": [
+        374,
+        420,
+        449
+      ],
+      "fix_direction": "Restrict One-Liner to cases where brevity materially blocks coordination (no decision/ack in a context requiring details) or is used as shutdown. Add context check: if prior thread already contains required details and message is a valid approval/ack, do not flag One-Liner."
+    },
+    {
+      "pattern": "Vagueness misapplied or missed due to context insensitivity (either overflags \u2018this/it\u2019 or misses incident-comms specificity requirements)",
+      "count": 8,
+      "example_ids": [
+        3,
+        459,
+        499
+      ],
+      "fix_direction": "Make Vagueness contingent on task requirements: in incident/client-update channels require status/impact/next update ETA/DRI; in casual channels tolerate deictics. Add context-aware referent resolution (prior message anchoring) before flagging deictic vagueness."
+    },
+    {
+      "pattern": "Fake label confusion with sarcasm (Fake \u2194 Sarcastic/Passive-Aggressive boundary errors; missing dual-label when expected)",
+      "count": 7,
+      "example_ids": [
+        21,
+        31,
+        94
+      ],
+      "fix_direction": "Clarify Fake: use only when praise/positivity is performative/weaponized to appear supportive (backhanded compliment), not for generic sarcastic openers. Add co-occurrence rule: sarcastic praise often => Fake + Passive-Aggressive; but pure irony without \u2018praise-as-mask\u2019 => no Fake."
+    },
+    {
+      "pattern": "Circular reasoning missed or diluted by extra labels (or Circular not detected and tone/objectivity substituted)",
+      "count": 7,
+      "example_ids": [
+        13,
+        136,
+        193
+      ],
+      "fix_direction": "Add a circularity detector: repeated premise-conclusion loops (\u2018X because X\u2019, \u2018deadline is the deadline\u2019) should trigger Circular as primary. Suppress secondary Vagueness/Non-Objective unless independently present beyond the tautology."
+    },
+    {
+      "pattern": "Rudeness vs Passive-Aggressive label swaps (direct blunt hostility tagged as Passive-Aggressive or vice versa)",
+      "count": 6,
+      "example_ids": [
+        22,
+        105,
+        197
+      ],
+      "fix_direction": "Enforce the indirectness criterion: Passive-Aggressive requires plausible deniability/insinuation/sarcasm; direct commands/shutdowns without veneer should map to Rudeness/Dismissive/Overly-blunt. Add examples contrasting \u2018Just do it\u2019 vs \u2018Sure\u2026 if you say so\u2019."
+    },
+    {
+      "pattern": "Non-Objective missed when message is subjective/blamey but not sarcastic (model focuses on Rudeness only)",
+      "count": 6,
+      "example_ids": [
+        71,
+        169,
+        195
+      ],
+      "fix_direction": "Expand Non-Objective triggers to include blame assignment, motive attribution, and subjective evaluation in decision/commitment channels (\u2018obvious fix\u2019, \u2018on design\u2019, \u2018goalposts\u2019). Add guidance: when message makes accountability claims without evidence/criteria, emit Non-Objective."
+    },
+    {
+      "pattern": "Overly-blunt category not emitted (collapsed into Rudeness or replaced with Non-Objective)",
+      "count": 2,
+      "example_ids": [
+        131,
+        148
+      ],
+      "fix_direction": "Differentiate \u2018style harshness\u2019 from interpersonal attack: Overly-blunt = harsh imperatives/no softeners/command-and-control without insults. Add explicit mapping rules and examples so the model doesn\u2019t default to Non-Objective or only Rudeness."
+    }
+  ]
+}

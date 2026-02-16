@@ -16,8 +16,10 @@
     "setup:slack": "bash scripts/setup-app.sh",
     "evals:setup": "bash evals/setup.sh",
     "evals:generate": "cd evals && poetry run python generate.py --step all",
-    "evals:generate:flags": "cd evals && poetry run python generate.py --step flags",
-    "evals:generate:messages": "cd evals && poetry run python generate.py --step messages"
+    "evals:generate:scenarios": "cd evals && poetry run python generate.py --step scenarios",
+    "evals:generate:messages": "cd evals && poetry run python generate.py --step messages",
+    "evals:train": "cd evals && poetry run python train.py --step full",
+    "evals:evaluate": "cd evals && poetry run python train.py --step evaluate"
   },
   "dependencies": {
     "@mantine/core": "^8.3.12",
