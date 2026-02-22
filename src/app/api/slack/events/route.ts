@@ -4,7 +4,7 @@ import { workspaceCollection, slackUserCollection, botChannelsCollection, analys
 import { ObjectId } from 'mongodb';
 import { SlackEventSchema, Workspace, SlackUser, DEFAULT_COACHING_FLAGS, ContextMessage } from '@/types';
 import { analyzeMessage } from '@/lib/ai';
-import { validateWorkspaceAccess, incrementWorkspaceUsage } from '@/lib/subscription';
+import { validateWorkspaceAccess, incrementWorkspaceUsage, generateAutoCoachingQuotaNotification } from '@/lib/subscription';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logSlackEvent } from '@/lib/logger';
@@ -213,21 +213,6 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             return;
         }
         
-        // Check workspace subscription access
-        const accessCheck = await validateWorkspaceAccess(workspace, 'autoCoaching');
-        
-        if (!accessCheck.allowed) {
-            console.log('[MSG] Skip: access denied', { reason: accessCheck.reason });
-            trackEvent(validatedEvent.user, EVENTS.API_SLACK_EVENT_PROCESSED, {
-                event_type: 'message',
-                channel_id: validatedEvent.channel,
-                processed: false,
-                skip_reason: 'access_denied',
-                subscription_tier: workspace.subscription?.tier || 'FREE',
-            });
-            return;
-        }
-        
         // Find user (don't create yet - only create if flagged for discovery)
         let user = await slackUserCollection.findOne({
             slackId: validatedEvent.user,
@@ -271,6 +256,50 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         
         // If no coaching needed, exit early
         if (analysis.flags.length === 0 || !analysis.suggestedRephrase) {
+            return;
+        }
+        
+        // Message was flagged — now check if workspace has quota remaining
+        const accessCheck = await validateWorkspaceAccess(workspace, 'autoCoaching');
+        
+        if (!accessCheck.allowed) {
+            console.log('[MSG] Quota exceeded, message was flagged:', { reason: accessCheck.reason, isNewUser });
+            
+            // Only notify existing opted-in users, and only once per billing period
+            const periodStart = workspace.subscription?.currentPeriodStart;
+            const alreadyNotified = user?.autoCoachingQuotaNotifiedAt && periodStart
+                && user.autoCoachingQuotaNotifiedAt >= periodStart;
+            
+            if (!isNewUser && !alreadyNotified) {
+                const quotaNotification = generateAutoCoachingQuotaNotification(
+                    accessCheck.resetDate || new Date(),
+                    String(workspace._id)
+                );
+                await sendEphemeralMessage(
+                    validatedEvent.channel,
+                    validatedEvent.user,
+                    quotaNotification.text,
+                    workspace.botToken,
+                    [],
+                    quotaNotification.blocks
+                );
+                
+                await slackUserCollection.updateOne(
+                    { slackId: validatedEvent.user, workspaceId: String(workspace._id) },
+                    { $set: { autoCoachingQuotaNotifiedAt: new Date() } }
+                );
+            }
+            
+            trackEvent(validatedEvent.user, EVENTS.API_SLACK_EVENT_PROCESSED, {
+                event_type: 'message',
+                channel_id: validatedEvent.channel,
+                processed: false,
+                skip_reason: 'quota_exceeded_after_flagging',
+                flags_found: analysis.flags.length,
+                subscription_tier: workspace.subscription?.tier || 'FREE',
+                is_new_user: isNewUser,
+                notified: !isNewUser && !alreadyNotified,
+            });
             return;
         }
         

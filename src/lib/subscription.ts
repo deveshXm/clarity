@@ -330,6 +330,54 @@ export function generateLimitReachedMessage(
   };
 }
 
+export function generateAutoCoachingQuotaNotification(
+  resetDate: Date,
+  workspaceId: string
+): { text: string; blocks: Array<Record<string, unknown>> } {
+  const resetDateStr = resetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const proConfig = getTierConfig('PRO');
+  const freeConfig = getTierConfig('FREE');
+  const checkoutUrl = `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/stripe/checkout?workspace=${encodeURIComponent(workspaceId)}`;
+
+  return {
+    text: 'Clarity found something to improve in your message',
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Clarity found something to improve* :sparkles:\n\nYour message may benefit from coaching, but your workspace has used all ${freeConfig.monthlyLimits.autoCoaching} free suggestions this month.\n\nUpgrade to Pro for up to ${proConfig.monthlyLimits.autoCoaching} coaching suggestions per month.`
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: `Upgrade to Pro - $${proConfig.price}/month`,
+              emoji: true
+            },
+            style: 'primary',
+            url: checkoutUrl,
+            action_id: 'upgrade_quota_exceeded'
+          }
+        ]
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `Resets ${resetDateStr} \u00b7 Only you can see this`
+          }
+        ]
+      }
+    ]
+  };
+}
+
 export function generateProLimitReachedMessage(
   feature: SubscriptionFeature, 
   currentUsage: number, 

@@ -3,21 +3,33 @@ import { z } from 'zod';
 // COACHING FLAGS SCHEMA & DEFAULTS
 export const CoachingFlagSchema = z.object({
     name: z.string().max(50),
-    description: z.string().max(200),
+    description: z.string().max(500),
     enabled: z.boolean(),
 });
 
 export type CoachingFlag = z.infer<typeof CoachingFlagSchema>;
 
 export const DEFAULT_COACHING_FLAGS: CoachingFlag[] = [
-    { name: 'Pushiness', description: 'Overly aggressive or demanding tone', enabled: true },
-    { name: 'Vagueness', description: 'Unclear or imprecise requests', enabled: true },
-    { name: 'Non-Objective', description: 'Subjective or biased communication', enabled: true },
-    { name: 'Circular', description: 'Repetitive or circular reasoning', enabled: true },
-    { name: 'Rudeness', description: 'Impolite or discourteous communication', enabled: true },
-    { name: 'Passive-Aggressive', description: 'Indirect expression of negative feelings', enabled: true },
-    { name: 'Fake', description: 'Insincere or inauthentic communication', enabled: false },
-    { name: 'One-Liner', description: 'Overly brief or dismissive responses', enabled: false },
+    {
+        name: 'Disrespectful',
+        description: 'Directly demeaning, insulting, hostile, or belittling language aimed at a person or group. Flag only when: there is a clear target (\'you\', \'they\', named person), the language would reasonably be interpreted as insulting in isolation, and the tone is explicitly hostile. Do NOT flag blunt but neutral technical feedback, disagreements, or constructive criticism without hostility.',
+        enabled: true,
+    },
+    {
+        name: 'Passive-Aggressive',
+        description: 'Indirect expressions of frustration or criticism masked by politeness, fake enthusiasm, or veiled digs. Flag when: there is a detectable mismatch between surface politeness and implied criticism, known snide patterns (\'per my last message\', \'thanks for finally...\'), or exaggerated praise that clearly contradicts context. Do NOT flag normal gratitude, genuine praise, or neutral reminders. This category requires high contextual confidence.',
+        enabled: true,
+    },
+    {
+        name: 'Dismissive',
+        description: 'Responses that reject or shut down discussion without engaging with the substance. Flag when: a concern or question was raised, the reply dismisses it without reasoning, and the reply reduces engagement or signals refusal to consider. Do NOT flag concise but sufficient answers, boundary setting (\'Let\'s take this offline\'), or prioritization decisions (\'We\'ll address this next sprint\').',
+        enabled: true,
+    },
+    {
+        name: 'Unclear / Not Actionable',
+        description: 'Messages that request action or raise issues but omit essential details needed to act, including vague requests and unsupported claims. Flag only when: the message asks for action, decision, or change AND lacks key information (who/what/where/when/impact) AND no clarifying detail exists in thread context. Do NOT flag casual updates, early brainstorming, high-level opinions, or normal technical judgment in engineering debate.',
+        enabled: true,
+    },
 ];
 
 export const MAX_COACHING_FLAGS = 15;
@@ -121,6 +133,7 @@ export const SlackUserSchema = z.object({
     // Personal preferences
     autoCoachingEnabledChannels: z.array(z.string()).default([]), // Channel IDs where user has enabled auto-coaching
     coachingFlags: z.array(CoachingFlagSchema).default([]), // User's coaching flags (seeded from defaults)
+    autoCoachingQuotaNotifiedAt: z.coerce.date().optional(), // Last time user was notified about quota limit (once per billing period)
     
     isActive: z.boolean().default(true),
     createdAt: z.coerce.date(),
@@ -283,7 +296,7 @@ export const SUBSCRIPTION_TIERS = {
         description: 'Quick start with core coaching.',
         priceLabel: '/ forever',
         monthlyLimits: {
-            autoCoaching: 20,        // messages per month
+            autoCoaching: 5,         // flagged messages per month
             manualRephrase: 50,      // messages per month  
         },
         features: {
@@ -294,21 +307,21 @@ export const SUBSCRIPTION_TIERS = {
                 name: 'Auto coaching suggestions',
                 description: 'Get instant, private suggestions to improve your messages',
                 included: true,
-                limit: 500,
-                limitLabel: '50 auto coaching suggestions. Only counts when message is flagged.'
+                limit: 5,
+                limitLabel: '5 auto coaching suggestions per month'
             },
             {
                 name: 'Manual rephrase',
                 description: 'Use /rephrase command to improve specific messages',
                 included: true,
-                limit: 500,
+                limit: 50,
                 limitLabel: '50 manual rephrase uses'
             },
             {
                 name: 'Default coaching flags',
                 description: 'Use pre-defined coaching focus areas',
                 included: true,
-                limitLabel: 'Default flags only'
+                limitLabel: '4 coaching categories'
             },
         ]
     },
@@ -329,21 +342,27 @@ export const SUBSCRIPTION_TIERS = {
                 name: 'Auto coaching suggestions',
                 description: 'Get instant, private suggestions to improve your messages',
                 included: true,
-                limit: 500,
-                limitLabel: '50 auto coaching suggestions'
+                limit: 200,
+                limitLabel: '200 auto coaching suggestions per month'
             },
             {
                 name: 'Manual rephrase',
                 description: 'Use /rephrase command to improve specific messages',
                 included: true,
-                limit: 500,
-                limitLabel: '50 manual rephrase uses'
+                limit: 200,
+                limitLabel: '200 manual rephrase uses'
             },
             {
                 name: 'Custom coaching flags',
                 description: 'Create and customize your own coaching focus areas',
                 included: true,
                 limitLabel: 'Up to 15 custom flags'
+            },
+            {
+                name: 'More coaching categories',
+                description: 'Additional coaching categories for deeper communication insights',
+                included: true,
+                limitLabel: 'Coming soon'
             },
             {
                 name: 'Advanced reasoning model',
