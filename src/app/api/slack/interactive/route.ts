@@ -71,17 +71,15 @@ async function refreshSettingsModal(
         const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
         const enabledCount = flags.filter((f: CoachingFlag) => f.enabled).length;
         
-        // Build flag options
+        // Build flag options (names only)
         const flagOptions = flags.map((flag: CoachingFlag, index: number) => ({
             text: { type: 'plain_text' as const, text: flag.name },
-            description: { type: 'plain_text' as const, text: flag.description },
             value: String(index)
         }));
         
         const enabledFlagOptions = flags
             .map((flag: CoachingFlag, index: number) => flag.enabled ? {
                 text: { type: 'plain_text' as const, text: flag.name },
-                description: { type: 'plain_text' as const, text: flag.description },
                 value: String(index)
             } : null)
             .filter((opt: unknown): opt is NonNullable<typeof opt> => opt !== null);
@@ -1169,7 +1167,7 @@ async function handleAddCustomFlagAction(payload: SlackInteractivePayload) {
                             type: 'plain_text_input',
                             action_id: 'description_input',
                             placeholder: { type: 'plain_text', text: 'e.g., Messages with excessive exclamation marks' },
-                            max_length: 200,
+                            max_length: 500,
                             multiline: true
                         }
                     },
@@ -1214,7 +1212,7 @@ async function handleManageFlagsButton(payload: SlackInteractivePayload) {
             type: 'section',
             text: {
                 type: 'mrkdwn',
-                text: `*${flag.name}*\n${flag.description}`
+                text: `*${flag.name}*`
             },
             accessory: {
                 type: 'overflow',
@@ -1310,7 +1308,7 @@ async function handleManageFlagsOverflowAction(payload: SlackInteractivePayload,
                                 type: 'plain_text_input',
                                 action_id: 'description_input',
                                 placeholder: { type: 'plain_text', text: 'e.g., Flag messages written in passive voice' },
-                                max_length: 200,
+                                max_length: 500,
                                 multiline: true
                             }
                         }
@@ -1363,7 +1361,7 @@ async function handleManageFlagsOverflowAction(payload: SlackInteractivePayload,
                                 type: 'plain_text_input',
                                 action_id: 'description_input',
                                 initial_value: flag.description,
-                                max_length: 200,
+                                max_length: 500,
                                 multiline: true
                             }
                         }
@@ -1499,7 +1497,7 @@ async function handleFlagOverflowAction(payload: SlackInteractivePayload, action
                                 type: 'plain_text_input',
                                 action_id: 'description_input',
                                 initial_value: flag.description,
-                                max_length: 200,
+                                max_length: 500,
                                 multiline: true
                             }
                         }
@@ -1634,7 +1632,7 @@ async function handleCreateFlagSubmission(payload: SlackInteractivePayload) {
             type: 'section',
             text: {
                 type: 'mrkdwn',
-                text: `*${flag.name}*\n${flag.description}`
+                text: `*${flag.name}*`
             },
             accessory: {
                 type: 'overflow',
@@ -1762,7 +1760,7 @@ async function handleEditFlagSubmission(payload: SlackInteractivePayload) {
             type: 'section',
             text: {
                 type: 'mrkdwn',
-                text: `*${flag.name}*\n${flag.description}`
+                text: `*${flag.name}*`
             },
             accessory: {
                 type: 'overflow',
@@ -1934,7 +1932,7 @@ async function handleDeleteFlagSubmission(payload: SlackInteractivePayload) {
             type: 'section',
             text: {
                 type: 'mrkdwn',
-                text: `*${flag.name}*\n${flag.description}`
+                text: `*${flag.name}*`
             },
             accessory: {
                 type: 'overflow',

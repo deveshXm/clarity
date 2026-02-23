@@ -491,15 +491,14 @@ async function handleSettings(userId: string, user: SlackUser, workspace: Worksp
         const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
         const enabledCount = flags.filter(f => f.enabled).length;
         
-        // Build flag options for checkboxes
+        // Build flag options for checkboxes (names only)
         const flagOptions = flags.map((flag, index) => ({
             text: { type: 'plain_text' as const, text: flag.name },
-            description: { type: 'plain_text' as const, text: flag.description },
             value: String(index)
         }));
         
         const enabledFlagOptions = flags
-            .map((flag, index) => flag.enabled ? { text: { type: 'plain_text' as const, text: flag.name }, description: { type: 'plain_text' as const, text: flag.description }, value: String(index) } : null)
+            .map((flag, index) => flag.enabled ? { text: { type: 'plain_text' as const, text: flag.name }, value: String(index) } : null)
             .filter((opt): opt is NonNullable<typeof opt> => opt !== null);
 
         const modal = {
