@@ -3,63 +3,67 @@ title: "Getting started"
 description: "Install Clarity and start improving your Slack communication"
 ---
 
-Get Clarity up and running in your Slack workspace in just a few minutes.
+Get Clarity running in your Slack workspace in under two minutes.
 
 <Frame>
-  <img src="/images/app_image.png" alt="Clarity onboarding" style={{ borderRadius: '0.5rem' }} />
+  <img src="/images/app_image.png" alt="Clarity website with Add to Slack button" style={{ borderRadius: '0.5rem' }} />
 </Frame>
 
 ## Prerequisites
 
-- A Slack workspace where you have permission to install apps
-- Admin permissions (or follow the [non-admin installation guide](/non-admin-install))
+- A Slack workspace where you have admin permissions
+- If you are not an admin, follow the [non-admin installation guide](/non-admin-install)
 
 ## Installation
 
 <Steps>
 
 <Step title="Add to Slack">
-  Click the **Add to Slack** button on the Clarity website. You will be redirected to Slack to authorize the app.
+  Click the **Add to Slack** button on the [Clarity website](https://clarityapp.io). You will be redirected to Slack to authorize the app.
 </Step>
 
 <Step title="Authorize permissions">
-  Review the permissions Clarity needs and click **Allow**. Clarity requires access to read messages in channels where you enable coaching.
+  Review the permissions Clarity needs and click **Allow**. Clarity requires access to read messages in channels where you enable coaching so it can analyze them and suggest improvements.
 </Step>
 
 <Step title="Complete onboarding">
-  After installation, Clarity will send you a direct message. Click **Complete Setup** to open the onboarding modal where you can:
-  
-  - Select which channels to enable auto coaching
-  - Choose your coaching preferences
-  - Set up custom coaching flags (Pro plan)
+  After installation, Clarity sends you a direct message in Slack. Run any `/clarity-` command to open the onboarding modal, where you select which channels to enable auto coaching in.
+
+  <Frame>
+    <img src="/images/complete_onboarding_prompt.png" alt="Clarity onboarding modal in Slack showing channel selection" style={{ borderRadius: '0.5rem' }} />
+  </Frame>
 </Step>
 
 </Steps>
 
-## Your first command
+## Your first rephrase
 
-Once installed, try the rephrase command to see Clarity in action:
+Try the rephrase command to see Clarity in action:
 
 ```
-/clarity-rephrase I need this done ASAP its really urgent
+/clarity-rephrase I need this done ASAP its really urgent and nobody seems to care
 ```
 
-Clarity will suggest an improved version:
+Clarity analyzes your message and suggests an improved version:
 
-> Could you please prioritize this? I need it completed as soon as possible.
+> Could you please prioritize this task? It's time-sensitive and I want to make sure it's on your radar.
 
-Click **Replace** to update your message or **Keep original** to dismiss.
+Click **Send** to post the improved version, or **Didn't like it** to dismiss.
+
+<Note>
+The `/clarity-rephrase` response is only visible to you. Your original text is never posted.
+</Note>
 
 ## Next steps
 
 <CardGroup cols={2}>
 
 <Card title="Learn the commands" icon="terminal" href="/commands">
-  Discover all available slash commands.
+  All five slash commands explained.
 </Card>
 
 <Card title="Enable auto coaching" icon="sparkles" href="/auto-coaching">
-  Get proactive suggestions as you type.
+  Get suggestions automatically after you send messages.
 </Card>
 
 </CardGroup>

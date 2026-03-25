@@ -1,6 +1,6 @@
 ---
 title: "Troubleshooting"
-description: "Common issues and frequently asked questions"
+description: "Common issues and how to fix them"
 ---
 
 Find answers to common questions and solutions to issues you might encounter.
@@ -12,50 +12,52 @@ Find answers to common questions and solutions to issues you might encounter.
 <Accordion title="Clarity is not responding to commands">
   1. Make sure Clarity is installed in your workspace
   2. Try running `/clarity-help` to test basic functionality
-  3. Check that you have completed onboarding
-  4. If issues persist, reinstall the app from the Clarity website
+  3. Check that you have completed onboarding (run any `/clarity-` command to trigger the onboarding modal if needed)
+  4. If issues persist, reinstall the app from [clarityapp.io](https://clarityapp.io)
 </Accordion>
 
 <Accordion title="Auto coaching is not working">
   1. Run `/clarity-settings` and verify auto coaching is enabled for the channel
-  2. Check that Clarity has been added to the channel
-  3. Verify you have not exceeded your monthly usage limit with `/clarity-status`
+  2. Make sure Clarity has been invited to the channel
+  3. Check your monthly usage limit with `/clarity-status` — the free plan allows 5 auto coaching suggestions per month
 </Accordion>
 
 <Accordion title="Replace button is not working">
-  The Replace button requires additional permissions. If you see a reinstall prompt:
-  
-  1. Click the reinstall link in the message
+  The Replace button uses your Slack OAuth permissions to update the original message. If it is not working:
+
+  1. Click the reinstall link if you see one in the error message
   2. Re-authorize Clarity with the updated permissions
   3. Try replacing your message again
 </Accordion>
 
 <Accordion title="I reached my usage limit">
-  Usage limits reset on the first of each month. Options:
-  
+  Usage limits reset on the first of each month. Your options:
+
   - Wait for the monthly reset
-  - Upgrade to Pro for higher limits
-  - Use `/clarity-rephrase` more sparingly
+  - Ask your workspace admin to upgrade to Pro (200 auto coaching + 200 rephrase per month)
+  - Use `/clarity-rephrase` for your most important messages
 </Accordion>
 
 <Accordion title="I cannot access billing settings">
-  Only workspace admins can manage billing. Contact your workspace admin to:
-  
+  Only the workspace admin can manage billing. The person who first installed Clarity is the admin. Contact them to:
+
   - Upgrade to Pro
   - Update payment information
   - View invoices
 </Accordion>
 
 <Accordion title="How do I become the workspace admin?">
-  The person who first installed Clarity becomes the admin. Admins can transfer admin rights via Settings. If the original admin left your organization, contact support.
+  The person who first installed Clarity becomes the admin. Admins can transfer admin rights via `/clarity-settings`. If the original admin left your organization, contact support@clarityapp.io.
 </Accordion>
 
-<Accordion title="Clarity is analyzing the wrong things">
+<Accordion title="Clarity is flagging things I don't want it to flag">
   Customize which aspects Clarity checks by adjusting your coaching flags:
-  
+
   1. Run `/clarity-settings`
-  2. Enable or disable specific flags
-  3. Click Save
+  2. Uncheck flags you want to disable (e.g., uncheck "Unclear / Not Actionable" if you prefer brief messages)
+  3. Click **Save**
+
+  At least one flag must remain enabled.
 </Accordion>
 
 <Accordion title="Can teammates see my coaching suggestions?">
@@ -68,10 +70,5 @@ Find answers to common questions and solutions to issues you might encounter.
 
 If your issue is not listed above:
 
-1. Run `/clarity-feedback [describe your issue]` to report it
-2. Email support at support@clarityapp.io
-3. Include your workspace name and a description of the problem
-
-<Note>
-Pro subscribers receive priority support with faster response times.
-</Note>
+1. Run `/clarity-feedback [describe your issue]` to report it directly from Slack
+2. Email support@clarityapp.io with your workspace name and a description of the problem

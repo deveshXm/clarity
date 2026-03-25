@@ -1,19 +1,17 @@
 ---
 title: "Commands"
-description: "All Clarity slash commands and how to use them"
+description: "All five Clarity slash commands and how to use them"
 ---
 
-Clarity provides several slash commands to help you communicate better in Slack.
+Clarity provides five slash commands. All responses are ephemeral, meaning only you can see them.
 
 <Frame>
-  <img src="/images/app_image.png" alt="Clarity commands" style={{ borderRadius: '0.5rem' }} />
+  <img src="/images/help_command.png" alt="Clarity help command output showing all available slash commands" style={{ borderRadius: '0.5rem' }} />
 </Frame>
 
-## Available commands
+## /clarity-rephrase
 
-### /clarity-rephrase
-
-Rephrase a message before sending it. Clarity analyzes your text and suggests improvements.
+Rephrase a message before sending it. Clarity analyzes your text against your active coaching flags and suggests an improved version.
 
 ```
 /clarity-rephrase [your message]
@@ -22,18 +20,24 @@ Rephrase a message before sending it. Clarity analyzes your text and suggests im
 **Example:**
 
 ```
-/clarity-rephrase hey can u fix this bug its blocking me
+/clarity-rephrase hey can u fix this bug its blocking me and I already told you about it
 ```
 
 Clarity suggests:
 
-> Hi, could you help fix this bug? It's currently blocking my work.
+> Hi, could you help look into this bug? It's currently blocking my work. I mentioned it earlier but wanted to follow up.
 
-Click **Send** to post the improved message or **Didn't like it** to dismiss.
+You get two buttons:
+- **Send** — posts the improved message in the channel
+- **Didn't like it** — dismisses the suggestion
+
+<Note>
+Each use counts toward your monthly rephrase limit. Free: 50/month. Pro: 200/month.
+</Note>
 
 ---
 
-### /clarity-settings
+## /clarity-settings
 
 Open the settings modal to manage your coaching preferences.
 
@@ -41,18 +45,40 @@ Open the settings modal to manage your coaching preferences.
 /clarity-settings
 ```
 
+<Frame>
+  <img src="/images/settings_modal_command.png" alt="Clarity settings modal showing coaching flags and channel selection" style={{ borderRadius: '0.5rem' }} />
+</Frame>
+
 In the settings modal you can:
 
-- Enable or disable coaching flags
-- Select channels for auto coaching
-- Edit or create custom flags (Pro plan)
-- Access billing (workspace admin only)
+- Enable or disable individual coaching flags
+- Select which channels have auto coaching enabled
+- Create, edit, or delete custom flags (Pro)
+- Access billing settings (admin only)
+- Transfer admin rights (admin only)
+
+See [Settings](/settings) for full details.
 
 ---
 
-### /clarity-help
+## /clarity-status
 
-Display a list of available commands and quick tips.
+Check whether Clarity is active in the current channel and view your usage.
+
+```
+/clarity-status
+```
+
+Shows:
+- Whether auto coaching is enabled in the current channel
+- Which coaching flags are active
+- Your workspace usage for the current month
+
+---
+
+## /clarity-help
+
+Display a quick reference of all available commands.
 
 ```
 /clarity-help
@@ -60,23 +86,7 @@ Display a list of available commands and quick tips.
 
 ---
 
-### /clarity-status
-
-Check whether Clarity is active in the current channel.
-
-```
-/clarity-status
-```
-
-Returns information about:
-
-- Whether auto coaching is enabled
-- Which coaching flags are active
-- Your usage for the current month
-
----
-
-### /clarity-feedback
+## /clarity-feedback
 
 Send feedback directly to the Clarity team.
 
@@ -87,17 +97,9 @@ Send feedback directly to the Clarity team.
 **Example:**
 
 ```
-/clarity-feedback Love the app! Would be great to have a dark mode.
+/clarity-feedback The suggestions are really helpful in our engineering channel!
 ```
 
-Your feedback helps us improve Clarity for everyone.
-
-## Tips
-
 <Tip>
-All commands work in any channel or direct message. Responses are only visible to you.
+All commands work in any channel or direct message. Responses are always private to you.
 </Tip>
-
-<Note>
-Commands count toward your monthly usage limits. Check your plan details in [Billing](/billing).
-</Note>

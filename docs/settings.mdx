@@ -1,70 +1,75 @@
 ---
 title: "Settings"
-description: "Customize your Clarity coaching preferences"
+description: "Customize your coaching flags, channels, and workspace options"
 ---
 
-Access your settings anytime with the `/clarity-settings` command.
+Open your settings anytime with `/clarity-settings`.
 
 <Frame>
-  <img src="/images/app_image.png" alt="Settings modal" style={{ borderRadius: '0.5rem' }} />
+  <img src="/images/settings_modal_command.png" alt="Clarity settings modal in Slack" style={{ borderRadius: '0.5rem' }} />
 </Frame>
 
-## Settings modal
+## Coaching flags
 
-The settings modal has several sections:
+The settings modal shows checkboxes for each coaching flag. Check a flag to enable it, uncheck to disable. At least one flag must be enabled.
 
-### Coaching flags
+### Default flags
 
-Enable or disable the coaching flags that Clarity uses to analyze your messages. Check a flag to enable it, uncheck to disable.
+| Flag | Description |
+|------|-------------|
+| Disrespectful | Directly demeaning, insulting, hostile, or belittling language |
+| Passive-Aggressive | Indirect frustration masked by politeness, fake enthusiasm, or veiled digs |
+| Dismissive | Shutting down discussion without engaging with the substance |
+| Unclear / Not Actionable | Requests that omit essential details needed to act |
 
-Default flags include:
+All four are enabled by default.
 
-- **Professional tone** — Suggests formal alternatives to casual language
-- **Clarity** — Simplifies complex or unclear sentences
-- **Brevity** — Shortens unnecessarily long messages
-- **Inclusive language** — Recommends more inclusive word choices
+### Custom flags (Pro)
 
-### Auto coaching channels
+Pro users can create custom coaching flags tailored to their communication needs. You can have up to 15 flags total (default + custom).
 
-Select which channels should have auto coaching enabled. When enabled, Clarity will automatically analyze messages you send in those channels.
+To manage custom flags, click **Edit Flags** in the settings modal:
 
-<Tip>
-You can enable auto coaching for direct messages too, not just public channels.
-</Tip>
+- **Add a flag** — give it a name and describe what patterns to look for
+- **Edit a flag** — update the name or description
+- **Delete a flag** — remove a flag you no longer need
 
-### Edit flags (Pro)
-
-Pro users can create custom coaching flags tailored to their needs. Click **Edit Flags** to:
-
-- **Add a flag** — Create a new custom flag with a name and description
-- **Edit a flag** — Modify an existing custom flag
-- **Delete a flag** — Remove a flag you no longer need
 
 <Note>
-Custom flags are personal to your account. Teammates on the same workspace can create their own.
+Custom flags are personal to you. Each person in the workspace can create their own.
 </Note>
+
+## Auto coaching channels
+
+Select which channels should have auto coaching enabled. When enabled, Clarity automatically analyzes messages you send in those channels and privately suggests improvements.
+
 
 ## Admin settings
 
-Workspace admins see additional options:
+Workspace admins see two additional sections in the settings modal.
 
 ### Billing
 
-Access the Stripe billing portal to:
+Click **Manage billing** to open the Stripe billing portal where you can:
 
-- View current subscription
-- Upgrade to Pro
+- View your current plan
+- Upgrade to Pro ($4.99/month)
 - Update payment method
 - View invoices
+- Cancel subscription
+
+<Note>
+Only workspace admins can manage billing. If you are not an admin, ask your workspace admin to upgrade.
+</Note>
 
 ### Transfer admin
 
-Transfer admin rights to another user in your workspace. Once transferred, you will lose admin access.
+Transfer admin rights to another user in your workspace. The person who installed Clarity is the initial admin.
 
 <Warning>
-Admin transfer is permanent. The new admin will have full control over billing and workspace settings.
+Admin transfer is permanent. The new admin gains full control over billing and workspace settings.
 </Warning>
 
 ## Saving changes
 
-Click **Save** at the bottom of the modal to apply your changes. Settings take effect immediately.
+Click **Save** at the bottom of the modal. Settings take effect immediately.
