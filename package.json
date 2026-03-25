@@ -17,7 +17,9 @@
     "evals:setup": "bash evals/setup.sh",
     "evals:generate": "cd evals && poetry run python generate.py --step all",
     "evals:generate:flags": "cd evals && poetry run python generate.py --step flags",
-    "evals:generate:messages": "cd evals && poetry run python generate.py --step messages"
+    "evals:generate:messages": "cd evals && poetry run python generate.py --step messages",
+    "evals:run": "cd evals && poetry run python evaluate.py",
+    "evals:run:prod": "cd evals && BASE_URL=https://clarity.rocktangle.com poetry run python evaluate.py"
   },
   "dependencies": {
     "@mantine/core": "^8.3.12",

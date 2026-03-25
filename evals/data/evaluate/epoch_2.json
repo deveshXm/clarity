@@ -1,0 +1,1833 @@
+{
+  "epoch": 2,
+  "scores": {
+    "overall": {
+      "precision": 0.7422680412371134,
+      "recall": 1.0,
+      "f1": 0.8520710059171598,
+      "tp": 72,
+      "fp": 25,
+      "fn": 0,
+      "tn": 47
+    },
+    "per_flag": {
+      "Apology Hedge": {
+        "precision": 0.28205128205128205,
+        "recall": 1.0,
+        "f1": 0.44000000000000006,
+        "tp": 11,
+        "fp": 28,
+        "fn": 0
+      },
+      "Over-Justifying": {
+        "precision": 0.6,
+        "recall": 0.9,
+        "f1": 0.7200000000000001,
+        "tp": 9,
+        "fp": 6,
+        "fn": 1
+      },
+      "Vague Help Ask": {
+        "precision": 0.8,
+        "recall": 0.6153846153846154,
+        "f1": 0.6956521739130435,
+        "tp": 8,
+        "fp": 2,
+        "fn": 5
+      },
+      "Hard Commit": {
+        "precision": 0.5217391304347826,
+        "recall": 1.0,
+        "f1": 0.6857142857142856,
+        "tp": 12,
+        "fp": 11,
+        "fn": 0
+      },
+      "Scope Creep": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 13,
+        "fp": 0,
+        "fn": 0
+      },
+      "Unverified Assurance": {
+        "precision": 0.7058823529411765,
+        "recall": 1.0,
+        "f1": 0.8275862068965517,
+        "tp": 12,
+        "fp": 5,
+        "fn": 0
+      },
+      "Abrupt Commands": {
+        "precision": 0.2894736842105263,
+        "recall": 1.0,
+        "f1": 0.4489795918367347,
+        "tp": 11,
+        "fp": 27,
+        "fn": 0
+      },
+      "Public Callouts": {
+        "precision": 0.9,
+        "recall": 1.0,
+        "f1": 0.9473684210526316,
+        "tp": 9,
+        "fp": 1,
+        "fn": 0
+      },
+      "Dismissive Replies": {
+        "precision": 0.6363636363636364,
+        "recall": 0.7777777777777778,
+        "f1": 0.7000000000000001,
+        "tp": 7,
+        "fp": 4,
+        "fn": 2
+      }
+    }
+  },
+  "false_positive_count": 25,
+  "false_negative_count": 0,
+  "results": [
+    {
+      "id": 1,
+      "type": "positive",
+      "message": "Sorry to bother you and this is probably my fault, but I\u2019m confused about the review comments on my PR \u2014 you\u2019re asking me to refactor the whole module and I\u2019m not sure why. I might be missing something obvious, could you explain what you\u2019re looking for?",
+      "ground_truth_flags": [
+        "Apology Hedge"
+      ],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Apology Hedge: The message begins with multiple apologies/self-blame phrases (\u201cSorry to bother you and this is probably my fault,\u201d \u201cI might be missing something obvious\u201d) that unnecessarily minimize the request before making a clear, reasonable ask. I did not apply other flags because the rest of the message is a direct, specific request for clarification and doesn't contain excessive justification, vague asking, hard commitments, scope changes, unverified claims, blunt commands, public callouts, or dismissive language. The suggested rephrase keeps the same intent and details while removing the hedging language so the ask is direct and professional.",
+      "error": null
+    },
+    {
+      "id": 2,
+      "type": "hard_negative",
+      "message": "I reviewed the PR comments on my changes and want to make sure I\u2019m interpreting them correctly. Could we sync for 10 minutes to walk through the requested refactor and confirm the rationale, since I\u2019m seeing a different tradeoff in the current approach?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific, and polite request to sync for 10 minutes to review PR feedback and discuss tradeoffs. It does not lead with unnecessary apology (no Apology Hedge), does not over-justify the ask, is not vague, and contains no hard commitments, scope additions, unverified assertions, abrupt commands, public callouts, or dismissive language. No flags apply.",
+      "error": null
+    },
+    {
+      "id": 3,
+      "type": "positive",
+      "message": "sorry to bother, I\u2019m probably missing something obvious but I\u2019m kind of stuck on the review comments and not sure what to change here \u2014 can someone take a look? also while we\u2019re at it maybe we should refactor the whole module and add some extra tests/logging so this doesn\u2019t come up again.",
+      "ground_truth_flags": [
+        "Apology Hedge",
+        "Scope Creep",
+        "Vague Help Ask"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying",
+        "Scope Creep"
+      ],
+      "reason": "Flagged Apology Hedge (1) because the message opens with unnecessary apologies and hedging: \"sorry to bother, I\u2019m probably missing something obvious\". Flagged Over-Justifying (2) because it spends extra space defending the request and downplaying the asker before making the ask: \"I\u2019m kind of stuck... not sure what to change here\". Flagged Scope Creep (5) because the message adds a broader request in the same ask\u2014\"refactor the whole module and add some extra tests/logging\"\u2014which introduces additional features/requirements without acknowledging tradeoffs or separate scoping. The suggested rephrase keeps the original intent (requesting review and proposing a follow-up refactor/tests) but removes hedging and unnecessary self-justification, and separates the immediate review request from the broader refactor proposal so it's clearer and easier to act on.",
+      "error": null
+    },
+    {
+      "id": 4,
+      "type": "hard_negative",
+      "message": "Quick clarification on the PR feedback: you suggested rewriting the module, but the current approach matches the agreed spec and keeps the hotfix scope small. Can we align on whether the goal is correctness for this release or a refactor follow-up?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a concise, constructive clarification request about PR goals. It doesn't lead with unnecessary apology, over-justify, or ask a vague question; it states a brief rationale and asks to align on objectives. No flag criteria are clearly or strongly met.",
+      "error": null
+    },
+    {
+      "id": 5,
+      "type": "positive",
+      "message": "hey sorry to bother everyone, I\u2019m kinda stuck on a code review comment thread and I\u2019ve already tried a bunch of stuff (rebasing twice, tweaking the naming, running tests locally, re-reading the style guide) but I still feel like I\u2019m missing something and I don\u2019t want to keep going back and forth in the PR forever \ud83d\ude05. if anyone has a minute could you take a look / tell me what I should do here?",
+      "ground_truth_flags": [
+        "Over-Justifying",
+        "Vague Help Ask"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flagged Apology Hedge because the message opens with 'hey sorry to bother everyone,' an unnecessary apologetic preface before the actual request. Flagged Over-Justifying because the message lists multiple attempts and defenses ('I\u2019ve already tried a bunch of stuff...') in a way that reads like extra justification for asking for help. The suggested rephrase removes the apologetic lead and trims the defensive tone while keeping the same intent and the helpful context about what was tried.",
+      "error": null
+    },
+    {
+      "id": 6,
+      "type": "hard_negative",
+      "message": "Hey team\u2014quick sanity check on the PR comments: should I address the reviewer\u2019s suggestion to refactor the helper into a separate module, or keep it inline since it\u2019s only used here? I\u2019m happy to make the change either way; I just want to align with our usual pattern so I don\u2019t churn the diff unnecessarily.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific, and cooperative question about preferred code style (refactor into module vs keep inline). It doesn't start with an unnecessary apology, over-explain, make hard commitments, ask vagely, or otherwise match any flag criteria. The brief rationale about diff churn is appropriate context and not excessive.",
+      "error": null
+    },
+    {
+      "id": 7,
+      "type": "positive",
+      "message": "Hey, sorry to bug you \u2014 I\u2019m stuck on the review comment about \u201cdon\u2019t mutate props\u201d in my PR and I swear I\u2019m not trying to ignore it; I tried cloning the object with spread and then with structuredClone, and I even moved the logic into a helper to keep it pure, but the linter still complains and the tests keep failing in that one case. I\u2019ve been staring at it for like an hour and I don\u2019t want to keep pushing noise commits or hold up the merge, could someone point out what I\u2019m missing or what the preferred pattern is here?",
+      "ground_truth_flags": [
+        "Over-Justifying"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flagged Apology Hedge because the message opens with an unnecessary apology ('sorry to bug you \u2014 I\u2019m stuck... I swear I\u2019m not trying to ignore it') which minimizes the ask before stating it. Flagged Over-Justifying because the message includes an extended defense and personal detail ('I tried... I even... I\u2019ve been staring at it for like an hour and I don\u2019t want to keep pushing noise commits or hold up the merge') that goes beyond the necessary context and reads like justification for requesting help. The suggested rephrase removes the apologetic preface and trims the extra justifying details while preserving the same technical context and the concrete request for guidance.",
+      "error": null
+    },
+    {
+      "id": 8,
+      "type": "hard_negative",
+      "message": "Hey team\u2014quick sanity check on the PR comments: should I address the reviewer\u2019s suggestion to refactor the helper into a separate module, or keep it inline since it\u2019s only used here? I\u2019m happy to make the change either way; I just want to align with our preferred pattern so I don\u2019t churn the diff unnecessarily.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific, and cooperative request for guidance on a PR pattern. It does not lead with unnecessary apology, over-justify, ask vaguely, make hard commitments, introduce scope creep, assert unverified facts, issue abrupt commands, call out anyone publicly, or shut down discussion. No flag applies.",
+      "error": null
+    },
+    {
+      "id": 9,
+      "type": "positive",
+      "message": "hey sorry to bug folks, can someone take a look at my PR and tell me what\u2019s wrong? also while you\u2019re in there could we tweak the endpoint to return a couple extra fields, add a cache layer, and maybe update the UI to handle it too so it\u2019s all consistent?",
+      "ground_truth_flags": [
+        "Vague Help Ask",
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Vague Help Ask",
+        "Scope Creep"
+      ],
+      "reason": "Apology Hedge (1): The message opens with 'hey sorry to bug folks,' which unnecessarily leads with an apology before the request. Vague Help Ask (3): 'tell me what\u2019s wrong' gives no details about the PR, errors, or what specific feedback is needed, making it hard to respond. Scope Creep (5): The message adds multiple additional requests ('tweak the endpoint', 'add a cache layer', 'update the UI') on top of the review request in the same message without acknowledging tradeoffs or scope. The suggested rephrase removes the apologetic hedge and makes the asks explicit while keeping the original intent and content.",
+      "error": null
+    },
+    {
+      "id": 10,
+      "type": "hard_negative",
+      "message": "Sorry to bother folks\u2014I'm a bit stuck on a code review comment and want to make sure I respond correctly. In PR #842 (auth-service), the reviewer asked me to replace the early return with a guard clause + extracted function; the current code is:\n```ts\nif (!user) return null;\nif (!user.isActive) return null;\nconst token = await mintToken(user.id);\nreturn token;\n```\nThey suggested:\n```ts\nconst ensureActiveUser = (user?: User) => {\n  if (!user || !user.isActive) throw new UnauthorizedError();\n  return user;\n};\nconst activeUser = ensureActiveUser(user);\nreturn mintToken(activeUser.id);\n```\nGiven this is an internal endpoint that currently returns `null` for unauthenticated, should I follow the refactor and also change behavior to throw `UnauthorizedError`, or keep the `null` response and just do the extraction?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flagged Apology Hedge because the message begins with an unnecessary apologetic phrase: \"Sorry to bother folks\u2014\". The rest of the message is a clear, specific code-review question and does not trigger other flags. The suggested rephrase removes the apologetic preface while keeping the original intent and full context so the reviewer can answer directly.",
+      "error": null
+    },
+    {
+      "id": 11,
+      "type": "positive",
+      "message": "Hey, sorry to bug everyone \u2014 my PR review kinda blew up and I\u2019m not sure what to do. Can someone take a look and tell me what I should change?",
+      "ground_truth_flags": [
+        "Vague Help Ask"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Vague Help Ask"
+      ],
+      "reason": "Apology Hedge: The message begins with 'sorry to bug everyone' which unnecessarily leads with an apology before the request. Vague Help Ask: The request 'Can someone take a look and tell me what I should change?' lacks specifics (which PR, links, which parts are confusing, or error examples), making it harder for reviewers to act. The rephrase removes the apologetic preface and keeps the same intent while being more direct; it still would be improved further by adding the PR link and any specific areas of concern.",
+      "error": null
+    },
+    {
+      "id": 12,
+      "type": "hard_negative",
+      "message": "Sorry to bother folks\u2014I'm a bit stuck on a code review comment and want to make sure I respond correctly. In PR #842 (auth-service), the reviewer asked me to replace the early return with a guard clause + extracted function; the current code is:\n```ts\nif (!user) return null;\nif (!user.isActive) return null;\nconst token = await mintToken(user.id);\nreturn token;\n```\nThey suggested:\n```ts\nconst ensureActiveUser = (user?: User) => {\n  if (!user || !user.isActive) throw new UnauthorizedError();\n  return user;\n}\nconst activeUser = ensureActiveUser(user);\nreturn mintToken(activeUser.id);\n```\nGiven our API currently returns 401 vs null in other endpoints, should I align to throwing `UnauthorizedError` here, or keep returning `null` for backward compatibility? Happy to update either way\u2014just want the right call.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flagged for Apology Hedge because the message begins with an unnecessary apology phrase: \"Sorry to bother folks\u2014\". The rest of the message is a clear, specific code-review question and does not need the apologetic preface. The suggested rephrase removes the apology while keeping the exact intent, context, code examples, and question unchanged.",
+      "error": null
+    },
+    {
+      "id": 13,
+      "type": "positive",
+      "message": "Hey team \u2014 let\u2019s stop spinning on this review; we\u2019re shipping the new approval flow exactly as spec\u2019d by Friday EOD, no exceptions. I\u2019m 100% guaranteeing it\u2019s in prod and working for customers before the weekend.",
+      "ground_truth_flags": [
+        "Hard Commit"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Abrupt Commands"
+      ],
+      "reason": "Hard Commit (flag 4): The message makes an unqualified promise and deadline\u2014\u201cwe\u2019re shipping... by Friday EOD, no exceptions\u201d and \u201cI\u2019m 100% guaranteeing it\u2019s in prod\u201d\u2014with no caveats or acknowledgment of dependencies, which is a definitive commitment. Abrupt Commands (flag 7): The tone is directive and blunt (e.g., \u201clet\u2019s stop spinning,\u201d \u201cwe\u2019re shipping... no exceptions\u201d) with little collaboration language or request for blockers/risks. The suggested rephrase preserves the intent to deliver by Friday while removing the absolute guarantee and softening the imperative tone, and adds a prompt for blockers so the team can surface risks.",
+      "error": null
+    },
+    {
+      "id": 14,
+      "type": "hard_negative",
+      "message": "I know it sounds like we can ship this right after this review, but until we resolve the API edge-case comments and rerun the full test suite, I\u2019m not committing to a date. If we can close the remaining threads today, we should be in a good spot to discuss a realistic release window tomorrow.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is clear, appropriately cautious, and provides necessary conditions for committing to a date. It does not lead with an unnecessary apology (no Apology Hedge), does not over-justify, does not make an unqualified promise, and does not match any other flag criteria.",
+      "error": null
+    },
+    {
+      "id": 15,
+      "type": "positive",
+      "message": "I get that the review comments are valid, but we\u2019re not slipping\u2014this feature will be merged today and will ship to customers by Friday EOD, guaranteed. Please approve the PR as-is so we can hit the launch.",
+      "ground_truth_flags": [
+        "Hard Commit"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance"
+      ],
+      "reason": "Flag 4 (Hard Commit): The message uses unqualified promises about delivery/outcome \u2014 \u201cwill be merged today\u201d and \u201cwill ship to customers by Friday EOD, guaranteed\u201d \u2014 with no caveats or dependency language. Flag 6 (Unverified Assurance): The same delivery statements are presented as definitive facts without evidence or confirmation (e.g., no sign-off from release, QA, or stakeholders). The suggested rephrase keeps the original intent (request approval to meet the launch) but removes the absolute guarantees and frames the timeline as a plan/aim rather than an incontrovertible fact.",
+      "error": null
+    },
+    {
+      "id": 16,
+      "type": "hard_negative",
+      "message": "I know it sounds like we\u2019re \"shipping this Friday\" and I\u2019m pushing hard for that, but we can\u2019t call it done until the review concerns are resolved and we get sign-off. If we align on the changes today, we should be in a good spot to target end-of-week\u2014otherwise we\u2019ll re-scope and share an updated ETA.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is clear, conditional, and collaborative. It does not lead with an unnecessary apology (no Apology Hedge), does not over-defend or over-justify the ask, and does not make an unqualified promise\u2014the timeline is presented with conditions. It also doesn't add extra scope, present unverified facts as central claims, issue abrupt commands, call out a person/team publicly, or dismiss discussion. Therefore no flags apply.",
+      "error": null
+    },
+    {
+      "id": 17,
+      "type": "positive",
+      "message": "Hey folks \u2014 on the PR for the review flow, can we also add a bulk-approve option, auto-save drafts, and a little dashboard showing approval SLAs? While we\u2019re here, let\u2019s make sure it supports multi-language and exports to CSV too so we don\u2019t have to revisit this later.",
+      "ground_truth_flags": [
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Scope Creep"
+      ],
+      "reason": "Scope Creep: The message adds multiple extra features and requirements (bulk-approve, auto-save drafts, approval SLA dashboard, multi-language support, CSV export) on top of the current PR request in a single message without acknowledging tradeoffs, prioritization, or impact on scope/timeline. Each new feature expands the scope and should be scoped, prioritized, or split into separate items rather than appended as additional asks in the same PR.",
+      "error": null
+    },
+    {
+      "id": 18,
+      "type": "hard_negative",
+      "message": "On the PR: I know it looks like I\u2019m asking for \u201cone more thing,\u201d but I\u2019m not adding scope\u2014just trying to align the implementation with the acceptance criteria we already agreed on (error states + logging). If that\u2019s going to push the timeline, call it out and we\u2019ll decide whether to defer it or adjust the plan.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flagged Apology Hedge because the message opens with minimizing language: \u201cI know it looks like I\u2019m asking for \u2018one more thing,\u2019\u201d which leads with an unnecessary apology/hedge before the real ask. Flagged Over-Justifying because the message spends extra space defending the request (\u201cI\u2019m not adding scope\u2014just trying to align\u2026\u201d), which reads like justification rather than a concise, direct request. The suggested rephrase removes the hedge and excessive defense while preserving the original intent and the ask about timeline impact.",
+      "error": null
+    },
+    {
+      "id": 19,
+      "type": "positive",
+      "message": "Hey folks, on this PR can we just land it today, and while we\u2019re here can we also add role-based permissions + audit logs for every change, and maybe squeeze in the new onboarding flow and dark mode toggle so it\u2019s all consistent? Should be pretty quick since we\u2019re already touching the area.",
+      "ground_truth_flags": [
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Scope Creep",
+        "Unverified Assurance"
+      ],
+      "reason": "Flagged Scope Creep (5) because the message asks to land the PR and simultaneously requests multiple additional features (role-based permissions, audit logs, new onboarding flow, dark mode) in the same ask without acknowledging tradeoffs or scheduling. Flagged Unverified Assurance (6) because the message asserts \u201cShould be pretty quick since we\u2019re already touching the area,\u201d presenting an unstated assumption as fact without evidence or confirmation. The suggested rephrase keeps the original intent but is slightly clearer and tones down the absolute certainty about effort.",
+      "error": null
+    },
+    {
+      "id": 20,
+      "type": "hard_negative",
+      "message": "Hey team \u2014 in the PR discussion, can we keep the changes strictly to the refactor + lint fixes we already agreed on and leave any UI tweaks/perf optimizations for a separate follow-up ticket? I\u2019m eager to ship, but I don\u2019t want us expanding the scope of this review beyond what\u2019s in the acceptance criteria.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, polite request to limit the PR scope to agreed refactor and lint fixes and defer UI/perf work. It does not lead with an unnecessary apology (no Apology Hedge), does not over-justify the ask, is specific rather than vague, makes no unqualified delivery promises, doesn\u2019t add extra requirements (so not Scope Creep), does not assert unverified facts, isn\u2019t an abrupt command, doesn\u2019t call out or blame anyone publicly, and does not shut down discussion. Therefore no flags apply.",
+      "error": null
+    },
+    {
+      "id": 21,
+      "type": "positive",
+      "message": "I went ahead and told Sales we\u2019re shipping this by Friday \u2014 engineering already signed off on the approach and security/legal are good with it, so let\u2019s stop bikeshedding the PR and just approve the changes today. Customers are going to love the new flow.",
+      "ground_truth_flags": [
+        "Unverified Assurance"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance",
+        "Dismissive Replies"
+      ],
+      "reason": "Flag 4 (Hard Commit): The message asserts a firm delivery commitment \u2014 'I went ahead and told Sales we\u2019re shipping this by Friday' \u2014 an unqualified promise about timing without caveats. Flag 6 (Unverified Assurance): It presents approvals as facts \u2014 'engineering already signed off' and 'security/legal are good with it' \u2014 without links or explicit confirmations. Flag 9 (Dismissive Replies): The phrasing 'let\u2019s stop bikeshedding the PR and just approve the changes today' shuts down further discussion and minimizes remaining concerns. The suggested rephrase keeps the same intent and timeline but softens the commitment language, frames approvals as reported indications, and asks for approval collaboratively rather than dismissively.",
+      "error": null
+    },
+    {
+      "id": 22,
+      "type": "hard_negative",
+      "message": "Quick check before we spin: if we can get an explicit approval comment on the PR and a \u2705 from Eng in this thread today, I\u2019ll tell stakeholders we\u2019re on track for Friday. Right now we\u2019re not treating anything as approved until those confirmations are in writing\u2014can we align on the remaining changes?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific, and cooperative coordination request: it asks for an explicit approval comment and an engineer's checkmark today, states the team's policy about written confirmations, and proposes alignment on remaining changes. It includes a conditional commitment tied to receiving those approvals, so it is not an unqualified promise. None of the flag criteria (apology hedge, over-justifying, vague ask, hard commit, scope creep, unverified assurance, abrupt command, public callout, or dismissive reply) are clearly and materially met.",
+      "error": null
+    },
+    {
+      "id": 23,
+      "type": "positive",
+      "message": "We can merge this as-is \u2014 legal is already good with the copy and eng already signed off on the approach, so no need to block on more review. Customers are going to love the new flow once it ships this week.",
+      "ground_truth_flags": [
+        "Unverified Assurance"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance"
+      ],
+      "reason": "Flag 6 (Unverified Assurance): The message states as facts that 'legal is already good with the copy' and 'eng already signed off' without citing confirmation or a source; those are presented as settled facts and are central to the decision to merge. Flag 4 (Hard Commit): The phrase 'once it ships this week' asserts a definite delivery timing (that it will ship this week) with no caveats or contingencies. The suggested rephrase keeps the original intent (approve merging, note approvals, and expectation of customer reaction) while slightly clarifying wording (uses 'has approved' / 'has signed off' for clarity and softens 'customers are going to love' to 'customers should like') to reduce absolute promotional language and improve tone.",
+      "error": null
+    },
+    {
+      "id": 24,
+      "type": "hard_negative",
+      "message": "Quick check before we merge: the review thread makes it sound like this is basically signed off, but I don\u2019t see an explicit approval comment yet. Can the final approver drop a clear \u2705 (or request changes) on the PR so we\u2019re aligned on what\u2019s actually approved?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a specific, polite request asking the final approver to leave an explicit approval or request changes. It does not start with unnecessary apology or self-blame, does not over-justify, is not vague, makes no hard commitments, does not add scope, and is not an unverified assertion or abrupt command. The context provided is concise and relevant, so no flags apply.",
+      "error": null
+    },
+    {
+      "id": 25,
+      "type": "positive",
+      "message": "Drop the argument in the PR and merge it now. Revert the extra refactor and ship the hotfix today.",
+      "ground_truth_flags": [
+        "Abrupt Commands"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "This message is predominantly imperative and blunt \u2014 short commands with no softening, context, or collaboration language, which triggered Abrupt Commands. Replacing the blunt imperatives with a polite request (please) keeps the same intent and deadline but reduces abruptness and improves tone.",
+      "error": null
+    },
+    {
+      "id": 26,
+      "type": "hard_negative",
+      "message": "I\u2019m not comfortable approving this PR as-is; the review thread still has open questions about the null-handling and the retry logic. Can you either address those comments or point me to the test coverage that makes this safe, so we can get it merged today?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a direct review request identifying specific concerns (null-handling and retry logic) and asking for either code changes or pointer to tests so it can be merged today. It doesn't begin with unnecessary apology, over-justify the ask, or lack needed detail; it's not an unqualified promise, scope expansion, or an abrupt command, nor a public callout or dismissive reply. Therefore none of the flags apply.",
+      "error": null
+    },
+    {
+      "id": 27,
+      "type": "positive",
+      "message": "Drop the argument and merge the PR now. Revert the nitpicks and push the fix before EOD.",
+      "ground_truth_flags": [
+        "Abrupt Commands"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands",
+        "Dismissive Replies"
+      ],
+      "reason": "Abrupt Commands (flag 7): The message is predominantly imperative and blunt\u2014\u2018Drop the argument and merge the PR now. Revert the nitpicks and push the fix before EOD.\u2019\u2014with no softening language or rationale. Dismissive Replies (flag 9): The phrase \u2018Drop the argument\u2019 shuts down discussion and dismisses ongoing debate without engaging the content. The rephrase keeps the same directives and deadline but uses a more polite, collaborative tone (\u2018Please stop the back-and-forth\u2019 and \u2018Please\u2019 implied) which is clearer and less dismissive.",
+      "error": null
+    },
+    {
+      "id": 28,
+      "type": "hard_negative",
+      "message": "I\u2019m not comfortable approving this PR as-is; the review thread still has open questions about the null-handling and the retry logic. Can you either address those comments or walk me through why the current approach is safe so we can land it today?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is clear, specific, and appropriately framed: it explains why the sender won\u2019t approve (open questions about null-handling and retry logic) and asks for two concrete options (address comments or explain why current approach is safe). It does not lead with unnecessary apology, over-justify, make an unqualified promise, ask a vague question, issue an abrupt command, or call out anyone publicly. No flags apply.",
+      "error": null
+    },
+    {
+      "id": 29,
+      "type": "positive",
+      "message": "@mike why did you push that refactor without addressing the review comments? Now the build is failing in #deployments and the rest of us are cleaning up your mess.",
+      "ground_truth_flags": [
+        "Public Callouts"
+      ],
+      "predicted_flags": [
+        "Public Callouts",
+        "Dismissive Replies"
+      ],
+      "reason": "Flag 8 (Public Callouts): The message publicly calls out @mike with blame for pushing a refactor and creating extra work, which is a corrective/blaming mention in-channel. The phrase \u201ccleaning up your mess\u201d directed at a named person in-channel triggered this. Flag 9 (Dismissive Replies): The line \u201cthe rest of us are cleaning up your mess\u201d dismisses the recipient\u2019s actions and shuts down constructive discussion by assigning blame rather than asking for collaboration. The suggested rephrase preserves the original intent (asking why the change was pushed and requesting help resolving the build failure) but removes blame, is more collaborative, and invites a concrete next step.",
+      "error": null
+    },
+    {
+      "id": 30,
+      "type": "hard_negative",
+      "message": "@alex quick check: can you summarize the rationale for the refactor in this PR and any tradeoffs you considered? I\u2019m trying to close the loop on the review thread today\u2014drop it here or in the PR, either works.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific, and polite request: asking Alex to summarize the refactor rationale and tradeoffs and indicating a deadline (closing the review thread today). It does not lead with unnecessary apology, over-justify, ask vagely, make an unqualified promise, add extra scope, present unverified facts, give an abrupt command, publicly call out or blame, or dismiss discussion. No communication flags apply.",
+      "error": null
+    },
+    {
+      "id": 31,
+      "type": "positive",
+      "message": "@alex why did you ignore the review comments and merge that anyway? It's already approved by Security and Legal so just ship it today. Can someone help me fix whatever's still broken here?",
+      "ground_truth_flags": [
+        "Public Callouts",
+        "Unverified Assurance",
+        "Vague Help Ask"
+      ],
+      "predicted_flags": [
+        "Public Callouts",
+        "Abrupt Commands",
+        "Unverified Assurance",
+        "Vague Help Ask"
+      ],
+      "reason": "Public Callouts (8): The message directly calls out @alex in-channel with a blaming tone: \u201cwhy did you ignore the review comments and merge that anyway?\u201d This is a public corrective callout. Abrupt Commands (7): Phrases like \u201cjust ship it today\u201d are imperative and blunt with no softening or collaboration. Unverified Assurance (6): The claim \u201cIt's already approved by Security and Legal\u201d is presented as fact without evidence or link; flag because it\u2019s a central claim used to push action. Vague Help Ask (3): The request \u201cCan someone help me fix whatever's still broken here?\u201d is broad and underspecified\u2014doesn't describe what's broken or what help is needed. The suggested rephrase keeps the original intent (ask why comments were missed, note approvals, request shipping today, and ask for help) while removing the public blame, softening the directive, and making the help request slightly more specific and collaborative.",
+      "error": null
+    },
+    {
+      "id": 32,
+      "type": "hard_negative",
+      "message": "Can someone from the review thread (including @alex if you\u2019re around) clarify what criteria we\u2019re using to block this PR? I\u2019m not looking to re-litigate\u2014just need the specific checklist item(s) so we can resolve it today.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a direct, specific request for which checklist items are blocking the PR and explicitly seeks to avoid re-litigating\u2014this is clear, cooperative, and actionable. It does not start with unnecessary apology (no Apology Hedge), does not over-justify the request, is not vague (asks for specific checklist items), does not make an unqualified promise, does not add extra requirements, does not assert unverified facts, is not an abrupt command, and is not a public callout or dismissive reply. Therefore no flags apply.",
+      "error": null
+    },
+    {
+      "id": 33,
+      "type": "positive",
+      "message": "Sorry to bother, but no, we\u2019re not re-litigating this review \u2014 just merge it as-is. I already spent two hours going through the comments, ran the tests locally and in CI, checked the edge cases, tried your suggested refactor and it made perf worse, so I reverted it; I\u2019m only asking because I\u2019m blocked and I don\u2019t have time to keep debating style.",
+      "ground_truth_flags": [
+        "Dismissive Replies",
+        "Over-Justifying",
+        "Apology Hedge"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying",
+        "Abrupt Commands"
+      ],
+      "reason": "Flagged Apology Hedge (1) because the message begins with an unnecessary apology 'Sorry to bother' before making the request. Flagged Over-Justifying (2) because it spends multiple sentences defending why the sender deserves the merge (two hours of work, tests, refactor attempt), which is more justification than needed. Flagged Abrupt Commands (7) because the core instruction 'just merge it as-is' is a blunt imperative with little collaborative tone. The suggested rephrase removes the hedging apology, keeps concise factual context, and softens the imperative into a polite request while preserving the original intent and constraints.",
+      "error": null
+    },
+    {
+      "id": 34,
+      "type": "hard_negative",
+      "message": "I\u2019m not going to merge this as-is. The review comments are about correctness and maintainability (null handling in the new path, missing tests, and unclear naming); address those and then ping me for a re-review with the updated diff.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": null,
+      "error": ""
+    },
+    {
+      "id": 35,
+      "type": "positive",
+      "message": "No, we\u2019re not rehashing this in the PR. Just merge it as-is and move on \u2014 I don\u2019t care about the style nitpicks.",
+      "ground_truth_flags": [
+        "Dismissive Replies"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands",
+        "Dismissive Replies"
+      ],
+      "reason": "Abrupt Commands (7): The message is predominantly imperative and blunt\u2014\"Just merge it as-is and move on\"\u2014with no softening language or rationale. Dismissive Replies (9): The phrase \"I don\u2019t care about the style nitpicks\" shuts down discussion and minimizes others' concerns. The suggested rephrase keeps the same intent (merge without re-litigating style) but uses more professional phrasing that avoids outright dismissal while preserving the original directive.",
+      "error": null
+    },
+    {
+      "id": 36,
+      "type": "hard_negative",
+      "message": "I\u2019m not approving this PR as-is. The review comments call out missing tests for the edge cases and an undocumented behavior change\u2014please address those and ping me; I\u2019ll re-review today.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is direct, specific, and constructive: it explains why the PR isn't approved (missing tests and undocumented behavior), requests fixes, and offers to re-review today. It does not lead with unnecessary apology, over-justify, ask a vague question, make an inappropriate hard commitment, add scope creep, present unverified assurances, give abrupt commands, call out a person/team publicly, or shut down discussion\u2014so no flags apply.",
+      "error": null
+    },
+    {
+      "id": 37,
+      "type": "positive",
+      "message": "Sorry to bother everyone at 5pm, I\u2019m probably missing something obvious, but the deployment is failing on the last step \u2014 does anyone know what I should check? My bad if this is a dumb question.",
+      "ground_truth_flags": [
+        "Apology Hedge"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Vague Help Ask"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The message opens with multiple unnecessary apologies/minimizing phrases \u2014 \u201cSorry to bother everyone,\u201d \u201cI\u2019m probably missing something obvious,\u201d and \u201cMy bad if this is a dumb question\u201d \u2014 which precede the actual request. Flag 3 (Vague Help Ask): The request is broad and lacks concrete diagnostic details (no error message, logs, what was attempted, or environment), making it hard for others to act on the ask. The suggested rephrase removes the hedging language and keeps the same request, making it direct while preserving intent.",
+      "error": null
+    },
+    {
+      "id": 38,
+      "type": "hard_negative",
+      "message": "Not an apology\u2014just flagging this before we push at 5pm: the migration step is still failing in staging with a timeout. Can someone take a quick look with me before we deploy so we don\u2019t roll back tonight?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a concise, cooperative request with concrete context (migration failing in staging with a timeout) and a clear ask (take a quick look before deploy). It does not lead with an unnecessary apology, over-justify, ask vagely, make hard commitments, add scope, assert unverified facts, give abrupt commands, call out a team publicly, or dismiss discussion \u2014 so none of the flags apply.",
+      "error": null
+    },
+    {
+      "id": 39,
+      "type": "positive",
+      "message": "Sorry to bother everyone at 5pm, I\u2019m probably missing something obvious, but the deployment is failing on the last step \u2014 does anyone know what I should check? My bad if this is a dumb question.",
+      "ground_truth_flags": [
+        "Apology Hedge"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Vague Help Ask"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The message begins with multiple unnecessary apologies/minimizing phrases ('Sorry to bother everyone at 5pm', 'I\u2019m probably missing something obvious', 'My bad if this is a dumb question') before the actual request. These hedges are unneeded and were the primary trigger for this flag.  \nFlag 3 (Vague Help Ask): The request is brief and lacks concrete diagnostic details (error text, logs, which step, recent changes), phrased as a broad 'does anyone know what I should check?,' which makes it hard to provide a targeted answer.  \nThe suggested rephrase removes the apologetic hedging and states the issue directly while keeping the original intent, so recipients can focus on troubleshooting. If you want lower ambiguity, include error messages, recent changes, or the CI/CD system and step name.",
+      "error": null
+    },
+    {
+      "id": 40,
+      "type": "hard_negative",
+      "message": "Not an apology\u2014just flagging this before we push at 5pm: I\u2019m not fully confident the migration is idempotent, and I don\u2019t want to risk a rollback on a Friday. Can someone take a quick look at the SQL diff with me before we hit deploy?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific request to review an SQL diff before a scheduled deploy due to concern about idempotency. It does not lead with an unnecessary apology or self-blame, doesn't over-justify, and provides sufficient context for the ask (what to review and why). None of the flag criteria (vague ask, hard commit, scope creep, abrupt command, public callout, etc.) are clearly met.",
+      "error": null
+    },
+    {
+      "id": 41,
+      "type": "positive",
+      "message": "Hey sorry to bug you this late on a Friday \u2014 I\u2019m trying to push the 5pm deploy and I\u2019m stuck on a migration failing in staging, and I\u2019ve already tried rerunning it, resetting the schema, checking the env vars, and comparing the SQL locally vs CI, but it still errors with a foreign key issue I can\u2019t reproduce. I feel like I\u2019m missing something obvious and I don\u2019t want to hold up the deploy or make a risky guess, but also I don\u2019t want to waste anyone\u2019s time since it\u2019s probably just me \u2014 could someone take a quick look or tell me what I should check next?",
+      "ground_truth_flags": [
+        "Over-Justifying"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flagged Apology Hedge (1) because the message begins with 'Hey sorry to bug you this late' and includes self-minimizing language like 'I don\u2019t want to waste anyone\u2019s time' that precedes the actual ask. Flagged Over-Justifying (2) because the sender lists multiple attempts and long justifications ('I\u2019ve already tried rerunning it, resetting the schema, checking the env vars, and comparing the SQL...') in a way that reads like defending their request rather than a concise summary. The suggested rephrase removes the unnecessary apology and trims the extended justification while preserving the same intent and key troubleshooting details.",
+      "error": null
+    },
+    {
+      "id": 42,
+      "type": "hard_negative",
+      "message": "Hey team\u2014I'm about to kick off the 5pm deploy and I'm a bit nervous about the migration step. Can someone do a quick sanity check on the runbook before I hit deploy?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, polite request for a quick sanity check before a deploy. It doesn't lead with unnecessary apology or self-blame, doesn't over-justify, and includes a specific ask (sanity-check the runbook). None of the flag conditions (apology hedge, over-justifying, vague help ask, hard commit, scope creep, unverified assurance, abrupt command, public callout, or dismissive reply) are clearly met.",
+      "error": null
+    },
+    {
+      "id": 43,
+      "type": "positive",
+      "message": "hey sorry to bug everyone at like 5pm on a Friday \ud83d\ude2c I\u2019ve been trying to get the deploy out for a while and I restarted stuff, reran the pipeline, tweaked a couple configs and double-checked env vars so I\u2019m not totally clueless, but it\u2019s still kind of\u2026 not working and I\u2019m blocked\u2014can someone help or tell me what I\u2019m missing? also while we\u2019re here should we maybe add the new logging + the feature flag defaults + update the README and bump the dependencies so we don\u2019t have to touch this again next week?",
+      "ground_truth_flags": [
+        "Over-Justifying",
+        "Vague Help Ask",
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying",
+        "Scope Creep"
+      ],
+      "reason": "Apology Hedge (1): The message opens with 'hey sorry to bug everyone...' which unnecessarily leads with an apology before making the request. Over-Justifying (2): The message spends several sentences defending the ask ('I restarted stuff, reran the pipeline, tweaked a couple configs and double-checked env vars...') in a way that reads like proving they \u2018deserve\u2019 help rather than a concise summary. Scope Creep (5): The sender asks for help with a blocked deploy and then adds multiple extra feature/maintenance requests in the same message ('add the new logging + the feature flag defaults + update the README and bump the dependencies'), which are additional requirements on top of the original ask. The suggested rephrase keeps the same intent and details but is more concise, removes the unnecessary apology, and clearly separates the immediate help request from the additional proposed tasks.",
+      "error": null
+    },
+    {
+      "id": 44,
+      "type": "hard_negative",
+      "message": "Hey team\u2014I'm about to kick off the 5pm Friday deploy and I'm unsure whether we want the feature flag for the new checkout flow enabled by default in prod. Can someone confirm the intended setting before I proceed so I don\u2019t accidentally ship it on?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific operational question asking for confirmation about a feature flag before a scheduled deploy. It doesn't start with an unnecessary apology, over-justify, make an unqualified promise, add scope, or otherwise meet any flag criteria. The request includes sufficient context (deploy time and exact decision needed), so no flags apply.",
+      "error": null
+    },
+    {
+      "id": 45,
+      "type": "positive",
+      "message": "Can someone help? Deploy this at 5, just push it. It\u2019s already approved and should be fine.",
+      "ground_truth_flags": [
+        "Vague Help Ask",
+        "Abrupt Commands",
+        "Unverified Assurance"
+      ],
+      "predicted_flags": [
+        "Unverified Assurance",
+        "Abrupt Commands"
+      ],
+      "reason": "Flag 6 (Unverified Assurance): The message states \u201cIt\u2019s already approved\u201d as a fact without citing who approved it or providing confirmation. Flag 7 (Abrupt Commands): The lines \u201cDeploy this at 5, just push it.\u201d are imperative and blunt with little collaborative language or rationale. The suggested rephrase softens the command into a polite request while preserving the original intent; it doesn't add new information but improves tone and clarity.",
+      "error": null
+    },
+    {
+      "id": 46,
+      "type": "hard_negative",
+      "message": "Hey\u2014sorry to bug folks at 5pm, but the deploy to prod is currently blocked: the pipeline fails on the \"migrate\" step with `ERROR: relation \"users\" already exists` after applying `2026_02_08_1702_add_users_table.sql` (build #1842, commit 9f3c2a1). Can someone confirm whether we should rollback and rerun with `--skip-existing`, or if there\u2019s an expected preexisting table in prod I\u2019m missing?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flagged for Apology Hedge because the message begins with an unnecessary apology/softener (\u201csorry to bug folks at 5pm\u201d) before stating the problem and request. The rest of the message is specific, actionable, and provides necessary context (error, migration file, build and commit), so no other flags apply. The suggested rephrase removes the apologetic preface while keeping the exact intent, details, and question intact.",
+      "error": null
+    },
+    {
+      "id": 47,
+      "type": "positive",
+      "message": "sorry to bother everyone this late but i'm probably missing something \u2014 deployment is acting weird and i can\u2019t tell what i did wrong. can someone help me figure it out?",
+      "ground_truth_flags": [
+        "Vague Help Ask",
+        "Apology Hedge"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Vague Help Ask"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The message begins with 'sorry to bother everyone this late' and 'i'm probably missing something', which needlessly hedges and apologizes before the actual request. Flag 3 (Vague Help Ask): The request is vague \u2014 'deployment is acting weird' and 'can someone help me figure it out?' lack concrete details (error messages, steps taken, environment) needed to diagnose the problem. The suggested rephrase removes the unnecessary apology while keeping the same intent and makes the ask more direct and actionable; the sender should still add specifics (logs, errors, recent changes) in a follow-up message.",
+      "error": null
+    },
+    {
+      "id": 48,
+      "type": "hard_negative",
+      "message": "Hey\u2014sorry to bug folks at 5pm, but the deploy to prod is currently blocked: the pipeline fails on the \"migrate\" step with `ERROR: relation \"users\" already exists` after applying `2026_02_08_1702_add_users_table.sql` (build #1842). Can someone confirm whether we should mark this migration as already applied in prod or roll back and rerun from #1841?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The message begins with an unnecessary apologetic preface\u2014\"sorry to bug folks at 5pm\"\u2014before stating the actual problem and request. The rest of the message is clear, specific, and actionable, so only the apology hedge applies. The suggested rephrase removes the apologetic lead while keeping the exact technical details and the same decision request, making the message more direct and focused.",
+      "error": null
+    },
+    {
+      "id": 49,
+      "type": "positive",
+      "message": "Hey team \u2014 we will deploy the full set of changes today by 5pm sharp, no exceptions. It\u2019s locked in and I\u2019m guaranteeing everything will be live and stable before the weekend.",
+      "ground_truth_flags": [
+        "Hard Commit"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Abrupt Commands"
+      ],
+      "reason": "Flag 4 (Hard Commit): The message makes an unqualified promise\u2014\"we will deploy... by 5pm sharp, no exceptions\" and \"I\u2019m guaranteeing everything will be live and stable before the weekend\"\u2014with definitive language and no caveats or acknowledgement of dependencies. Flag 7 (Abrupt Commands): The tone is directive and blunt (\"no exceptions\", \"It\u2019s locked in\"), giving orders without inviting collaboration or indicating contingency. The suggested rephrase preserves the intent (targeting a 5pm deploy and expecting stability before the weekend) but softens the absolute language, adds a request to surface blockers, and frames the outcome as contingent on no unresolved issues, addressing both the hard-commit and abrupt-command concerns.",
+      "error": null
+    },
+    {
+      "id": 50,
+      "type": "hard_negative",
+      "message": "Team \u2014 I\u2019d love for us to land the deployment by 5pm Friday, and that\u2019s the target I\u2019m planning around. That said, we\u2019ll only hit the button if QA is green and the rollout checklist is fully cleared; otherwise we\u2019ll slide to the next safe window.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message sets a target rollout time but includes clear caveats (only if QA is green and the checklist is cleared), so it is not an unqualified hard commit. It's direct but collaborative and not overly apologetic or justificatory, doesn't add scope, make unverified claims, issue abrupt commands, or call out anyone. Therefore none of the flags apply.",
+      "error": null
+    },
+    {
+      "id": 51,
+      "type": "positive",
+      "message": "Hey team \u2014 we will deploy the full set of changes today by 5pm sharp, no exceptions. It\u2019s locked in and I\u2019m guaranteeing everything goes live before end of day.",
+      "ground_truth_flags": [
+        "Hard Commit"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Abrupt Commands"
+      ],
+      "reason": "Flag 4 (Hard Commit): The message makes an unqualified promise about delivery/outcome (\u201cwe will deploy... by 5pm sharp, no exceptions,\u201d \u201cI\u2019m guaranteeing everything goes live before end of day\u201d) with absolute language and no caveats or acknowledgement of dependencies. Flag 7 (Abrupt Commands): The tone is directive and blunt\u2014\u2018no exceptions\u2019 and a guaranteed outcome\u2014without collaborative language, context about blockers, or invitation for questions. The suggested rephrase keeps the original intent (schedule the deployment and set expectation for it to be live today) while softening the absolute language and making it slightly more collaborative/realistic.",
+      "error": null
+    },
+    {
+      "id": 52,
+      "type": "hard_negative",
+      "message": "Team \u2014 I\u2019d love for us to land the deployment by 5pm Friday, and the plan is to be in a ship-ready state by then. That said, we\u2019ll only push if QA and the rollout checklist are fully green; otherwise we\u2019ll hold and communicate an updated timeline immediately.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message sets a target and explains conditional criteria (only push if QA and checklist are green) and a fallback (hold and communicate updated timeline). It is not an unqualified promise (so not a Hard Commit), doesn\u2019t begin with unnecessary apology, isn\u2019t over-justifying, vague, or otherwise matching the flagged categories. The tone is collaborative and appropriately cautious, so no flags apply.",
+      "error": null
+    },
+    {
+      "id": 53,
+      "type": "positive",
+      "message": "Happy Friday \u2014 since we\u2019re deploying at 5pm anyway, can we also sneak in the new onboarding flow, add the KPI dashboard for execs, and update the pricing page copy? Should be pretty quick and it\u2019ll make the release way more impactful.",
+      "ground_truth_flags": [
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Scope Creep"
+      ],
+      "reason": "Flagged for Scope Creep (5): the message asks to add three additional features (onboarding flow, KPI dashboard, pricing copy) to an already-scheduled 5pm deployment in the same request, which is adding extra requirements without acknowledging tradeoffs or asking about capacity. The phrase \u201cShould be pretty quick\u201d downplays the impact but doesn\u2019t by itself justify the additions. The suggested rephrase preserves the original ask but makes it collaborative and requests confirmation of feasibility and consideration of time/QA constraints.",
+      "error": null
+    },
+    {
+      "id": 54,
+      "type": "hard_negative",
+      "message": "Team\u2014before we hit the button on the 5pm Friday deploy, can we quickly confirm we\u2019re still shipping only what\u2019s already in the approved release notes (no late additions)? If anything new is being considered, let\u2019s park it for Monday\u2019s planning and just focus on a clean, low-risk launch today.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific operational request asking the team to confirm scope before a deploy and to defer any new items. It is polite and collaborative (uses 'can we' and 'let's'), not an unnecessary apology or over-justification, not vague, and not an abrupt command or public callout. No flag criteria are clearly met.",
+      "error": null
+    },
+    {
+      "id": 55,
+      "type": "positive",
+      "message": "Happy Friday \u2014 can we ship the deployment at 5pm as planned? While we\u2019re in there, can we also add the new onboarding step, turn on the updated pricing page, and wire up the analytics events + dashboard so we can announce it Monday?",
+      "ground_truth_flags": [
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Scope Creep"
+      ],
+      "reason": "Scope Creep: The message asks to ship a deployment at a specific time and then immediately adds multiple additional features/requirements (\u201calso add the new onboarding step, turn on the updated pricing page, and wire up the analytics events + dashboard\u201d) in the same request without acknowledging tradeoffs, sequencing, or resourcing. Each extra item materially increases the scope of the deployment, which is why this triggers the Scope Creep flag. The suggested rephrase preserves the original intent and specifics while slightly clarifying wording (enable vs. turn on; analytics events and dashboard spelled out) without adding new content or commitments.",
+      "error": null
+    },
+    {
+      "id": 56,
+      "type": "hard_negative",
+      "message": "Team\u2014before we hit the button on the 5pm Friday deploy, can we quickly confirm we\u2019re still shipping only what\u2019s already in the approved release notes (no late additions)? If anything new is being considered, let\u2019s park it for Monday\u2019s planning and just focus on a clean, low-risk launch today.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific operational check about a planned deploy and asks the team to confirm scope. It is polite and collaborative (asks to confirm, suggests parking new items), so it does not meet the high bar for any flag (not an apology hedge, not over-justifying, not vague, not a hard commitment, not scope creep, not an unverified assurance, not an abrupt command, not a public callout, and not dismissive).",
+      "error": null
+    },
+    {
+      "id": 57,
+      "type": "positive",
+      "message": "Hey team \u2014 let\u2019s go ahead and ship this at 5pm today; engineering already signed off and Legal\u2019s totally fine with it, so we\u2019re good to deploy. Customers are going to love it and this will definitely move the needle over the weekend.",
+      "ground_truth_flags": [
+        "Unverified Assurance"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance"
+      ],
+      "reason": "Flag 4 (Hard Commit): The message makes an unqualified commitment to ship at an exact time (\u201clet\u2019s go ahead and ship this at 5pm today\u201d) without acknowledging dependencies or potential blockers. Flag 6 (Unverified Assurance): The message asserts approvals and outcomes as facts without evidence or links (\u201cengineering already signed off,\u201d \u201cLegal\u2019s totally fine,\u201d and \u201cCustomers are going to love it\u201d / \u201cthis will definitely move the needle\u201d). The suggested rephrase preserves the intent to release at 5pm and to communicate approvals and expected impact, but softens absolute language and presents the approvals as confirmations rather than emphatic claims.",
+      "error": null
+    },
+    {
+      "id": 58,
+      "type": "hard_negative",
+      "message": "It *sounds* like we\u2019re all set to push at 5pm Friday and I\u2019m excited to get this in front of users\u2014but I don\u2019t want to assume anything. Can someone drop the final go/no-go confirmation here (incl. rollback plan + any sign-offs) before we hit deploy?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific operational request asking for final go/no-go confirmation, rollback plan, and sign-offs before deploy. It does not lead with unnecessary apology or self-blame, does not over-justify the ask, is not vague, and is politely phrased rather than an abrupt command or public callout. Therefore no flags apply.",
+      "error": null
+    },
+    {
+      "id": 59,
+      "type": "positive",
+      "message": "Let\u2019s go ahead and ship this at 5pm \u2014 engineering is good with it and QA already signed off, so we\u2019re covered. Legal has no issues and customers are going to love this update.",
+      "ground_truth_flags": [
+        "Unverified Assurance"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance"
+      ],
+      "reason": "Flag 4 (Hard Commit): The message makes an unqualified, time-specific directive to 'ship this at 5pm' without caveats or explicit confirmation from all stakeholders. Flag 6 (Unverified Assurance): Several claims are presented as facts without sourced confirmation \u2014 'engineering is good with it,' 'QA already signed off,' 'Legal has no issues,' and 'customers are going to love this update.' The suggested rephrase preserves the intent to ship at 5pm while softening the commitment, asking for confirmation from Legal and others, and avoiding asserting customer reactions as a fact.",
+      "error": null
+    },
+    {
+      "id": 60,
+      "type": "hard_negative",
+      "message": "Team \u2014 pushing for a 5pm Friday deploy: my read is we\u2019re *almost* in the clear on the remaining checks, but I don\u2019t have the final green lights yet. If Eng + QA can drop explicit \u2705 in this thread (or link the sign-off), I\u2019ll go ahead and schedule once those are in.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is clear, specific, and collaborative: it requests explicit sign-offs from Eng and QA before scheduling a 5pm Friday deploy and notes the current state. It does not lead with unnecessary apology, over-justify, make an unqualified promise, or otherwise meet any flag criteria.",
+      "error": null
+    },
+    {
+      "id": 61,
+      "type": "positive",
+      "message": "Deploy to prod at 5pm. Run migrations, flip the feature flag, and monitor errors\u2014no delays.",
+      "ground_truth_flags": [
+        "Abrupt Commands"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "This message is predominantly imperative and blunt\u2014short, directive sentences with a strict deadline and 'no delays'\u2014which matches Abrupt Commands. The suggested rephrase keeps the same intent and required actions but adds a polite softener ('Please') and slightly clearer phrasing while preserving the original instruction.",
+      "error": null
+    },
+    {
+      "id": 62,
+      "type": "hard_negative",
+      "message": "It\u2019s 5pm Friday\u2014before we deploy, can you confirm the rollback plan is tested and on-call is aware? If anything\u2019s uncertain, let\u2019s hold the release and pick it up Monday.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific operational request with a reasonable conditional (hold release if uncertain). It does not lead with unnecessary apology, over-justify, ask vaguely, make an unqualified promise, add scope creep, assert unverified facts, issue abrupt commands, call out a person/team, or shut down discussion. No communication flags apply.",
+      "error": null
+    },
+    {
+      "id": 63,
+      "type": "positive",
+      "message": "Deploy to prod at 5pm. Run migrations, flip the feature flag, and monitor errors\u2014no delays.",
+      "ground_truth_flags": [
+        "Abrupt Commands"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "Flag 7 (Abrupt Commands): The message is predominantly imperative and blunt\u2014short, direct orders with no softening language or rationale. Phrases like \"Deploy to prod at 5pm\" and \"no delays\" are commanding rather than collaborative. The suggested rephrase keeps the exact intent and timing but adds a polite softener (\"Please\") to reduce abruptness while preserving urgency and required steps.",
+      "error": null
+    },
+    {
+      "id": 64,
+      "type": "hard_negative",
+      "message": "It\u2019s 5pm Friday\u2014before we deploy, can we take 10 minutes to confirm the rollback plan and on-call coverage? If anything looks even slightly off, I\u2019d rather hold and ship Monday than spend the weekend firefighting.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific, and cooperative request: it asks for a 10-minute check of rollback plan and on-call coverage before a Friday deploy and states a preference to delay if anything looks off. It does not lead with unnecessary apology, over-justify, ask a vague question, make an unqualified promise, add extra scope, assert unverified facts, issue abrupt commands, call out a person/team, or shut down discussion\u2014so none of the flags apply.",
+      "error": null
+    },
+    {
+      "id": 65,
+      "type": "positive",
+      "message": "@deploy-team why didn\u2019t you catch this earlier\u2014now we\u2019re scrambling at 5pm on a Friday. We will ship the full deployment tonight by 7pm, guaranteed. Legal already signed off and the customers are expecting it, so just get it done.",
+      "ground_truth_flags": [
+        "Public Callouts",
+        "Hard Commit",
+        "Unverified Assurance"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance",
+        "Public Callouts",
+        "Abrupt Commands"
+      ],
+      "reason": "Flag 8 (Public Callouts): the message directly calls out @deploy-team in a blaming tone (\u201cwhy didn\u2019t you catch this earlier\u2014now we\u2019re scrambling\u201d), which is a public corrective callout. Flag 4 (Hard Commit): it makes an unqualified promise about delivery and outcome (\u201cWe will ship the full deployment tonight by 7pm, guaranteed.\u201d) with no caveats. Flag 6 (Unverified Assurance): it presents approvals/expectations as facts without evidence or citation (\u201cLegal already signed off and the customers are expecting it\u201d). Flag 7 (Abrupt Commands): the closing line (\u201cso just get it done.\u201d) is an imperative directive with little collaboration or rationale. The suggested rephrase preserves the same intent (urgent deployment by 7pm, legal/customer context, request for action) but removes the accusatory tone, softens the directive into a prioritization request, and asks for blockers/ETA to enable collaboration.",
+      "error": null
+    },
+    {
+      "id": 66,
+      "type": "hard_negative",
+      "message": "It\u2019s 5pm Friday\u2014if anyone is planning to deploy, pause and confirm we have an on-call owner + rollback plan before pushing. No @mentions; I just don\u2019t want us debugging prod over the weekend. Post status here when you\u2019re ready.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, concise operational request with a brief rationale and polite tone. It does not lead with an unnecessary apology (no Apology Hedge), does not over-justify, and includes specific asks (confirm on-call owner + rollback plan and post status), so it isn't a Vague Help Ask. While directive, it provides context and a reason, so it doesn't meet the high bar for Abrupt Commands. No other flags (Scope Creep, Unverified Assurance, Public Callouts, Dismissive Replies, Hard Commit) are triggered.",
+      "error": null
+    },
+    {
+      "id": 67,
+      "type": "positive",
+      "message": "We\u2019re at 5pm Friday and prod is still broken \u2014 @backend-team what happened, why didn\u2019t you test this before deploying? Roll it back now and post a real ETA in this channel.",
+      "ground_truth_flags": [
+        "Public Callouts"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands",
+        "Public Callouts"
+      ],
+      "reason": "Flagged for Abrupt Commands (7) because the message is predominantly imperative and blunt\u2014'Roll it back now and post a real ETA'\u2014with little softening or collaboration. Flagged for Public Callouts (8) because it calls out @backend-team in a public channel with a blaming tone: 'what happened, why didn\u2019t you test this before deploying?' The suggested rephrase preserves the original intent (requesting incident details, a rollback, and an ETA) but uses a calmer, more collaborative tone and removes accusatory phrasing, making it more appropriate for a public channel while keeping the urgency.",
+      "error": null
+    },
+    {
+      "id": 68,
+      "type": "hard_negative",
+      "message": "5pm Friday deploy: I\u2019m not looking for heroics\u2014keep this tight. @eng-oncall please post the rollout plan + rollback steps and a single owner for the window; if anything\u2019s unclear, say so now.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "The message is predominantly imperative with direct commands to @eng-oncall (\"please post... and a single owner\"), with little collaborative language or context beyond the instructions, which matches Abrupt Commands. The phrasing \"keep this tight\" and \"I\u2019m not looking for heroics\" reinforces a blunt, directive tone. The rephrase preserves the same intent and requirements but slightly softens the tone and adds a polite prompt to raise questions.",
+      "error": null
+    },
+    {
+      "id": 69,
+      "type": "positive",
+      "message": "No. We\u2019re deploying at 5pm like planned\u2014stop overthinking it. If you\u2019re worried, figure it out after the push.",
+      "ground_truth_flags": [
+        "Dismissive Replies"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands",
+        "Dismissive Replies"
+      ],
+      "reason": "Abrupt Commands (7): The message is predominantly imperative and blunt\u2014\"stop overthinking it\" and \"figure it out after the push\" are direct commands with no collaborative tone or rationale. Dismissive Replies (9): The message shuts down discussion and dismisses others' concerns with a terse negation and no engagement (\"No. ... stop overthinking it\"). The suggested rephrase preserves the original intent (insisting the deployment proceed at 5pm and postponing concerns) while removing the dismissive tone and softening the commands to be more professional and actionable.",
+      "error": null
+    },
+    {
+      "id": 70,
+      "type": "hard_negative",
+      "message": "No, we\u2019re not deploying at 5pm Friday \u2014 push it to Monday\u2019s window. If there\u2019s a customer-facing hotfix that truly can\u2019t wait, reply here with the risk/rollback plan and who\u2019s on call, and I\u2019ll make the call in the next 10 minutes.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Hard Commit",
+        "Abrupt Commands"
+      ],
+      "reason": "Flag 7 (Abrupt Commands): The message is predominantly imperative and blunt \u2014 ordering to push the deployment to Monday and instructing people to reply with plans, with little softening language. The initial sentence ('No, we\u2019re not deploying... \u2014 push it to Monday\u2019s window.') reads as a direct command. Flag 4 (Hard Commit): The message makes a definitive, unqualified scheduling decision about deployments ('we\u2019re not deploying at 5pm Friday') without caveats or acknowledgement of dependencies, which reads like a hard commitment. The suggested rephrase preserves the original intent but softens the tone by adding polite phrasing ('Let's not', 'please') and keeps the clear instruction and deadline for follow-up.",
+      "error": null
+    },
+    {
+      "id": 71,
+      "type": "positive",
+      "message": "No. We\u2019re deploying at 5pm Friday, end of discussion. Don\u2019t ping me with more \u201cconcerns\u201d unless something is literally on fire.",
+      "ground_truth_flags": [
+        "Dismissive Replies"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands",
+        "Dismissive Replies"
+      ],
+      "reason": "Flagged for Abrupt Commands because the message is predominantly imperative and blunt ('Don\u2019t ping me', 'end of discussion') with no softening or collaborative language. Flagged for Dismissive Replies because it shuts down further discussion and minimizes other people\u2019s concerns ('Don\u2019t ping me with more \u201cconcerns\u201d unless something is literally on fire'). The suggested rephrase keeps the same firm decision and intent but removes the abrupt tone and dismissiveness, making it clearer and more professional while preserving the requirement that only critical incidents should be escalated.",
+      "error": null
+    },
+    {
+      "id": 72,
+      "type": "hard_negative",
+      "message": "No, we\u2019re not deploying at 5pm Friday unless you can show a rollback plan, risk assessment, and on-call coverage in this thread. If it\u2019s urgent, propose an alternative window and confirm QA sign-off; otherwise queue it for Monday\u2019s release.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "Flagged as Abrupt Commands because the message is predominantly imperative and blunt (\"we're not deploying... unless you can show...\") with little collaborative phrasing or softening. The rephrase keeps the same firm decision and requirements but uses slightly softer, more collaborative language (\"I can't approve...\" and \"please\"), which maintains intent while reducing abruptness.",
+      "error": null
+    },
+    {
+      "id": 73,
+      "type": "positive",
+      "message": "Sorry to bother you and this is probably a dumb question, but do you have a minute to talk about my salary? I feel like I\u2019m missing something on what the right range is and I don\u2019t want to make this awkward.",
+      "ground_truth_flags": [
+        "Apology Hedge"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The message begins with multiple apologies/minimizing phrases \u2014 \u201cSorry to bother you\u201d and \u201cthis is probably a dumb question\u201d \u2014 which needlessly undercuts the ask. Flag 2 (Over-Justifying): The message adds extra self-defense (\u201cI feel like I\u2019m missing something\u2026 I don\u2019t want to make this awkward\u201d) that goes beyond what\u2019s needed to request a conversation. The suggested rephrase keeps the same intent and politeness while removing hedging and unnecessary justification, making the request clearer and more direct.",
+      "error": null
+    },
+    {
+      "id": 74,
+      "type": "hard_negative",
+      "message": "Hi Pat \u2014 I know compensation talks can be awkward, but I\u2019d like to set up 15 minutes to discuss my salary adjustment based on the scope I\u2019ve taken on this quarter. Are you free sometime this week?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a concise, polite request to schedule a 15-minute conversation about salary based on recent scope. It does include a mild prefatory comment (\u201cI know compensation talks can be awkward\u201d), but this is not an unnecessary apology or hedging that obstructs the ask\u2014it's contextual politeness. The message is specific (requested duration, topic, timeframe) and not over-justifying, vague, commanding, or accusatory, so none of the flags apply.",
+      "error": null
+    },
+    {
+      "id": 75,
+      "type": "positive",
+      "message": "Sorry to bother you and I\u2019m probably missing something, but could we talk about my salary for this cycle? I\u2019ll have the raise proposal finalized and ready to send to you and HR by Friday 5pm, 100%.",
+      "ground_truth_flags": [
+        "Apology Hedge",
+        "Hard Commit"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Hard Commit"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The message opens with unnecessary apologetic hedging\u2014\"Sorry to bother you and I\u2019m probably missing something\"\u2014before making the request. Flag 4 (Hard Commit): The sender makes an unqualified, absolute promise about delivery\u2014\"I\u2019ll have ... by Friday 5pm, 100%\"\u2014which is definitive and leaves no room for uncertainty or dependencies. The suggested rephrase removes the apologetic preface and tones down the absolute language while keeping the same intent and timeline.",
+      "error": null
+    },
+    {
+      "id": 76,
+      "type": "hard_negative",
+      "message": "Hi Pat \u2014 I know compensation talks can be awkward, but I\u2019d like to set up 15 minutes to discuss adjusting my salary based on the scope I\u2019ve taken on this quarter. Are you free sometime this week?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flagged Apology Hedge because the message begins with an unnecessary softening phrase (\u201cI know compensation talks can be awkward\u201d) before making a direct request. The rest of the message is a clear, specific scheduling request and does not trigger other flags. The suggested rephrase removes the hedging while preserving the same intent and specifics.",
+      "error": null
+    },
+    {
+      "id": 77,
+      "type": "positive",
+      "message": "hey, sorry to bug you \u2014 I\u2019m supposed to email HR about my salary and I\u2019ve been staring at it all morning because I don\u2019t want to come off entitled; I drafted like 4 versions, checked the comp bands doc, looked at what I delivered this quarter (on-call, the payments fixes, and the new feature), and I even asked a couple friends outside work, but I\u2019m still stuck on how to phrase an ask without sounding ungrateful. could you take a quick look and tell me if it\u2019s reasonable or if I\u2019m missing something?",
+      "ground_truth_flags": [
+        "Over-Justifying"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The message opens with \u201csorry to bug you,\u201d which unnecessarily leads with an apology before making the request. Flag 2 (Over-Justifying): The message spends a lot of space defending the request (detailing multiple drafts, checking comp bands, listing deliverables, and consulting friends) in a way that reads like proving they \u201cdeserve\u201d help rather than a concise ask. The suggested rephrase removes the apologetic lead-in and trims the extra justification while preserving the original intent and the key context the requester wanted reviewed, making the request more direct and easier to respond to.",
+      "error": null
+    },
+    {
+      "id": 78,
+      "type": "hard_negative",
+      "message": "Hey [Manager], do you have 10 minutes this week to chat about compensation? I\u2019ve pulled together a brief summary of my recent work and impact so the conversation is grounded in specifics\u2014what\u2019s the best prep or process you prefer for this kind of discussion?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, polite request for a short meeting about compensation and notes the sender prepared a brief summary. It does not exhibit unnecessary apology, over-justification, vagueness, hard commitments, scope creep, unverified assertions, abrupt commands, public callouts, or dismissal. The ask is specific (10 minutes this week) and asks how the manager prefers to prepare, so no flags apply.",
+      "error": null
+    },
+    {
+      "id": 79,
+      "type": "positive",
+      "message": "hey, sorry to bug you \u2014 I\u2019m trying to figure out how to bring up salary (or if I even should) since I\u2019m pretty junior and don\u2019t want to come off entitled; I looked at our leveling doc, checked a couple internal postings, and even compared my last review notes to the expectations, and I *think* I\u2019m closer to the next band but I might be misunderstanding. could you sanity-check what\u2019s appropriate to ask for / how to frame it, because I\u2019ve been going in circles and I\u2019m worried I\u2019ll mess it up if I just wing it?",
+      "ground_truth_flags": [
+        "Over-Justifying"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flagged for Apology Hedge (1) because the message opens with an unnecessary apology: \u201csorry to bug you,\u201d which hedges before the real ask. Flagged for Over-Justifying (2) because the message includes a lengthy defense of why they deserve help\u2014detailing multiple things they checked and emphasizing worry about being entitled\u2014which reads like proving they deserve assistance. The suggested rephrase removes the apologetic preface and shortens the defensive language while keeping the same intent and request, making it clearer and more direct.",
+      "error": null
+    },
+    {
+      "id": 80,
+      "type": "hard_negative",
+      "message": "Hey [Manager], do you have 10 minutes this week to chat about compensation? I\u2019ve pulled together a quick summary of my recent work and impact so the conversation is grounded in specifics\u2014what time works best for you?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a concise, polite request to schedule a 10-minute conversation with relevant context (a summary of work and impact). It does not lead with an unnecessary apology, over-justify, ask a vague question, make an absolute commitment, add scope creep, assert unverified facts, issue abrupt commands, call out anyone publicly, or shut down discussion\u2014so none of the flags apply.",
+      "error": null
+    },
+    {
+      "id": 81,
+      "type": "positive",
+      "message": "hey, sorry to bother, but can someone help me with the salary negotiation stuff? i\u2019m kind of stuck and not sure what to say or how to handle it, any advice would be appreciated.",
+      "ground_truth_flags": [
+        "Vague Help Ask"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Vague Help Ask"
+      ],
+      "reason": "Flagged Apology Hedge because the message begins with an unnecessary apology/minimizer (\u201chey, sorry to bother\u201d) before the actual request. Flagged Vague Help Ask because the request lacks concrete details (no context about the role, current offer, priorities, or what specific part of negotiation is causing difficulty), making it hard to give actionable advice. The suggested rephrase removes the apologetic preface and makes the ask more direct while preserving the original intent, which helps recipients respond more confidently.",
+      "error": null
+    },
+    {
+      "id": 82,
+      "type": "hard_negative",
+      "message": "Hey team\u2014sorry to bug you, I\u2019m a bit nervous about this: I have my salary review tomorrow and I\u2019m planning to ask for $85k based on my scope (on-call rotation, shipped X feature, took over Y service) and local market comps. Could someone sanity-check whether that number + a short script like \u201cI\u2019d like to align comp with my current responsibilities\u2014can we target $85k?\u201d is reasonable, or suggest a better phrasing/counter if they say the budget is tight?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The message begins with an unnecessary apology and self-minimizing language (\u201csorry to bug you, I\u2019m a bit nervous\u201d) before the actual request. Flag 2 (Over-Justifying): The message includes extra defensive detail about why they deserve the raise (multiple accomplishments and scope) in a way that reads like proving they deserve help rather than a concise ask. The suggested rephrase removes the apology and nervous framing while keeping the same intent and details, making the request more direct and professional without adding new content.",
+      "error": null
+    },
+    {
+      "id": 83,
+      "type": "positive",
+      "message": "hey, sorry to bother, but can someone help me with the salary negotiation stuff? i\u2019m kind of stuck and not sure what to say or how to handle it, any advice would be appreciated.",
+      "ground_truth_flags": [
+        "Vague Help Ask"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Vague Help Ask"
+      ],
+      "reason": "Flagged Apology Hedge because the message begins with an unnecessary apology ('sorry to bother') that precedes the actual request. Flagged Vague Help Ask because the request lacks concrete details (no context about the offer, current salary, role, or what specific part of negotiation is causing difficulty), making it hard to provide actionable advice. The suggested rephrase removes the apologetic preface and makes the request more direct while keeping the original intent and tone.",
+      "error": null
+    },
+    {
+      "id": 84,
+      "type": "hard_negative",
+      "message": "Hey team\u2014sorry to bother, I\u2019m feeling a bit out of my depth on salary negotiation. For my upcoming comp chat, I\u2019m planning to ask for $92k based on my current $84k plus market data; does that range sound reasonable for my role/level here, and should I lead with a number or ask for their range first?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flagged Apology Hedge because the message opens with 'sorry to bother, I\u2019m feeling a bit out of my depth,' which needlessly minimizes the request before asking a clear question. The rest of the message is specific and appropriate (mentions current salary, target, and concrete questions about negotiation strategy), so other flags do not apply. The suggested rephrase removes the unnecessary apologetic preface while keeping the original intent and details intact.",
+      "error": null
+    },
+    {
+      "id": 85,
+      "type": "positive",
+      "message": "If we get my comp bumped to $185k, I will ship the entire Q2 roadmap end-to-end by May 31\u2014guaranteed. I\u2019m 100% locking in the new onboarding flow + pricing experiments and we\u2019ll hit the revenue target no matter what.",
+      "ground_truth_flags": [
+        "Hard Commit"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance"
+      ],
+      "reason": "Hard Commit (4): The message makes an unqualified promise/guarantee about delivery and outcome (\"I will ship... by May 31\u2014guaranteed,\" \"I\u2019m 100% locking in...\") with no caveats or acknowledgement of dependencies. Unverified Assurance (6): It presents hitting the revenue target as a certain outcome (\"we\u2019ll hit the revenue target no matter what\") without evidence or confirmation from other stakeholders. The suggested rephrase keeps the original intent (tying a compensation increase to delivering the Q2 roadmap by a date and committing to specific work) while slightly tightening wording; it does not add new content.",
+      "error": null
+    },
+    {
+      "id": 86,
+      "type": "hard_negative",
+      "message": "If we can align today on the comp band and leveling, I\u2019m confident we can get this wrapped up quickly and I\u2019ll push hard to get the updated offer drafted for your review as soon as possible. That said, I can\u2019t promise timing until Finance and HR sign off.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a cooperative, reasonably specific update and request. It includes a reasonable caveat about Finance and HR sign-off, so it does not make an unqualified promise (Hard Commit). It also doesn\u2019t lead with unnecessary apology, over-justify the ask, ask a vague question, or call out anyone publicly. No other flags clearly apply.",
+      "error": null
+    },
+    {
+      "id": 87,
+      "type": "positive",
+      "message": "If we can get my comp adjusted to $190k base, I will ship the full Q2 roadmap exactly as scoped by May 31 \u2014 guaranteed. I\u2019ll have the exec-ready launch metrics deck ready the next morning, no matter what.",
+      "ground_truth_flags": [
+        "Hard Commit"
+      ],
+      "predicted_flags": [
+        "Hard Commit"
+      ],
+      "reason": "Hard Commit triggered because the message makes absolute, unqualified promises about delivery and timing: \u201cI will ship the full Q2 roadmap exactly as scoped by May 31 \u2014 guaranteed\u201d and \u201cI\u2019ll have the exec-ready launch metrics deck ready the next morning, no matter what.\u201d Those phrases present certainty with no caveats about dependencies or risks. The suggested rephrase removes hyperbolic absolutes (\"exactly,\" \"guaranteed,\" \"no matter what\") while preserving the intent to commit to the work and timelines, making the language firmer but less absolutist and more appropriate for workplace planning.",
+      "error": null
+    },
+    {
+      "id": 88,
+      "type": "hard_negative",
+      "message": "If we can align on leveling and comp band today, I\u2019m confident we can land on a package that works for both sides\u2014though I\u2019ll need final Finance + HR sign-off before anything is official. I\u2019ll come back with a concrete range after I review the latest data and approvals.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is clear, appropriately conditional, and concise. It does not begin with unnecessary apology (no Apology Hedge), does not over-justify, and includes necessary caveats (Finance + HR sign-off and a follow-up after review), so it does not meet the high bar for Hard Commit, Unverified Assurance, or other flags.",
+      "error": null
+    },
+    {
+      "id": 89,
+      "type": "positive",
+      "message": "Hey team \u2014 before I sign the updated offer, can we bump the base a bit? Also, while we\u2019re at it, I\u2019d love to expand my scope to own the entire product strategy + roadmap for all surfaces, roll out the new pricing/packaging revamp this quarter, and kick off a full customer research program with monthly exec readouts.",
+      "ground_truth_flags": [
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Scope Creep"
+      ],
+      "reason": "Scope Creep: The message starts as a compensation negotiation but then adds multiple additional responsibilities and deliverables in the same message (\u2018expand my scope to own the entire product strategy + roadmap for all surfaces,\u2019 \u2018roll out the new pricing/packaging revamp this quarter,\u2019 and \u2018kick off a full customer research program with monthly exec readouts\u2019). Each of these is an extra feature/requirement appended to the original ask without acknowledging tradeoffs, resourcing, or feasibility. No other flags were applied because the message is a clear request rather than an apology (no Apology Hedge), not an over-defensive justification, and the timeline is a requested target rather than the sender unilaterally promising delivery.",
+      "error": null
+    },
+    {
+      "id": 90,
+      "type": "hard_negative",
+      "message": "Quick note before my comp convo: I\u2019m excited to keep owning the current Q2 roadmap and hitting the deliverables we already agreed on\u2014no additions implied. If the salary adjustment isn\u2019t feasible right now, I\u2019m happy to align on the existing scope and revisit comp at the next review with clear goals.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is clear, professional, and cooperative. It does not lead with unnecessary apology (no Apology Hedge), does not over-justify the request, and is specific about scope and next steps, so it isn\u2019t a Vague Help Ask. The commitment to own the Q2 roadmap is reasonable context rather than an unqualified Hard Commit, and there are no signs of Scope Creep, Unverified Assurance, Abrupt Commands, Public Callouts, or Dismissive Replies. Therefore no flags apply.",
+      "error": null
+    },
+    {
+      "id": 91,
+      "type": "positive",
+      "message": "Need a comp bump to $170k + 20% bonus effective next paycheck, update the offer doc and get Finance approval today. While you're at it, add a $15k sign-on, extra equity refresh, and lock in a promotion to Senior PM by end of Q2\u2014send it for signature ASAP.",
+      "ground_truth_flags": [
+        "Scope Creep",
+        "Abrupt Commands"
+      ],
+      "predicted_flags": [
+        "Scope Creep",
+        "Abrupt Commands"
+      ],
+      "reason": "Flagged Scope Creep because the message adds multiple extra items (\u201cadd a $15k sign-on, extra equity refresh, and lock in a promotion\u201d) on top of the original comp change request without acknowledging tradeoffs, approvals, or timelines. Flagged Abrupt Commands because the message is predominantly imperative and blunt (e.g., \u201cNeed a comp bump... update the offer doc and get Finance approval today... send it for signature ASAP\u201d) with no softening language or collaboration. The suggested rephrase keeps the same requests and deadlines but tones down the abruptness, clarifies the actions needed, and signals that the additional items require confirmation/approval.",
+      "error": null
+    },
+    {
+      "id": 92,
+      "type": "hard_negative",
+      "message": "Quick note before my comp convo: I\u2019m excited to keep owning the current Q2 roadmap and hitting the deliverables we already agreed on\u2014no additions implied. If the salary adjustment isn\u2019t feasible right now, I\u2019m happy to align on the existing scope and revisit comp at the next review with clear goals.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is concise, professional, and cooperative. It does not lead with an unnecessary apology (no Apology Hedge), does not over-justify the request, and is not an unclear help ask. While it affirms commitment to agreed deliverables, this is a reasonable statement of intent rather than an unqualified, risky promise that would trigger Hard Commit. There are no added feature requests (Scope Creep), no unsupported factual claims (Unverified Assurance), no abrupt directives, public callouts, or dismissive language.",
+      "error": null
+    },
+    {
+      "id": 93,
+      "type": "positive",
+      "message": "Hey team \u2014 looping back on my comp: finance already signed off on the salary bump and HR has the updated offer letter ready, so we can wrap this today. I\u2019ll take the lead on the new initiative and guarantee we\u2019ll hit the Q2 targets once the raise is in place.",
+      "ground_truth_flags": [
+        "Unverified Assurance"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance"
+      ],
+      "reason": "Hard Commit (4): The phrase \u201cguarantee we\u2019ll hit the Q2 targets\u201d is an unqualified promise of an outcome with no caveats or dependencies, which matches the Hard Commit flag. Unverified Assurance (6): The message presents approvals as definitive facts (\u201cfinance already signed off,\u201d \u201cHR has the updated offer letter ready\u201d) without sourcing or evidence; this triggers the Unverified Assurance flag. The suggested rephrase softens the assurance about approvals (\u201cto my knowledge\u201d) and replaces the absolute \u201cguarantee\u201d with a committed but realistic statement (\u201cwill work to meet\u201d), preserving the original intent while removing the unqualified claims.",
+      "error": null
+    },
+    {
+      "id": 94,
+      "type": "hard_negative",
+      "message": "Heads up: I\u2019m planning to go into tomorrow\u2019s comp chat aiming for the Senior PM band and a +15% adjustment\u2014*pending HR\u2019s formal review and the updated leveling doc* (I don\u2019t have confirmation yet). If you\u2019re aligned, can you share any guidance or comp ranges you\u2019re comfortable putting in writing before I set expectations?",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific, and polite request for input on compensation guidance and ranges. It does not lead with an unnecessary apology, over-justify, or make an unqualified commitment. The caveat about HR review and lack of confirmation avoids presenting an unverified assurance. Therefore no flags apply.",
+      "error": null
+    },
+    {
+      "id": 95,
+      "type": "positive",
+      "message": "Update the offer to $190k base + 20% bonus and send it today. Finance already approved it and legal is good, so lock the comp by EOD and I\u2019ll have them signed by Friday\u2014guaranteed.",
+      "ground_truth_flags": [
+        "Unverified Assurance",
+        "Hard Commit",
+        "Abrupt Commands"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance",
+        "Abrupt Commands"
+      ],
+      "reason": "Hard Commit (4): The message includes an unqualified guarantee\u2014\u201cI\u2019ll have them signed by Friday\u2014guaranteed.\u201d\u2014which is an absolute promise about an outcome/delivery with no caveats. Unverified Assurance (6): The claim that \u201cFinance already approved it and legal is good\u201d is presented as fact without citation or confirmation. Abrupt Commands (7): The message is predominantly imperative (\u201cUpdate the offer\u2026 send it today\u2026 lock the comp by EOD\u201d) with no softening language or context. The suggested rephrase keeps the same directive and timeline but uses softer language (please/expect) and clarifies approvals as statements rather than absolute guarantees, reducing the hard-commit and abrupt tone while preserving intent.",
+      "error": null
+    },
+    {
+      "id": 96,
+      "type": "hard_negative",
+      "message": "Quick update on salary: I\u2019ve asked Finance/HR to confirm whether the comp adjustment is within this cycle\u2019s approved ranges, and I\u2019ll share their written response as soon as it comes back. If it\u2019s not feasible this cycle, I\u2019ll come with a concrete alternative package (bonus/equity/title scope) before our next sync.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Hard Commit"
+      ],
+      "reason": "Flag 4 (Hard Commit): The message makes an unqualified promise about deliverables/timing\u2014specifically, \"I\u2019ll come with a concrete alternative package... before our next sync.\" That is a definitive commitment to deliver a specific outcome by a specific time with no caveats. The suggested rephrase preserves the same intent and content but slightly softens phrasing around timing and delivery language (\"propose\" and \"when it comes back\") while keeping the message clear.",
+      "error": null
+    },
+    {
+      "id": 97,
+      "type": "positive",
+      "message": "Send me your updated comp expectations by EOD. Strip out the long justification and just give the number and start date.",
+      "ground_truth_flags": [
+        "Abrupt Commands"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "Abrupt Commands: The message is predominantly imperative and blunt\u2014'Send me... Strip out...'\u2014with no softening language (please) or brief rationale. This direct style can come across as terse in a workplace channel. The suggested rephrase preserves the original ask and constraints but adds \u201cplease\u201d and slightly smoother phrasing to make it more collaborative while keeping the same requirements.",
+      "error": null
+    },
+    {
+      "id": 98,
+      "type": "hard_negative",
+      "message": "Before we lock the offer, I need your salary expectations and any competing comps you\u2019re using\u2014so we can calibrate fairly. If you can share a number and your rationale today, I\u2019ll review and get back to you with our range.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a direct, specific request for salary expectations and comps with a clear timeline; it does not lead with unnecessary apology (no Apology Hedge), does not over-justify, is not vague, does not make an unqualified promise, does not add scope, does not assert unverified facts, is not an abrupt command, does not call out anyone publicly, and does not dismiss discussion. Therefore none of the flags apply.",
+      "error": null
+    },
+    {
+      "id": 99,
+      "type": "positive",
+      "message": "Send me your updated comp expectations by EOD. Cut the back-and-forth and pick a number.",
+      "ground_truth_flags": [
+        "Abrupt Commands"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands",
+        "Dismissive Replies"
+      ],
+      "reason": "Flag 7 (Abrupt Commands): The message is predominantly imperative and blunt\u2014\"Send me... by EOD\" and \"Cut the back-and-forth and pick a number\"\u2014with no softening language or brief rationale. Flag 9 (Dismissive Replies): The phrase \"Cut the back-and-forth\" shuts down further discussion and is dismissive of potential clarifying questions. The suggested rephrase keeps the original intent and deadline but uses a more polite, collaborative tone that reduces abruptness and dismissal.",
+      "error": null
+    },
+    {
+      "id": 100,
+      "type": "hard_negative",
+      "message": "Re: your salary ask \u2014 I\u2019m not approving the number you sent as-is. If you can share the competing offer details and your updated scope for the next 6 months, I\u2019ll put together a counter and we can close this quickly.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a direct, professional response to a salary request and does not clearly match any flag. It asks for specific information (competing offer details and updated scope) and offers a follow-up action (put together a counter) \u2014 this is a concrete, collaborative request rather than an unnecessary apology, over-justification, vague help ask, hard unqualified commitment, scope creep, unverified assurance, abrupt command, public callout, or dismissive reply.",
+      "error": null
+    },
+    {
+      "id": 101,
+      "type": "positive",
+      "message": "@jordan why did you tell the candidate we \"can\u2019t go above\" $150k without checking with me first? Now they\u2019re pushing for $180k in #recruiting and it makes us look disorganized.",
+      "ground_truth_flags": [
+        "Public Callouts"
+      ],
+      "predicted_flags": [
+        "Public Callouts"
+      ],
+      "reason": "This message publicly calls out a colleague (@jordan) in-channel and assigns blame for miscommunication, which matches the Public Callouts flag. The phrasing (\u201cwhy did you tell\u2026 without checking with me first?\u201d and \u201cit makes us look disorganized\u201d) is corrective and accusatory in a public thread. The suggested rephrase preserves the original intent\u2014asking why the candidate was told a hard cap without consultation and pointing out the consequence\u2014while shifting to a more collaborative tone that asks to sync and align next steps, reducing public shaming.",
+      "error": null
+    },
+    {
+      "id": 102,
+      "type": "hard_negative",
+      "message": "@Sam please set up 15 mins today to finalize your salary adjustment\u2014no drama, just numbers. I\u2019m not debating this in here; send your latest expectations + competing offer details in DM before the call.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Abrupt Commands",
+        "Public Callouts"
+      ],
+      "reason": "Flag 7 (Abrupt Commands): The message is predominantly imperative and blunt\u2014\"please set up 15 mins today... send... in DM before the call\"\u2014with little softening or collaborative tone. The rephrase keeps the same ask but uses softer language (\"could you please schedule\") and a clearer, polite request. Flag 8 (Public Callouts): The message calls out @Sam in-channel about a sensitive topic (salary) and instructs them to provide competing-offer details, which is a public callout of a private matter. The rephrase preserves the request while emphasizing privacy and a less confrontational tone. No other flags were applied because the message contains a clear, specific request (so it\u2019s not vague), doesn\u2019t over-justify or hedging, and doesn\u2019t make unqualified promises or add scope.",
+      "error": null
+    },
+    {
+      "id": 103,
+      "type": "positive",
+      "message": "@jordan calling you out here in #eng-leadership: why are you negotiating salary after we already set expectations\u2014this is wasting everyone\u2019s time. Decide by EOD today and I will have your new comp approved and in writing by 5pm tomorrow, guaranteed.",
+      "ground_truth_flags": [
+        "Public Callouts",
+        "Hard Commit"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance",
+        "Abrupt Commands",
+        "Public Callouts"
+      ],
+      "reason": "Public Callouts (8): The message publicly calls out @jordan in a channel (#eng-leadership) and criticizes their behavior (\u201ccalling you out\u2026 this is wasting everyone\u2019s time\u201d), which is a blaming public callout. Abrupt Commands (7): The directive \u201cDecide by EOD today\u201d is an imperative with little softening or collaboration language. Hard Commit (4): \u201cI will have your new comp approved and in writing by 5pm tomorrow\u201d is an unqualified promise with a specific deadline. Unverified Assurance (6): The addition of \u201cguaranteed\u201d presents a firm assurance without evidence or confirmation from others/approvals. The suggested rephrase preserves the original intent (ask for a decision by EOD and promise to pursue approval by 5pm tomorrow) while removing the public blaming tone, softening the command, and avoiding an absolute guarantee.",
+      "error": null
+    },
+    {
+      "id": 104,
+      "type": "hard_negative",
+      "message": "@Sam please set up 15 mins today to finalize your salary adjustment\u2014no drama, just numbers. I\u2019m not debating this in here; send your latest expectations + competing offer details in DM before the call.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "Abrupt Commands: The message is predominantly imperative\u2014directing @Sam to schedule time and provide documents\u2014without softening language or collaboration. The rephrase preserves the original intent (set up a 15-minute meeting today and send expectations/competing offer details in DM beforehand) but uses a more polite, collaborative tone (\"could you please\" and \"please DM\") which is more appropriate for requests in-channel.",
+      "error": null
+    },
+    {
+      "id": 105,
+      "type": "positive",
+      "message": "No \u2014 we\u2019re not renegotiating your salary right now. Drop it and get back to work.",
+      "ground_truth_flags": [
+        "Dismissive Replies"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands",
+        "Dismissive Replies"
+      ],
+      "reason": "Abrupt Commands (7): The message is predominantly imperative and blunt\u2014'Drop it and get back to work'\u2014with no softening language or rationale. Dismissive Replies (9): The phrasing shuts down the conversation tersely ('No \u2014 we\u2019re not renegotiating...') and dismisses the request without engagement. The suggested rephrase keeps the same decision and directive but uses a calmer tone and a polite request form, which is more appropriate for workplace communication.",
+      "error": null
+    },
+    {
+      "id": 106,
+      "type": "hard_negative",
+      "message": "I\u2019m not signing off on a salary bump just because it\u2019s being asked for\u2014send me a tight case: scope changes since last comp cycle, market data, and the impact if we don\u2019t adjust. If you get that to me today, I\u2019ll review and give you a clear answer by EOD.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Hard Commit",
+        "Abrupt Commands"
+      ],
+      "reason": "Flagged Hard Commit (4) because the sender states a definitive promise to 'review and give you a clear answer by EOD'\u2014an unqualified commitment about an outcome and timeline. Flagged Abrupt Commands (7) because the message is predominantly imperative and blunt ('send me a tight case') with little softening or collaborative language. The suggested rephrase keeps the same intent and requirements but softens the tone and clarifies the request while preserving the promised review timeline.",
+      "error": null
+    },
+    {
+      "id": 107,
+      "type": "positive",
+      "message": "No \u2014 we\u2019re not renegotiating your salary right now. Drop it and get back to work.",
+      "ground_truth_flags": [
+        "Dismissive Replies"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands",
+        "Dismissive Replies"
+      ],
+      "reason": "Flag 7 (Abrupt Commands): The message is predominantly imperative and blunt\u2014'Drop it and get back to work'\u2014with no softening, explanation, or collaborative language. Flag 9 (Dismissive Replies): The message shuts down the discussion and minimizes the topic with a terse negation and directive ('No \u2014 we\u2019re not renegotiating...'), which dismisses the person's request without engagement. The suggested rephrase keeps the same intent and firmness but uses calmer, more professional language that still directs the recipient to stop pursuing the request and resume work.",
+      "error": null
+    },
+    {
+      "id": 108,
+      "type": "hard_negative",
+      "message": "I\u2019m not signing off on a salary bump just because it\u2019s being asked for\u2014send me a tight summary of scope changes, impact metrics, and what you\u2019re currently seeing in the market. If it checks out, I\u2019ll take it to Finance and we can move quickly.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "Abrupt Commands: The message is predominantly imperative and blunt\u2014'send me a tight summary...'\u2014with minimal softening or collaborative language. The opening 'I\u2019m not signing off...' is directive and shuts down the ask without a brief, courteous transition. The suggested rephrase keeps the same intent and requirements but uses softer wording ('Please send', 'concise') and a clearer, more professional tone while preserving the original decision path.",
+      "error": null
+    },
+    {
+      "id": 109,
+      "type": "positive",
+      "message": "Sorry to bother you and this is probably a dumb question, but I\u2019m seeing a bunch of 500s on the checkout service since the last deploy and I\u2019m not sure where to start. My bad if I missed something obvious\u2014can someone point me at the right logs or dashboard?",
+      "ground_truth_flags": [
+        "Apology Hedge"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Apology Hedge: The message leads with multiple unnecessary apologies/minimizing phrases (\u201cSorry to bother you,\u201d \u201cthis is probably a dumb question,\u201d \u201cMy bad if I missed something obvious\u201d) before the actual request. Over-Justifying: The sender adds extra self-defensive language and qualifiers that aren\u2019t needed to get help. The suggested rephrase removes those hedges while preserving the same request and intent, making it direct and easier for recipients to act on.",
+      "error": null
+    },
+    {
+      "id": 110,
+      "type": "hard_negative",
+      "message": "Not taking the blame here, but I need a second set of eyes: the incident channel shows 5xx spikes right after the 14:02 deploy, and I\u2019m seeing elevated DB connection timeouts in prod. Can someone confirm whether we should roll back or throttle traffic while I keep digging into logs?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The original message opens with 'Not taking the blame here, but', which is an unnecessary preface minimizing responsibility before making a clear operational ask. That phrasing matches the Apology Hedge pattern. The suggested rephrase removes the hedging language while preserving the exact intent and details (timing of deploy, 5xx spikes, DB timeouts, and the question about rollback vs throttling), making the request more direct and easier for recipients to act on.",
+      "error": null
+    },
+    {
+      "id": 111,
+      "type": "positive",
+      "message": "Sorry to bother you and this is probably a dumb question, but I\u2019m freaking out a bit \u2014 I think my change might\u2019ve caused the 500s in prod. Could someone please take a quick look with me or point me at the right dashboard/logs to confirm?",
+      "ground_truth_flags": [
+        "Apology Hedge"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The message begins with multiple apologies and self-minimizing phrases (\u201cSorry to bother you,\u201d \u201cthis is probably a dumb question\u201d), which unnecessarily hedges before the actual request. Flag 2 (Over-Justifying): The message includes extra emotional justification and defensive language (\u201cI\u2019m freaking out a bit\u201d) that go beyond useful context and read like trying to prove the urgency/deservingness of help. The suggested rephrase removes the hedging and emotional justification while keeping the same intent and a clear, specific ask (confirm whether the change caused 500s and pointer to dashboards/logs).",
+      "error": null
+    },
+    {
+      "id": 112,
+      "type": "hard_negative",
+      "message": "Not taking the blame here, but I need a second set of eyes: the incident channel shows 5xx spikes right after the 14:02 deploy, and I\u2019m seeing elevated DB connection timeouts in prod. Can someone confirm whether we should roll back or throttle traffic while I keep digging into logs?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flag 1 (Apology Hedge): The message opens with 'Not taking the blame here, but...'\u2014a hedging phrase that minimizes or deflects responsibility before the actual request. The rest of the message is a clear, specific operational ask and does not require the defensive preface. The suggested rephrase removes the unnecessary self-blame while keeping the same intent and technical details so recipients can respond directly.",
+      "error": null
+    },
+    {
+      "id": 113,
+      "type": "positive",
+      "message": "hey folks, sorry to bug you during the incident \u2014 I\u2019ve been staring at the 5xx spike for like an hour and I\u2019m probably missing something obvious, but I checked the last deploy diff, tailed api logs in prod, compared the error rate to last week, and even tried rolling back locally (can\u2019t do prod rollback without approval) and I still can\u2019t tell if the timeout is coming from our service or the payments provider. I don\u2019t want to spam on-call or wake anyone up if it\u2019s just me, but I\u2019m kind of blocked because I don\u2019t have access to the vendor dashboard and I\u2019m not sure what the next best step is \u2014 could someone point me at what to check next?",
+      "ground_truth_flags": [
+        "Over-Justifying"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flagged Apology Hedge because the message begins with unnecessary apologetic language (\u201csorry to bug you during the incident \u2026 I\u2019m probably missing something obvious\u201d) that precedes the actual ask. Flagged Over-Justifying because the message goes into lengthy defensive detail about everything already tried and why they\u2019re hesitant to wake on-call (multiple clauses explaining the author\u2019s attempts and concerns), which reads like proving they deserve help. The suggested rephrase removes the apologetic preface and trims the defensive framing while preserving the same facts and the direct request for the next steps or vendor verification.",
+      "error": null
+    },
+    {
+      "id": 114,
+      "type": "hard_negative",
+      "message": "Hey team\u2014sorry to ping during the incident; I\u2019m seeing 500s spike on /checkout in prod and the dashboard points to the payments service. I restarted the pod once and tailed the logs (looks like timeouts to the upstream), but I\u2019m not sure if we should rollback or bump the timeout\u2014can someone confirm the right move?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flagged Apology Hedge because the message begins with an unnecessary apology ('sorry to ping during the incident;') before stating the issue and request. The rest of the message is concise, provides useful context (500s, payments service, actions taken), and asks a clear question, so no other flags apply. The suggested rephrase removes the hedging apology while keeping the same facts and request, making the message more direct and action-oriented.",
+      "error": null
+    },
+    {
+      "id": 115,
+      "type": "positive",
+      "message": "hey, sorry to bug you during the incident \u2014 I\u2019m kinda stuck and I swear I tried a bunch before asking: I tailed the api pods, compared the last deploy diff, replayed the failing request in staging, checked redis/DB metrics, and even rolled back locally but I still can\u2019t pin down why we\u2019re getting 502s only on /checkout. I\u2019m hesitant to ping too many people but I\u2019m blocked on what to check next and don\u2019t want to make it worse, could someone sanity-check my approach or point me at the right logs/dashboards?",
+      "ground_truth_flags": [
+        "Over-Justifying"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Over-Justifying"
+      ],
+      "reason": "Flagged Apology Hedge because the message begins with an unnecessary apology and minimizing language (\u201csorry to bug you\u201d, \u201cI\u2019m kinda stuck\u201d) before the actual ask. Flagged Over-Justifying because the author includes an extended defense of effort (\u201cI swear I tried a bunch\u2026\u201d) and lists many attempts in a way that reads like proving they deserve help. The suggested rephrase removes the apologetic preface and trims the defensive tone while preserving the concrete troubleshooting steps and the clear request for a sanity-check or pointers to logs/dashboards.",
+      "error": null
+    },
+    {
+      "id": 116,
+      "type": "hard_negative",
+      "message": "Hey team\u2014sorry to ping during the incident; I\u2019m seeing 500s spike on /api/orders right after the 14:05 deploy. I checked the logs and it looks like the DB pool is exhausted; could someone confirm whether we should rollback or bump the pool size while I keep digging?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Apology Hedge triggered because the message begins with an unnecessary apology ('sorry to ping during the incident') before making a clear, time-sensitive request. The rest of the message is specific and actionable, so only the leading apology was flagged. The suggested rephrase removes the prefatory apology while keeping the same intent, details (time, endpoint, likely cause), and request for a decision.",
+      "error": null
+    },
+    {
+      "id": 117,
+      "type": "positive",
+      "message": "hey, sorry to bug everyone but something seems really off with prod right now and I\u2019m kinda stuck. can someone take a look or tell me what I should do?",
+      "ground_truth_flags": [
+        "Vague Help Ask"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Vague Help Ask"
+      ],
+      "reason": "Flagged Apology Hedge because the message opens with unnecessary apologetic phrasing (\u201csorry to bug everyone\u201d) before the real ask. Flagged Vague Help Ask because the request lacks concrete details about what 'off with prod' means (no error messages, affected services, times, or steps already tried), making it hard for others to respond effectively. The suggested rephrase removes the apologetic hedge and keeps the same intent while being more direct and actionable; it does not add new technical details, which preserves the original meaning.",
+      "error": null
+    },
+    {
+      "id": 118,
+      "type": "hard_negative",
+      "message": "Sorry to bother\u2014during the incident I\u2019m seeing elevated 5xx on the checkout API after deploy 2f3c9a1; in Kibana `checkout-prod` the top error is `TimeoutError: upstream cart-service after 3000ms` starting 02:14 UTC. I\u2019ve already rolled back to 9c1d7e0 and restarted the pods (errors dropped but not to baseline); can someone confirm whether to keep the rollback or also disable the cart-service feature flag `cart_v2` while we investigate?",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flagged for Apology Hedge: the message begins with 'Sorry to bother\u2014', which unnecessarily leads with an apology before making a clear operational request. The rest of the message is specific, actionable, and includes relevant troubleshooting steps, so no other flags apply. The suggested rephrase removes the initial apology while preserving the exact intent and details.",
+      "error": null
+    },
+    {
+      "id": 119,
+      "type": "positive",
+      "message": "hey everyone, sorry to bother during the incident but can someone help? I\u2019ve been staring at the deploy/alerts for like an hour and tried restarting stuff, checking logs, and re-running the pipeline but I still don\u2019t get what\u2019s going on and I\u2019m kinda blocked, so any ideas? also @oncall-team why didn\u2019t you catch this earlier / update the channel \u2014 I\u2019m getting paged and don\u2019t know what I\u2019m supposed to do.",
+      "ground_truth_flags": [
+        "Vague Help Ask",
+        "Over-Justifying",
+        "Public Callouts"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Public Callouts"
+      ],
+      "reason": "Apology Hedge (flag 1): The message begins with an unnecessary apology (\u201csorry to bother during the incident\u201d) that precedes the actual ask. Public Callouts (flag 8): The message calls out @oncall-team in a blaming way (\u201cwhy didn\u2019t you catch this earlier / update the channel\u201d), which is a corrective public callout. The suggested rephrase keeps the same intent and details about troubleshooting steps and the need for help, while removing the upfront apology and the blaming tone toward the oncall team so it will be received more constructively.",
+      "error": null
+    },
+    {
+      "id": 120,
+      "type": "hard_negative",
+      "message": "Sorry to bother\u2014during the incident I\u2019m seeing elevated 5xx on the checkout API after the 14:22 deploy (release 3.18.4); logs show `NullReferenceException: CartService.ApplyDiscount()` on `POST /checkout` with `traceId=9f2c...` and it started at 14:24. I\u2019m about to roll back unless someone confirms whether we should instead disable the discount feature flag `discount_v2` to mitigate faster.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Apology Hedge"
+      ],
+      "reason": "Flagged as Apology Hedge because the message begins with an unnecessary apology phrase (\u201cSorry to bother\u2014\u201d) before making a clear operational request. The rest of the message is specific and actionable (error, timestamps, traceId, and a proposed mitigation), so the apology is extraneous. The suggested rephrase removes the apology while preserving all original details and the same decision-oriented ask, making the message more direct and efficient for responders.",
+      "error": null
+    },
+    {
+      "id": 121,
+      "type": "positive",
+      "message": "Hey folks\u2014seeing a bunch of incident noise and I\u2019m not sure what\u2019s going on, can someone jump in and help? I already told leadership we will have this fully resolved and customers back to normal by 3pm today.",
+      "ground_truth_flags": [
+        "Hard Commit",
+        "Vague Help Ask"
+      ],
+      "predicted_flags": [
+        "Vague Help Ask",
+        "Hard Commit"
+      ],
+      "reason": "Flag 3 (Vague Help Ask): The request for help is broad and lacks concrete details about the incident (no error text, scope, affected services, or recent troubleshooting), making it hard for responders to act. The phrase \u201cnot sure what\u2019s going on, can someone jump in and help?\u201d triggered this. Flag 4 (Hard Commit): The message makes an unqualified promise to leadership \u2014 \u201cwe will have this fully resolved and customers back to normal by 3pm today\u201d \u2014 which is a definitive delivery commitment with no caveats or dependencies. The suggested rephrase keeps the same intent (requesting assistance and communicating leadership expectations) but softens the hard commitment to an achievable, non-definitive goal (\u201caiming to have this resolved\u201d) and keeps the ask clearer and polite.",
+      "error": null
+    },
+    {
+      "id": 122,
+      "type": "hard_negative",
+      "message": "We\u2019re aiming to have the incident fully mitigated today and a patch ready to roll right after, but I don\u2019t want to overcommit until we finish verifying the root cause and run the rollback tests. I\u2019ll share the next update as soon as we have confirmation from on-call and SRE.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, cautious status/update. It does not start with unnecessary apology (no Apology Hedge), does not over-justify, and the delivery timeline is explicitly qualified by verification steps (so it is not an unqualified Hard Commit). No other flags apply.",
+      "error": null
+    },
+    {
+      "id": 123,
+      "type": "positive",
+      "message": "Heads up: we\u2019ll have the incident fully resolved and the fix shipped to prod by 3pm today, guaranteed. I\u2019ve already told Sales it\u2019s locked in so they can reassure the customer.",
+      "ground_truth_flags": [
+        "Hard Commit"
+      ],
+      "predicted_flags": [
+        "Hard Commit"
+      ],
+      "reason": "Flag 4 (Hard Commit): The message makes an unqualified, definitive promise \u2014 \u201cfully resolved\u2026 by 3pm today, guaranteed\u201d and \u201clocked in\u201d \u2014 with no caveats about dependencies or risks. Those phrases present a certainty about delivery/outcome and triggered the Hard Commit flag. The suggested rephrase preserves the original intent and meaning while using slightly clearer phrasing; it keeps the commitment but removes the word \u201cguaranteed,\u201d which is the strongest wording that caused the flag.",
+      "error": null
+    },
+    {
+      "id": 124,
+      "type": "hard_negative",
+      "message": "We\u2019re aiming to have the incident fully mitigated today and a patch ready to roll right after, but I don\u2019t want to overcommit until we finish verifying the root cause and run the rollback tests. I\u2019ll share the next update as soon as we have confirmed timing from on-call.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, cautious status update that includes appropriate caveats (\u2019aiming\u2019 and \u2018don\u2019t want to overcommit\u2019). It does not lead with unnecessary apology or defensiveness, is not overly long or justificatory, does not make an unqualified guarantee, and includes a next-step commitment to share timing. None of the flag criteria are clearly met.",
+      "error": null
+    },
+    {
+      "id": 125,
+      "type": "positive",
+      "message": "Hey team\u2014while we\u2019re fixing the incident, can we also add a real-time status banner in-app, auto-post updates to the status page + Slack, and spin up an audit log so we can show exactly what happened later? Should be a quick add and would be huge for customer trust.",
+      "ground_truth_flags": [
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Scope Creep"
+      ],
+      "reason": "Scope Creep (flag 5): The message asks to add multiple additional features ('real-time status banner', 'auto-post updates', 'spin up an audit log') on top of the ongoing incident fix \u2014 this is adding new requirements in the same request without acknowledging tradeoffs or resourcing. Hard Commit (flag 4): The phrase 'Should be a quick add' asserts an unqualified claim about effort/delivery with no caveats; that definitive assurance about implementation effort triggered the Hard Commit flag. The suggested rephrase keeps the same intent (requesting those features now) but removes the unqualified claim about how quick it will be and asks to evaluate feasibility, which reduces the hard-commit tone and surfaces the tradeoff.",
+      "error": null
+    },
+    {
+      "id": 126,
+      "type": "hard_negative",
+      "message": "Heads up: for the incident response, let\u2019s keep this strictly to containment + customer comms and defer any \u201cnice-to-have\u201d improvements (extra dashboards, automation, retro action items) to a follow-up ticket after we\u2019re stable. I\u2019ll draft the status update now and route it for quick approval.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is clear, directive but collaborative, and focused on prioritization for an incident response. It does not lead with unnecessary apology (no Apology Hedge), does not over-justify, is not a vague help request, does not make an unqualified promised delivery, does not add extra scope (it defers extras rather than adding them), does not assert unverified facts, is not an abrupt command, does not call out anyone publicly, and does not shut down discussion dismissively. No flags apply.",
+      "error": null
+    },
+    {
+      "id": 127,
+      "type": "positive",
+      "message": "Hey team\u2014while we\u2019re fixing the incident, can we also add a real-time status banner in-app, auto-post updates to the status page + Slack, and spin up an audit log so we can show exactly what happened later? Should be a quick add and would be huge for customer trust.",
+      "ground_truth_flags": [
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Scope Creep"
+      ],
+      "reason": "Scope Creep: The message asks the team to add multiple additional features (in-app status banner, auto-posting, audit log) on top of the ongoing incident fix without acknowledging trade-offs, time, or resourcing. Phrases like \u201cShould be a quick add\u201d minimize potential effort and act as an implicit request to expand scope during the incident response. The rephrase keeps the same intent but explicitly invites discussion of scope and trade-offs, making the ask clearer and less likely to push unplanned work into the current incident response.",
+      "error": null
+    },
+    {
+      "id": 128,
+      "type": "hard_negative",
+      "message": "Heads up: for the incident response, let\u2019s keep this strictly to containment + customer comms and defer any \u201cnice-to-have\u201d improvements (extra dashboards, automation, retro action items) to a follow-up once we\u2019re stable. Please capture ideas in the doc, but no new deliverables during the live incident.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, concise operational directive to limit work during an incident. It does not lead with an unnecessary apology (no Apology Hedge), doesn\u2019t over-justify the request, isn\u2019t vague, doesn\u2019t make an unqualified delivery promise, and isn\u2019t adding extra scope. While directive, it\u2019s collaborative ('let\u2019s') and not abrupt, so Abrupt Commands does not apply. No other flags are triggered.",
+      "error": null
+    },
+    {
+      "id": 129,
+      "type": "positive",
+      "message": "No, we don\u2019t need to keep debating this \u2014 it\u2019s already approved and engineering\u2019s on board, so just ship the hotfix today. While we\u2019re at it, let\u2019s roll out the new alerting dashboard + auto customer email notifications and add SSO support so we can announce it as a full reliability upgrade.",
+      "ground_truth_flags": [
+        "Unverified Assurance",
+        "Dismissive Replies",
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Scope Creep",
+        "Unverified Assurance",
+        "Abrupt Commands"
+      ],
+      "reason": "Scope Creep (5): The message tacks on multiple additional features and requirements (\u201croll out the new alerting dashboard + auto customer email notifications and add SSO support\u201d) on top of the original hotfix request without acknowledging tradeoffs or resourcing. Unverified Assurance (6): The claim that \u201cit\u2019s already approved and engineering\u2019s on board\u201d is presented as fact without a citation or confirmation. Abrupt Commands (7): Phrases like \u201cjust ship the hotfix today\u201d are imperative and blunt, lacking collaborative language or acknowledgement of feasibility. The suggested rephrase keeps the original intent and asks but softens the imperative, clarifies feasibility, and reduces the scope-creep tone so recipients can assess tradeoffs.",
+      "error": null
+    },
+    {
+      "id": 130,
+      "type": "hard_negative",
+      "message": "Heads up: it *sounds* like the hotfix is basically green-lit and we can tell customers it\u2019s resolved, but I don\u2019t have a confirmed approval chain yet\u2014can someone from Eng + Legal drop the explicit go/no-go in-thread? Once we have that, I\u2019ll align Support on the exact wording and timeline.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Unverified Assurance"
+      ],
+      "reason": "Flag 6 (Unverified Assurance): The message presents the central claim that the hotfix is \u201cbasically green-lit\u201d and that we can tell customers it\u2019s resolved, despite acknowledging no confirmed approval chain. That presents an assumption as actionable fact and asks others to confirm; this matches Unverified Assurance. The suggested rephrase keeps the same intent but removes the stronger implication that customers can be told we've resolved the issue and instead frames the status as unconfirmed and requests explicit confirmation from Engineering and Legal.",
+      "error": null
+    },
+    {
+      "id": 131,
+      "type": "positive",
+      "message": "We\u2019re good to push the hotfix right now \u2014 engineering already signed off and legal is totally fine with the workaround, so no need to wait. This will 100% stop the incident and customers will be happy once it\u2019s live.",
+      "ground_truth_flags": [
+        "Unverified Assurance"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Unverified Assurance"
+      ],
+      "reason": "Flag 4 (Hard Commit): The message makes unqualified promises with definitive language \u2014 \u201cno need to wait,\u201d and \u201cThis will 100% stop the incident,\u201d presenting guaranteed outcomes with no caveats or contingency plan. Flag 6 (Unverified Assurance): It asserts approvals and consensus as facts \u2014 \u201cengineering already signed off\u201d and \u201clegal is totally fine\u201d \u2014 without citation or evidence in-channel, and predicts customer reaction as certain. The suggested rephrase keeps the intent (push the hotfix now if no objections) but removes absolute guarantees and frames approvals and outcomes more cautiously, adding monitoring/rollback contingency.",
+      "error": null
+    },
+    {
+      "id": 132,
+      "type": "hard_negative",
+      "message": "Heads up: we\u2019re in incident response mode\u2014once Eng confirms the fix is green in staging and on-call signs off, I\u2019ll tell Support to message impacted customers with the updated ETA. I\u2019m drafting the comms now, but I won\u2019t send anything until we\u2019ve got explicit approval + links to the verification.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is clear, concise, and appropriately conditional. It doesn't lead with an unnecessary apology (no Apology Hedge), doesn't over-justify, isn't a vague help ask, and doesn't make an unqualified promise\u2014the actions are conditional on engineering confirmation and on-call sign-off. There are no added requirements (Scope Creep), no unverified assertions presented as fact, no abrupt commands, no public callouts, and no dismissive language. Therefore no flags apply.",
+      "error": null
+    },
+    {
+      "id": 133,
+      "type": "positive",
+      "message": "Get the incident bridge up now. Roll back the last deploy and page on-call for API + DB, start a full log pull.",
+      "ground_truth_flags": [
+        "Abrupt Commands"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "Abrupt Commands: The message is a series of direct imperatives (\u201cGet\u2026\u201d, \u201cRoll back\u2026\u201d, \u201cpage\u2026\u201d, \u201cstart\u2026\u201d) with no softening language or collaboration phrasing. That makes it come across blunt and directive rather than a clear team request. The suggested rephrase keeps the same urgency and actions but adds a polite softener and slightly clearer wording (\"on-call engineers\" and \"please\"), which improves tone while preserving the original intent.",
+      "error": null
+    },
+    {
+      "id": 134,
+      "type": "hard_negative",
+      "message": "Need a quick status check on the incident\u2014what\u2019s the current impact and ETA for mitigation? Please start a short timeline in the channel as you go so we can keep stakeholders aligned.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific operational request (impact, ETA, and a running timeline). It is direct but polite (includes \u201cPlease\u201d) and provides enough detail to act on, so it does not meet the high bar for any flag such as Vague Help Ask, Abrupt Commands, or others.",
+      "error": null
+    },
+    {
+      "id": 135,
+      "type": "positive",
+      "message": "Roll back the last deploy now.Page the on-call, lock writes, and post a status update in #incidents in 5 minutes.",
+      "ground_truth_flags": [
+        "Abrupt Commands"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "Flag 7 (Abrupt Commands): The message is a series of direct imperatives with no softening language, context, or acknowledgement of others' availability (\"Roll back the last deploy now. Page the on-call, lock writes, and post a status update...\"). Rephrasing adds a polite marker (\"Please\") and a small clarity improvement (\"within 5 minutes\") while preserving the original intent and urgency.",
+      "error": null
+    },
+    {
+      "id": 136,
+      "type": "hard_negative",
+      "message": "Need a quick status check on the incident\u2014what\u2019s the current impact and ETA for mitigation? Please prioritize customer-facing services first and post updates in the incident channel as you have them.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a clear, specific, and cooperative operational request: it asks for current impact and ETA, requests prioritization of customer-facing services, and asks for updates in the incident channel. It is polite (includes \u201cPlease\u201d) and not unduly apologetic, justificatory, vague, commanding, or accusatory, so none of the flag criteria are met.",
+      "error": null
+    },
+    {
+      "id": 137,
+      "type": "positive",
+      "message": "Can someone explain why we're still down? @oncall @backend-team this is on you \u2014 why didn\u2019t you catch the db connection leak before it took prod out again?",
+      "ground_truth_flags": [
+        "Public Callouts"
+      ],
+      "predicted_flags": [
+        "Public Callouts",
+        "Abrupt Commands"
+      ],
+      "reason": "Flag 8 (Public Callouts): The message calls out @oncall and @backend-team in-channel and directly blames them (\u201cthis is on you \u2014 why didn\u2019t you catch the db connection leak\u2026\u201d), which is a public corrective/blaming callout. Flag 7 (Abrupt Commands): The tone is imperative and blunt with little collaboration or softening language (e.g., \u201cthis is on you \u2014 why didn\u2019t you\u2026\u201d). The suggested rephrase keeps the original intent (requesting an explanation and pointing to a db connection leak) while removing the accusatory framing and adding a more collaborative, less confrontational phrasing.",
+      "error": null
+    },
+    {
+      "id": 138,
+      "type": "hard_negative",
+      "message": "@oncall please post the current status + ETA for mitigation in this channel and confirm whether customer impact is ongoing. If you need additional hands, say so now so we can pull in the right people.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a direct operational request but includes polite language (please) and clear, specific asks (current status, ETA, confirmation of customer impact, and whether additional help is needed). It is not an unnecessary apology, over-justifying, vague, a hard commit, scope creep, unverified assurance, public callout in a blaming way, nor a dismissal. Although imperative, it is appropriate for an incident channel and therefore does not meet the high bar for 'Abrupt Commands'.",
+      "error": null
+    },
+    {
+      "id": 139,
+      "type": "positive",
+      "message": "Sorry to bother, but @oncall-ops why didn\u2019t you catch the database failover last night \u2014 this is basic. It\u2019s already been approved to tell customers everything is resolved and there\u2019s no data loss, so push the incident update now.",
+      "ground_truth_flags": [
+        "Public Callouts",
+        "Unverified Assurance",
+        "Apology Hedge"
+      ],
+      "predicted_flags": [
+        "Apology Hedge",
+        "Unverified Assurance",
+        "Abrupt Commands",
+        "Public Callouts"
+      ],
+      "reason": "Flags applied:\n- Apology Hedge (1): The message begins with \"Sorry to bother,\" which leads with an unnecessary apology before the main point.\n- Unverified Assurance (6): The claim \"It\u2019s already been approved\" is presented as fact without citing who approved it or providing confirmation.\n- Abrupt Commands (7): \"push the incident update now\" is a blunt imperative with no softening or collaboration.\n- Public Callouts (8): Directly calls out @oncall-ops in-channel with a blaming tone (\"why didn\u2019t you catch... \u2014 this is basic\").\nSuggested rephrase keeps the original intent (ask why failover wasn\u2019t detected and request the approved update be published) while removing the minimizing apology lead, softening the command, and avoiding accusatory language. It also preserves the unverified approval claim but presents it neutrally; the sender should still consider adding the approver or confirmation if available.",
+      "error": null
+    },
+    {
+      "id": 140,
+      "type": "hard_negative",
+      "message": "@oncall please post the current status + ETA for mitigation in this channel and confirm whether the runbook steps are complete. If you\u2019re blocked, say what you need\u2014keep it factual and keep updates coming every 10 minutes.",
+      "ground_truth_flags": [],
+      "predicted_flags": [],
+      "reason": "The message is a direct, specific operational request (status, ETA, runbook completion, blocks, and 10-minute updates) and includes a polite 'please.' It does not lead with unnecessary apology, over-justify, ask a vague question, make an unqualified promise, add scope creep, assert unverified facts, call out or blame a team, or shut down discussion\u2014so none of the flag conditions are clearly met.",
+      "error": null
+    },
+    {
+      "id": 141,
+      "type": "positive",
+      "message": "No, we\u2019re not spinning up another incident bridge for this\u2014stop overreacting. Just roll back and move on.",
+      "ground_truth_flags": [
+        "Dismissive Replies"
+      ],
+      "predicted_flags": [
+        "Abrupt Commands",
+        "Dismissive Replies"
+      ],
+      "reason": "Flag 7 (Abrupt Commands): The message is predominantly imperative and blunt\u2014'stop overreacting. Just roll back and move on.'\u2014with little collaboration, softening, or rationale. Flag 9 (Dismissive Replies): The phrase 'stop overreacting' shuts down discussion and minimizes others' concerns, which is dismissive. The suggested rephrase preserves the original intent (oppose opening another bridge and request a rollback) while using calmer, more professional language that removes the dismissive phrasing and adds a polite request.",
+      "error": null
+    },
+    {
+      "id": 142,
+      "type": "hard_negative",
+      "message": "No\u2014stopping the incident response to \"circle back\" isn\u2019t an option right now. Keep the bridge active, post a 15\u2011min update with current impact, suspected root cause, and next mitigation step; I\u2019ll review and unblock anything you need.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "Abrupt Commands: The message is predominantly imperative and directive ('Keep the bridge active, post a 15\u2011min update...') with little softening language. The suggested rephrase preserves the same intent and content but adds a polite phrasing ('Please') and slightly clearer structure to reduce abruptness while keeping the original instructions.",
+      "error": null
+    },
+    {
+      "id": 143,
+      "type": "positive",
+      "message": "No, we\u2019re not doing a postmortem doc right now\u2014just get the incident closed. Also while you\u2019re in there, add auto-remediation, better alerting dashboards, and rotate the keys across all services today.",
+      "ground_truth_flags": [
+        "Dismissive Replies",
+        "Scope Creep"
+      ],
+      "predicted_flags": [
+        "Hard Commit",
+        "Scope Creep",
+        "Abrupt Commands",
+        "Dismissive Replies"
+      ],
+      "reason": "Hard Commit (4): The message demands key rotation and other deliverables 'today' as an unqualified deadline despite significant scope and potential dependencies. Scope Creep (5): In addition to closing the incident, it adds multiple separate requests (auto-remediation, better dashboards, key rotations) in the same instruction without acknowledging tradeoffs or resourcing. Abrupt Commands (7): The tone is predominantly imperative and blunt ('just get the incident closed', 'add... rotate... today') with little softening or collaboration. Dismissive Replies (9): The opening 'No, we\u2019re not doing a postmortem doc right now\u2014just...' shuts down the prior suggestion tersely. The suggested rephrase keeps the same intent and timeline but softens tone and adds polite phrasing to improve clarity and collaboration.",
+      "error": null
+    },
+    {
+      "id": 144,
+      "type": "hard_negative",
+      "message": "No\u2014stopping the incident call isn\u2019t an option right now. Post the current impact, timeline, and mitigation status in this thread, then assign an owner to each open action so we can close the loop fast.",
+      "ground_truth_flags": [],
+      "predicted_flags": [
+        "Abrupt Commands"
+      ],
+      "reason": "Flag 7 (Abrupt Commands): The message is predominantly imperative and blunt\u2014'Post the current impact... then assign an owner...'\u2014with no softening language or brief rationale beyond urgency. The opening 'No\u2014stopping the incident call isn\u2019t an option right now.' is terse and directive. The suggested rephrase preserves the original intent and instructions but uses slightly softer phrasing ('Please', 'quickly') to reduce abruptness while keeping the same requests.",
+      "error": null
+    }
+  ]
+}
