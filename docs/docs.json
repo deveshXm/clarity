@@ -49,7 +49,7 @@
         },
         {
           "anchor": "Contact support",
-          "href": "mailto:support@clarityapp.io",
+          "href": "mailto:ghulatid@gmail.com",
           "icon": "envelope"
         }
       ]
@@ -63,13 +63,13 @@
     "links": [
       {
         "label": "Support",
-        "href": "mailto:support@clarityapp.io"
+        "href": "mailto:ghulatid@gmail.com"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Add to Slack",
-      "href": "https://clarityapp.io"
+      "href": "https://clarity.rocktangle.com"
     }
   },
   "footer": {
