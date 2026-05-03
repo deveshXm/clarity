@@ -34,6 +34,39 @@ export const DEFAULT_COACHING_FLAGS: CoachingFlag[] = [
 
 export const MAX_COACHING_FLAGS = 15;
 
+// COMMUNICATION-STYLE PRESETS
+// Used to seed the textarea in the style-editor modal. Users pick a preset,
+// the description is loaded as the starting point, and they can edit on top
+// (or write fully custom).
+export const STYLE_PRESETS: Record<string, { label: string; description: string }> = {
+    direct: {
+        label: 'Direct & action-oriented',
+        description: 'I get to the point quickly. I lead with the decision, the ask, or the next step. I avoid hedging language and unnecessary preamble. I prefer short sentences and clear, specific verbs over qualifiers.',
+    },
+    warm: {
+        label: 'Warm & collaborative',
+        description: 'I lead with empathy and acknowledgement before diving into substance. I invite input, use inclusive language ("we", "let\'s"), and frame critique as a shared problem to solve. I avoid blunt or terse phrasing that could read as cold.',
+    },
+    analytical: {
+        label: 'Analytical & precise',
+        description: 'I support claims with concrete evidence, numbers, or examples. I distinguish between opinion and fact. I structure longer messages with clear premises and conclusions. I avoid vague qualifiers like "kind of" or "I think maybe".',
+    },
+    concise: {
+        label: 'Brief & low-friction',
+        description: 'I keep messages as short as possible while staying complete. I omit pleasantries when context is established. I use bullets or single sentences over paragraphs. I avoid restating context the reader already has.',
+    },
+};
+
+export type StylePresetKey = keyof typeof STYLE_PRESETS | 'custom';
+
+export const PreferredStyleSchema = z.object({
+    preset: z.enum(['direct', 'warm', 'analytical', 'concise', 'custom']).default('custom'),
+    description: z.string().max(1000).default(''),
+    updatedAt: z.coerce.date().optional(),
+});
+
+export type PreferredStyle = z.infer<typeof PreferredStyleSchema>;
+
 // BASIC USER SCHEMA (defined first for use in Slack schemas)
 export const UserSchema = z.object({
     _id: z.string(),
@@ -134,6 +167,15 @@ export const SlackUserSchema = z.object({
     autoCoachingEnabledChannels: z.array(z.string()).default([]), // Channel IDs where user has enabled auto-coaching
     coachingFlags: z.array(CoachingFlagSchema).default([]), // User's coaching flags (seeded from defaults)
     autoCoachingQuotaNotifiedAt: z.coerce.date().optional(), // Last time user was notified about quota limit (once per billing period)
+
+    // Communication-style coach (Phase 1)
+    // preferredStyle is optional — if set, it flavors auto-correct rephrases
+    // and adds a deviation section to the weekly digest. If absent, the digest
+    // is baseline-only (LLM describes how the user actually writes).
+    preferredStyle: PreferredStyleSchema.optional(),
+    digestCadence: z.enum(['off', 'daily', 'weekly']).default('off'),
+    digestTimezone: z.string().default('UTC'), // IANA TZ for scheduling
+    lastDigestSentAt: z.coerce.date().optional(),
     
     isActive: z.boolean().default(true),
     createdAt: z.coerce.date(),

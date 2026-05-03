@@ -103,13 +103,32 @@ export async function POST(request: NextRequest) {
             // Handle bot being removed from channels
             if (event.type === 'channel_left' || event.type === 'group_left') {
                 console.log(`🤖 Bot left ${event.type === 'channel_left' ? 'public channel' : 'private channel'} event received`);
-                
+
                 after(async () => {
                     try {
                         await handleBotLeftChannel(event, eventData.team_id);
                         console.log('✅ Bot left channel processing completed');
                     } catch (error) {
                         console.error('❌ Bot left channel processing error:', error);
+                    }
+                });
+            }
+
+            // Channel lifecycle events — keep botChannelsCollection in sync with reality
+            // so cached channel state can't drift (the settings modal reconciles on render
+            // as a safety net, but handling these events removes the drift at the source).
+            if (
+                event.type === 'channel_archive' || event.type === 'group_archive' ||
+                event.type === 'channel_unarchive' || event.type === 'group_unarchive' ||
+                event.type === 'channel_deleted' || event.type === 'group_deleted' ||
+                event.type === 'channel_rename' || event.type === 'group_rename'
+            ) {
+                console.log(`🔄 Channel lifecycle event: ${event.type}`);
+                after(async () => {
+                    try {
+                        await handleChannelLifecycle(event, eventData.team_id);
+                    } catch (error) {
+                        console.error(`❌ Channel lifecycle (${event.type}) processing error:`, error);
                     }
                 });
             }
@@ -236,6 +255,7 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
         const analysis = await analyzeMessage(validatedEvent.text, flags, {
             context: channelContext,
             messageTs: validatedEvent.ts,
+            preferredStyle: user?.preferredStyle?.description,
         });
         
         console.log('[MSG] AI result:', { flagged: analysis.flags.length > 0, flagCount: analysis.flags.length });
@@ -697,6 +717,84 @@ async function handleBotLeftChannel(event: Record<string, unknown>, teamId: stri
         
     } catch (error) {
         console.error('Error processing bot left channel event:', error);
+    }
+}
+
+async function handleChannelLifecycle(event: Record<string, unknown>, teamId: string) {
+    const eventType = event.type as string;
+    // Slack puts the channel id either at event.channel (string) for archive/unarchive/deleted
+    // or as an object at event.channel for rename. Normalize.
+    const channelField = event.channel;
+    const channelId = typeof channelField === 'string'
+        ? channelField
+        : (channelField as { id?: string } | undefined)?.id;
+    const renamedTo = typeof channelField === 'object' && channelField !== null
+        ? (channelField as { name?: string }).name
+        : undefined;
+
+    if (!channelId || !teamId) {
+        console.error(`❌ Missing channel id or team id in ${eventType} event`);
+        return;
+    }
+
+    const workspace = await workspaceCollection.findOne({ workspaceId: teamId });
+    if (!workspace) {
+        console.log(`⚠️ Workspace not found for team ${teamId} on ${eventType}`);
+        return;
+    }
+    const workspaceId = workspace._id.toString();
+
+    if (eventType === 'channel_archive' || eventType === 'group_archive' ||
+        eventType === 'channel_deleted' || eventType === 'group_deleted') {
+        // Drop from bot's channel cache and from any user's enabled-channels list.
+        const result = await botChannelsCollection.deleteOne({ workspaceId, channelId });
+        await slackUserCollection.updateMany(
+            { workspaceId, autoCoachingEnabledChannels: channelId },
+            { $pull: { autoCoachingEnabledChannels: channelId } } as unknown as Parameters<typeof slackUserCollection.updateMany>[1]
+        );
+        console.log(`✅ ${eventType}: removed channel ${channelId} (deleted=${result.deletedCount}) for workspace ${teamId}`);
+        return;
+    }
+
+    if (eventType === 'channel_rename' || eventType === 'group_rename') {
+        if (!renamedTo) {
+            console.warn(`⚠️ ${eventType} event missing new name for channel ${channelId}`);
+            return;
+        }
+        const result = await botChannelsCollection.updateOne(
+            { workspaceId, channelId },
+            { $set: { channelName: renamedTo } }
+        );
+        console.log(`✅ ${eventType}: channel ${channelId} renamed to #${renamedTo} (matched=${result.matchedCount})`);
+        return;
+    }
+
+    if (eventType === 'channel_unarchive' || eventType === 'group_unarchive') {
+        // On unarchive the bot's previous membership is restored. Re-cache the channel
+        // if the bot is a member; otherwise leave it out.
+        const slack = new WebClient(workspace.botToken);
+        try {
+            const info = await slack.conversations.info({ channel: channelId });
+            const ch = info.channel as { id?: string; name?: string; is_member?: boolean } | undefined;
+            if (!ch?.is_member || !ch.id || !ch.name) {
+                console.log(`📝 ${eventType}: bot is not a member of ${channelId}, skipping cache insert`);
+                return;
+            }
+            const existing = await botChannelsCollection.findOne({ workspaceId, channelId });
+            if (!existing) {
+                await botChannelsCollection.insertOne({
+                    _id: new ObjectId(),
+                    workspaceId,
+                    channelId: ch.id,
+                    channelName: ch.name,
+                    addedAt: new Date(),
+                });
+                console.log(`✅ ${eventType}: re-cached channel #${ch.name} (${ch.id})`);
+            }
+        } catch (error) {
+            console.error(`❌ ${eventType}: failed to fetch channel info for ${channelId}:`, error);
+        }
+        return;
     }
 }
 

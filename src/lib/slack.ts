@@ -1,7 +1,8 @@
 import { WebClient } from '@slack/web-api';
 import * as crypto from 'crypto';
 import { botChannelsCollection } from './db';
-import { SlackChannel, SlackUser, SUBSCRIPTION_TIERS } from '@/types';
+import { PreferredStyle, SlackChannel, SlackUser, STYLE_PRESETS, StylePresetKey, SUBSCRIPTION_TIERS } from '@/types';
+import type { StyleBaselineResult, StyleDeviationResult } from './ai';
 
 // OAuth configuration
 export const slackOAuthConfig = {
@@ -510,6 +511,97 @@ export const joinChannel = async (channelId: string, botToken: string): Promise<
     }
 };
 
+export type WorkspaceChannelEntry = {
+    channelId: string;
+    channelName: string;
+    isMember: boolean;
+    isPrivate: boolean;
+};
+
+// Live-fetch all non-archived channels in the workspace (public + private the bot
+// can see) and reconcile botChannelsCollection against bot-member status. Returns
+// the full workspace channel list with membership flags so callers can render
+// every channel in pickers (and auto-join when needed) rather than only ones the
+// bot already lives in.
+//
+// Slack's member_joined/left + channel lifecycle events keep the DB cache fresh
+// in the steady state; this function is the safety net that heals drift on
+// user-facing surfaces (e.g. the Settings modal).
+export const reconcileBotChannels = async (
+    workspaceId: string,
+    botToken: string
+): Promise<WorkspaceChannelEntry[]> => {
+    const { ObjectId } = await import('mongodb');
+    try {
+        const slack = new WebClient(botToken);
+        const allChannels: WorkspaceChannelEntry[] = [];
+        let cursor: string | undefined;
+
+        do {
+            const res = await slack.conversations.list({
+                types: 'public_channel,private_channel',
+                exclude_archived: true,
+                limit: 200,
+                cursor,
+            });
+            for (const c of res.channels ?? []) {
+                if (c.id && c.name) {
+                    allChannels.push({
+                        channelId: c.id,
+                        channelName: c.name,
+                        isMember: c.is_member ?? false,
+                        isPrivate: c.is_private ?? false,
+                    });
+                }
+            }
+            cursor = res.response_metadata?.next_cursor || undefined;
+        } while (cursor);
+
+        // DB cache mirrors only channels the bot is a member of.
+        const memberChannels = allChannels.filter(c => c.isMember);
+        const memberIds = new Set(memberChannels.map(c => c.channelId));
+        const stored = await botChannelsCollection.find({ workspaceId }).toArray();
+        const storedById = new Map(stored.map(c => [c.channelId, c]));
+
+        const staleIds = stored.filter(c => !memberIds.has(c.channelId)).map(c => c.channelId);
+        if (staleIds.length > 0) {
+            await botChannelsCollection.deleteMany({
+                workspaceId,
+                channelId: { $in: staleIds },
+            });
+        }
+
+        for (const live of memberChannels) {
+            const existing = storedById.get(live.channelId);
+            if (!existing) {
+                await botChannelsCollection.insertOne({
+                    _id: new ObjectId(),
+                    workspaceId,
+                    channelId: live.channelId,
+                    channelName: live.channelName,
+                    addedAt: new Date(),
+                });
+            } else if (existing.channelName !== live.channelName) {
+                await botChannelsCollection.updateOne(
+                    { workspaceId, channelId: live.channelId },
+                    { $set: { channelName: live.channelName } }
+                );
+            }
+        }
+
+        return allChannels;
+    } catch (error) {
+        console.error('Error reconciling bot channels, falling back to DB cache:', error);
+        const stored = await botChannelsCollection.find({ workspaceId }).toArray();
+        return stored.map(c => ({
+            channelId: c.channelId,
+            channelName: c.channelName,
+            isMember: true,
+            isPrivate: false,
+        }));
+    }
+};
+
 // Check if channel is accessible to bot (exists in botChannelsCollection)
 // Database is kept in sync via member_joined_channel and member_left_channel events
 export const isChannelAccessible = async (channelId: string, workspaceId: string): Promise<boolean> => {
@@ -871,6 +963,24 @@ export const openOnboardingModal = async (
                     type: 'divider'
                 },
                 {
+                    type: 'input',
+                    block_id: 'digest_opt_in_block',
+                    optional: true,
+                    label: { type: 'plain_text', text: 'Weekly style digest' },
+                    hint: { type: 'plain_text', text: 'A private DM each Monday summarizing how you came across.' },
+                    element: {
+                        type: 'checkboxes',
+                        action_id: 'digest_opt_in_checkbox',
+                        options: [{
+                            text: { type: 'plain_text', text: 'Send me the weekly digest' },
+                            value: 'weekly',
+                        }],
+                    },
+                },
+                {
+                    type: 'divider'
+                },
+                {
                     type: 'section',
                     text: {
                         type: 'mrkdwn',
@@ -1137,4 +1247,191 @@ export const sendAdminTransferNotification = async (
         console.error('Error sending admin transfer notification:', error);
         return false;
     }
+};
+
+// ===== Communication-Style Coach helpers =====
+
+// Open the style-editor sub-modal from inside the Settings modal. Slack requires
+// views.push (not views.open) when stacking on top of an existing modal.
+export const openStyleEditModal = async (
+    triggerId: string,
+    botToken: string,
+    currentStyle: PreferredStyle | undefined
+): Promise<boolean> => {
+    try {
+        const workspaceSlack = new WebClient(botToken);
+
+        const presetOptions = (Object.keys(STYLE_PRESETS) as Array<keyof typeof STYLE_PRESETS>).map(key => ({
+            text: { type: 'plain_text' as const, text: STYLE_PRESETS[key].label },
+            value: key,
+        }));
+        presetOptions.push({
+            text: { type: 'plain_text' as const, text: 'Custom (write your own)' },
+            value: 'custom',
+        });
+
+        const currentPreset: StylePresetKey = currentStyle?.preset ?? 'custom';
+        const currentDescription = currentStyle?.description ?? '';
+        const seedFromPreset = currentPreset !== 'custom' ? STYLE_PRESETS[currentPreset]?.description ?? '' : '';
+        const initialValue = currentDescription || seedFromPreset;
+
+        // Build the input block. If both description and preset-seed are empty
+        // (very first open with no preset), omit `initial_value` — Slack rejects
+        // an empty string here, leaving the textarea blank as desired.
+        const descriptionElement: Record<string, unknown> = {
+            type: 'plain_text_input',
+            action_id: 'style_description_input',
+            multiline: true,
+            max_length: 1000,
+            placeholder: {
+                type: 'plain_text',
+                text: 'e.g. I want to come across as direct and warm. I lead with the ask, but I always acknowledge what the other person did before critiquing.',
+            },
+        };
+        if (initialValue.length > 0) {
+            descriptionElement.initial_value = initialValue;
+        }
+
+        await workspaceSlack.views.push({
+            trigger_id: triggerId,
+            view: {
+                type: 'modal',
+                callback_id: 'style_modal',
+                title: { type: 'plain_text', text: 'Target style' },
+                submit: { type: 'plain_text', text: 'Save' },
+                close: { type: 'plain_text', text: 'Cancel' },
+                blocks: [
+                    {
+                        type: 'section',
+                        text: {
+                            type: 'mrkdwn',
+                            text: '*How do you want to come across?*\nDescribe the person you want to read as in your messages — in plain English, like you\'d explain it to a coach.',
+                        },
+                    },
+                    {
+                        type: 'context',
+                        elements: [{
+                            type: 'mrkdwn',
+                            text: '💡 *Tips for writing yours:*\n• Use first person ("I", "my").\n• Be specific — name habits ("I lead with the ask", "I avoid hedging like \'kind of\'").\n• Mention what you want to *avoid* too ("I don\'t want to sound passive-aggressive").\n• Up to 1000 characters. The more concrete, the better the digest.',
+                        }],
+                    },
+                    {
+                        type: 'context',
+                        elements: [{
+                            type: 'mrkdwn',
+                            text: '*Example:* "I want to come across as a thoughtful senior engineer. I lead with the conclusion, then 2–3 supporting reasons. I push back firmly when I disagree but I always quote what I\'m responding to. I avoid hedging (\'maybe\', \'I think\') and corporate filler (\'circle back\', \'reach out\'). With more junior teammates I\'m warmer and ask more questions."',
+                        }],
+                    },
+                    {
+                        type: 'input',
+                        block_id: 'style_preset_block',
+                        optional: true,
+                        label: { type: 'plain_text', text: 'Starting point (optional)' },
+                        hint: { type: 'plain_text', text: 'Pick one to seed the textarea, then edit on top. Or just write your own.' },
+                        element: {
+                            type: 'static_select',
+                            action_id: 'style_preset_select',
+                            placeholder: { type: 'plain_text', text: 'Pick a preset…' },
+                            options: presetOptions,
+                            initial_option: presetOptions.find(o => o.value === currentPreset) ?? presetOptions[presetOptions.length - 1],
+                        },
+                    },
+                    {
+                        type: 'input',
+                        block_id: 'style_description_block',
+                        optional: true,
+                        label: { type: 'plain_text', text: 'Your style description' },
+                        hint: { type: 'plain_text', text: 'Leave blank to clear your target style and go back to baseline-only digests.' },
+                        element: descriptionElement,
+                    },
+                ],
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any,
+        });
+
+        return true;
+    } catch (error) {
+        console.error('Error opening style edit modal:', error);
+        return false;
+    }
+};
+
+// Render the weekly digest as Slack blocks. baseline is required; deviation is
+// optional and only included when the user has set a preferredStyle.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const formatDigestBlocks = (baseline: StyleBaselineResult, deviation: StyleDeviationResult | null): any[] => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const blocks: any[] = [
+        {
+            type: 'header',
+            text: { type: 'plain_text', text: 'Your weekly communication digest', emoji: true },
+        },
+        {
+            type: 'section',
+            text: { type: 'mrkdwn', text: `*How you came across this week*\n${baseline.summary || '_No summary available._'}` },
+        },
+    ];
+
+    if (baseline.traits.length > 0) {
+        blocks.push({
+            type: 'section',
+            text: { type: 'mrkdwn', text: '*What stood out*\n' + baseline.traits.map(t => `• ${t}`).join('\n') },
+        });
+    }
+
+    for (const ex of baseline.examples.slice(0, 2)) {
+        blocks.push({
+            type: 'section',
+            text: { type: 'mrkdwn', text: `> ${ex.quote}\n_${ex.observation}_` },
+        });
+    }
+
+    if (deviation) {
+        blocks.push({ type: 'divider' });
+        blocks.push({
+            type: 'section',
+            text: { type: 'mrkdwn', text: `*Alignment with your target style*  ·  *${deviation.adherenceScore}/100*` },
+        });
+
+        if (deviation.deviations.length > 0) {
+            blocks.push({
+                type: 'section',
+                text: { type: 'mrkdwn', text: '*Where you drifted*' },
+            });
+            for (const d of deviation.deviations.slice(0, 3)) {
+                blocks.push({
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: `> ${d.quote}\n*Why:* ${d.why}\n*Try:* ${d.suggestion}`,
+                    },
+                });
+            }
+        }
+
+        if (deviation.strengths.length > 0) {
+            blocks.push({
+                type: 'section',
+                text: { type: 'mrkdwn', text: '*What you nailed*\n' + deviation.strengths.map(s => `• ${s}`).join('\n') },
+            });
+        }
+    } else {
+        blocks.push({
+            type: 'context',
+            elements: [{
+                type: 'mrkdwn',
+                text: '💡 Set a target style in `/clarity-settings` to see how well you tracked it each week.',
+            }],
+        });
+    }
+
+    blocks.push({
+        type: 'context',
+        elements: [{
+            type: 'mrkdwn',
+            text: '🔒 This digest is private. Adjust delivery in `/clarity-settings`.',
+        }],
+    });
+
+    return blocks;
 };

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, sendWorkspaceAnnouncementMessage, joinChannel, sendAdminTransferNotification, openAdminTransferModal, resolveSlackUserName, getWorkspaceChannels, openOnboardingModal, sendDirectMessage } from '@/lib/slack';
+import { verifySlackSignature, sendWorkspaceAnnouncementMessage, joinChannel, sendAdminTransferNotification, openAdminTransferModal, resolveSlackUserName, getWorkspaceChannels, openOnboardingModal, sendDirectMessage, reconcileBotChannels, openStyleEditModal } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection, botChannelsCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
 import { trackEvent, trackError } from '@/lib/posthog';
 import { EVENTS, ERROR_CATEGORIES } from '@/lib/analytics/events';
 import { logError, logInfo } from '@/lib/logger';
-import { Workspace, CoachingFlag, DEFAULT_COACHING_FLAGS, MAX_COACHING_FLAGS } from '@/types';
+import { Workspace, CoachingFlag, DEFAULT_COACHING_FLAGS, MAX_COACHING_FLAGS, STYLE_PRESETS, StylePresetKey } from '@/types';
 
 // Define types inline for now
 interface SlackInteractivePayload {
@@ -66,7 +66,7 @@ async function refreshSettingsModal(
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(workspaceId) });
         if (!workspace) return;
         
-        const botChannels = await botChannelsCollection.find({ workspaceId }).toArray();
+        const botChannels = await reconcileBotChannels(workspaceId, workspace.botToken);
         
         const flags = user.coachingFlags?.length ? user.coachingFlags : DEFAULT_COACHING_FLAGS;
         const enabledCount = flags.filter((f: CoachingFlag) => f.enabled).length;
@@ -86,19 +86,68 @@ async function refreshSettingsModal(
         
         // Build channel options
         const channelOptions = botChannels.map(channel => ({
-            text: { type: 'plain_text' as const, text: `#${channel.channelName}` },
+            text: { type: 'plain_text' as const, text: `${channel.isPrivate ? '🔒 ' : ''}#${channel.channelName}` },
             value: channel.channelId
         }));
-        
+
         const enabledChannelOptions = botChannels
             .filter(channel => user.autoCoachingEnabledChannels?.includes(channel.channelId))
             .map(channel => ({
-                text: { type: 'plain_text' as const, text: `#${channel.channelName}` },
+                text: { type: 'plain_text' as const, text: `${channel.isPrivate ? '🔒 ' : ''}#${channel.channelName}` },
                 value: channel.channelId
             }));
         
         // Build blocks for Settings modal
         const blocks = [
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: '*📬 Weekly style digest*\nA private DM from Clarity each Monday summarizing how you came across.',
+                },
+            },
+            {
+                type: 'input',
+                block_id: 'digest_cadence_block',
+                optional: true,
+                label: { type: 'plain_text', text: 'Send me the digest' },
+                element: {
+                    type: 'static_select',
+                    action_id: 'digest_cadence_select',
+                    options: [
+                        { text: { type: 'plain_text', text: 'Off' }, value: 'off' },
+                        { text: { type: 'plain_text', text: 'Daily (every morning)' }, value: 'daily' },
+                        { text: { type: 'plain_text', text: 'Weekly (Monday mornings)' }, value: 'weekly' },
+                    ],
+                    initial_option: (() => {
+                        const cadence = user.digestCadence ?? 'off';
+                        const labels: Record<string, string> = {
+                            off: 'Off',
+                            daily: 'Daily (every morning)',
+                            weekly: 'Weekly (Monday mornings)',
+                        };
+                        return {
+                            text: { type: 'plain_text', text: labels[cadence] ?? 'Off' },
+                            value: cadence,
+                        };
+                    })(),
+                },
+            },
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: user.preferredStyle?.description
+                        ? `*🎯 Target style:* ${user.preferredStyle.preset === 'custom' ? 'Custom' : (user.preferredStyle.preset.charAt(0).toUpperCase() + user.preferredStyle.preset.slice(1))}\n_${user.preferredStyle.description.length > 200 ? user.preferredStyle.description.slice(0, 200) + '…' : user.preferredStyle.description}_`
+                        : '*🎯 Target style:* _Not set_\nOptional — pick one and we\'ll show you how well you tracked it. Without a target, you still get the baseline summary.',
+                },
+                accessory: {
+                    type: 'button',
+                    action_id: 'edit_style_button',
+                    text: { type: 'plain_text', text: user.preferredStyle?.description ? 'Edit Style' : 'Set Style', emoji: true },
+                },
+            },
+            { type: 'divider' },
             {
                 type: 'section',
                 text: { type: 'mrkdwn', text: `*🎯 Coaching Focus* (${enabledCount}/${flags.length} active)` },
@@ -239,6 +288,8 @@ export async function POST(request: NextRequest) {
                 return await handleDismissSuggestion(payload);
             } else if (action.action_id === 'enable_channel_monitoring') {
                 return await handleEnableChannelMonitoring(payload, action);
+            } else if (action.action_id === 'edit_style_button') {
+                return await handleEditStyleButton(payload);
             }
         } else if (payload.type === 'view_submission') {
             // Handle modal form submissions
@@ -258,6 +309,8 @@ export async function POST(request: NextRequest) {
                 return await handleEditFlagSubmission(payload);
             } else if (callbackId === 'delete_flag_modal') {
                 return await handleDeleteFlagSubmission(payload);
+            } else if (callbackId === 'style_modal') {
+                return await handleStyleSubmission(payload);
             } else {
                 logInfo('Unhandled view submission', { callback_id: callbackId });
             }
@@ -672,6 +725,13 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         // Extract selected channels from checkboxes
         const channelsElement = view.state?.values?.auto_coaching_channels_section?.channel_checkboxes;
         const enabledChannelIds = channelsElement?.selected_options?.map((option: { value: string }) => option.value) || [];
+
+        // Extract digest cadence selection
+        const digestCadenceRaw = view.state?.values?.digest_cadence_block?.digest_cadence_select?.selected_option?.value;
+        const digestCadence: 'off' | 'daily' | 'weekly' =
+            digestCadenceRaw === 'daily' ? 'daily'
+            : digestCadenceRaw === 'weekly' ? 'weekly'
+            : 'off';
         
         // Get coaching flags from private_metadata and update enabled state from checkboxes
         const metadata = view.private_metadata ? JSON.parse(view.private_metadata) : {};
@@ -722,7 +782,13 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
             });
         }
         
-        // Update user's preferences in the database
+        // Channels the user newly enabled in this submission. We auto-join the bot
+        // to any of these where it isn't already a member, so users don't have to
+        // manually `/invite @bot` for every coached channel.
+        const previouslyEnabled = new Set(user.autoCoachingEnabledChannels || []);
+        const newlyEnabled = enabledChannelIds.filter((id: string) => !previouslyEnabled.has(id));
+
+        // Update user's preferences in the database, then auto-join newly enabled channels
         after(async () => {
             try {
                 const userDoc = await slackUserCollection.findOneAndUpdate(
@@ -731,6 +797,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                         $set: {
                             autoCoachingEnabledChannels: enabledChannelIds,
                             coachingFlags: flags,
+                            digestCadence,
                             updatedAt: new Date(),
                         },
                     },
@@ -744,8 +811,38 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
                         auto_coaching_enabled_channels_count: enabledChannelIds.length,
                         coaching_flags_count: flags.length,
                         enabled_flags_count: flags.filter((f: CoachingFlag) => f.enabled).length,
+                        digest_cadence: digestCadence,
                         subscription_tier: workspace?.subscription?.tier || 'FREE',
                     });
+                }
+
+                if (newlyEnabled.length > 0 && workspace?.botToken) {
+                    const slack = new WebClient(workspace.botToken);
+                    const needsManualInvite: string[] = [];
+                    for (const channelId of newlyEnabled) {
+                        try {
+                            await slack.conversations.join({ channel: channelId });
+                        } catch (err: unknown) {
+                            const slackErr = (err as { data?: { error?: string } })?.data?.error
+                                ?? (err as { code?: string })?.code
+                                ?? 'unknown';
+                            // already_in_channel is fine; everything else (especially
+                            // method_not_supported_for_channel_type for private channels)
+                            // means the user has to invite the bot themselves.
+                            if (slackErr !== 'already_in_channel') {
+                                needsManualInvite.push(channelId);
+                                console.log(`[settings] could not auto-join ${channelId}: ${slackErr}`);
+                            }
+                        }
+                    }
+                    if (needsManualInvite.length > 0) {
+                        const channelMentions = needsManualInvite.map(id => `<#${id}>`).join(', ');
+                        await sendDirectMessage(
+                            userId,
+                            `⚠️ I couldn't auto-join these channel(s): ${channelMentions}.\nThey may be private — please run \`/invite @Clarity\` in each one so I can coach you there.`,
+                            workspace.botToken
+                        );
+                    }
                 }
             } catch (err) {
                 const errorObj = err instanceof Error ? err : new Error(String(err));
@@ -831,6 +928,10 @@ async function handleOnboardingSubmission(payload: SlackInteractivePayload) {
         // Extract announcement channel
         const announcementValue = view.state?.values?.announcement_channel?.announcement_channel_select?.selected_option?.value;
         const announcementChannel = announcementValue ? JSON.parse(announcementValue) : null;
+
+        // Extract weekly digest opt-in
+        const digestOptIn = (view.state?.values?.digest_opt_in_block?.digest_opt_in_checkbox?.selected_options ?? []).length > 0;
+        const digestCadence: 'off' | 'weekly' = digestOptIn ? 'weekly' : 'off';
         
         logInfo('Workspace onboarding submission', {
             admin_user_id: userId,
@@ -885,6 +986,8 @@ async function handleOnboardingSubmission(payload: SlackInteractivePayload) {
                         displayName: payload.user.name,
                         autoCoachingEnabledChannels: selectedChannels.map(c => c.id),
                         coachingFlags: [...DEFAULT_COACHING_FLAGS],
+                        digestCadence,
+                        digestTimezone: 'UTC',
                         isActive: true,
                         createdAt: new Date(),
                         updatedAt: new Date()
@@ -893,11 +996,12 @@ async function handleOnboardingSubmission(payload: SlackInteractivePayload) {
                     // Update admin's auto-coaching channels
                     await slackUserCollection.updateOne(
                         { slackId: userId },
-                        { 
-                            $set: { 
+                        {
+                            $set: {
                                 autoCoachingEnabledChannels: selectedChannels.map(c => c.id),
+                                digestCadence,
                                 updatedAt: new Date()
-                            } 
+                            }
                         }
                     );
                 }
@@ -1185,6 +1289,98 @@ async function handleAddCustomFlagAction(payload: SlackInteractivePayload) {
         const errorObj = error instanceof Error ? error : new Error(String(error));
         logError('Error handling add custom flag action', errorObj);
         return NextResponse.json({ text: 'Error opening flag creation modal' });
+    }
+}
+
+async function handleEditStyleButton(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const triggerId = payload.trigger_id;
+        const settingsViewId = payload.view?.id;
+
+        if (!userId || !triggerId) {
+            return NextResponse.json({ text: 'Missing required data' });
+        }
+
+        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        if (!user) return NextResponse.json({ text: 'User not found' });
+
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        if (!workspace) return NextResponse.json({ text: 'Workspace not found' });
+
+        // Stash settings view id in private_metadata so the style_modal submission
+        // knows which parent modal to refresh.
+        await openStyleEditModal(triggerId, workspace.botToken, user.preferredStyle);
+        // Persist the parent view id on the user temporarily (no schema field needed
+        // — we rely on view-level private_metadata in the open call instead).
+        // For Phase 1 we don't refresh the parent; the user closes & reopens settings
+        // if they want to see the new value, OR we could refresh on style_modal submit.
+        void settingsViewId;
+
+        return new NextResponse('', { status: 200 });
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error opening style edit modal', errorObj);
+        return NextResponse.json({ text: 'Error opening style modal' });
+    }
+}
+
+async function handleStyleSubmission(payload: SlackInteractivePayload) {
+    try {
+        const userId = payload.user?.id;
+        const view = payload.view;
+        if (!userId || !view) {
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'style_modal',
+                    title: { type: 'plain_text', text: 'Target style' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Something went wrong' } }],
+                },
+            });
+        }
+
+        const presetSelection = view.state?.values?.style_preset_block?.style_preset_select?.selected_option?.value;
+        const description = (view.state?.values?.style_description_block?.style_description_input?.value ?? '').trim();
+        const preset: StylePresetKey = (presetSelection && (presetSelection === 'custom' || presetSelection in STYLE_PRESETS))
+            ? presetSelection as StylePresetKey
+            : 'custom';
+
+        // Empty description = clear the target style entirely.
+        const update = description.length === 0
+            ? { $unset: { preferredStyle: '' as const }, $set: { updatedAt: new Date() } }
+            : {
+                $set: {
+                    preferredStyle: { preset, description, updatedAt: new Date() },
+                    updatedAt: new Date(),
+                },
+            };
+
+        await slackUserCollection.updateOne({ slackId: userId }, update);
+
+        trackEvent(userId, EVENTS.FEATURE_SETTINGS_UPDATED, {
+            user_name: payload.user?.name || 'Unknown',
+            change: description.length === 0 ? 'preferred_style_cleared' : 'preferred_style_set',
+            preset,
+            description_length: description.length,
+        });
+
+        // Just close the style modal; user can reopen Settings to see the updated summary.
+        return NextResponse.json({ response_action: 'clear' });
+    } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        logError('Error handling style submission', errorObj, { user_id: payload.user?.id });
+        trackError(payload.user?.id || 'anonymous', errorObj, { operation: 'style_submission' });
+        return NextResponse.json({
+            response_action: 'update',
+            view: {
+                type: 'modal',
+                callback_id: 'style_modal',
+                title: { type: 'plain_text', text: 'Target style' },
+                blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Failed to save style. Please try again.' } }],
+            },
+        });
     }
 }
 

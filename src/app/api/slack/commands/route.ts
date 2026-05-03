@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, isChannelAccessible, getSlackOAuthUrl, openOnboardingModal, getWorkspaceChannels, getSlackUserInfoWithEmail } from '@/lib/slack';
+import { verifySlackSignature, isChannelAccessible, getSlackOAuthUrl, openOnboardingModal, getWorkspaceChannels, getSlackUserInfoWithEmail, reconcileBotChannels } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection, botChannelsCollection, feedbackCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
@@ -430,10 +430,10 @@ async function handleSettings(userId: string, user: SlackUser, workspace: Worksp
     try {
         const isAdmin = workspace.adminSlackId === userId;
         
-        // Get channels where bot is active
-        const botChannels = await botChannelsCollection.find({
-            workspaceId: String(workspace._id)
-        }).toArray();
+        // Live-fetch channels the bot is in (reconciles botChannelsCollection so
+        // the modal reflects reality even when channels are deleted/archived/renamed
+        // outside our event handlers).
+        const botChannels = await reconcileBotChannels(String(workspace._id), workspace.botToken);
 
         const workspaceSlack = new WebClient(workspace.botToken);
 
@@ -517,6 +517,55 @@ async function handleSettings(userId: string, user: SlackUser, workspace: Worksp
                     type: 'section',
                     text: {
                         type: 'mrkdwn',
+                        text: '*📬 Weekly style digest*\nA private DM from Clarity each Monday summarizing how you came across.',
+                    },
+                },
+                {
+                    type: 'input',
+                    block_id: 'digest_cadence_block',
+                    optional: true,
+                    label: { type: 'plain_text', text: 'Send me the digest' },
+                    element: {
+                        type: 'static_select',
+                        action_id: 'digest_cadence_select',
+                        options: [
+                            { text: { type: 'plain_text', text: 'Off' }, value: 'off' },
+                            { text: { type: 'plain_text', text: 'Daily (every morning)' }, value: 'daily' },
+                            { text: { type: 'plain_text', text: 'Weekly (Monday mornings)' }, value: 'weekly' },
+                        ],
+                        initial_option: (() => {
+                            const cadence = user.digestCadence ?? 'off';
+                            const labels: Record<string, string> = {
+                                off: 'Off',
+                                daily: 'Daily (every morning)',
+                                weekly: 'Weekly (Monday mornings)',
+                            };
+                            return {
+                                text: { type: 'plain_text', text: labels[cadence] ?? 'Off' },
+                                value: cadence,
+                            };
+                        })(),
+                    },
+                },
+                {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: user.preferredStyle?.description
+                            ? `*🎯 Target style:* ${user.preferredStyle.preset === 'custom' ? 'Custom' : (user.preferredStyle.preset.charAt(0).toUpperCase() + user.preferredStyle.preset.slice(1))}\n_${user.preferredStyle.description.length > 200 ? user.preferredStyle.description.slice(0, 200) + '…' : user.preferredStyle.description}_`
+                            : '*🎯 Target style:* _Not set_\nOptional — pick one and we\'ll show you how well you tracked it. Without a target, you still get the baseline summary.',
+                    },
+                    accessory: {
+                        type: 'button',
+                        action_id: 'edit_style_button',
+                        text: { type: 'plain_text', text: user.preferredStyle?.description ? 'Edit Style' : 'Set Style', emoji: true },
+                    },
+                },
+                { type: 'divider' },
+                {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
                         text: `*🎯 Coaching Focus* (${enabledCount}/${flags.length} active)`
                     },
                     accessory: {
@@ -552,7 +601,7 @@ async function handleSettings(userId: string, user: SlackUser, workspace: Worksp
                     block_id: 'auto_coaching_channels_section',
                     text: {
                         type: 'mrkdwn',
-                        text: '*📢 Auto Coaching Channels*\nSelect channels where you want automatic coaching:'
+                        text: '*📢 Auto Coaching Channels*\nSelect channels for automatic coaching. Public channels: I\'ll auto-join. Private channels (🔒): invite me manually.'
                     },
                     accessory: botChannels.length > 0 ? {
                         type: 'checkboxes',
@@ -561,13 +610,13 @@ async function handleSettings(userId: string, user: SlackUser, workspace: Worksp
                             const enabledChannels = botChannels
                                 .filter(channel => user.autoCoachingEnabledChannels?.includes(channel.channelId))
                                 .map(channel => ({
-                                    text: { type: 'plain_text', text: `#${channel.channelName}` },
+                                    text: { type: 'plain_text', text: `${channel.isPrivate ? '🔒 ' : ''}#${channel.channelName}` },
                                     value: channel.channelId
                                 }));
                             return enabledChannels.length > 0 ? { initial_options: enabledChannels } : {};
                         })()),
                         options: botChannels.map(channel => ({
-                            text: { type: 'plain_text', text: `#${channel.channelName}` },
+                            text: { type: 'plain_text', text: `${channel.isPrivate ? '🔒 ' : ''}#${channel.channelName}` },
                             value: channel.channelId
                         }))
                     } : undefined

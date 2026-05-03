@@ -49,7 +49,7 @@ echo "Config token refreshed"
 OLD_URL=$(python3 -c "
 import json, re
 with open('$MANIFEST_FILE') as f:
-    match = re.search(r'https://[a-z0-9-]+\.ngrok-free\.app', f.read())
+    match = re.search(r'https://[a-z0-9-]+\.ngrok(?:-free)?\.(?:app|dev|io)', f.read())
     print(match.group(0) if match else '')
 ")
 

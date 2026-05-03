@@ -35,6 +35,14 @@ const nextConfig: NextConfig = {
         source: "/clarity-ui96/flags",
         destination: "https://us.i.posthog.com/flags",
       },
+      {
+        source: "/docs",
+        destination: "https://clarity-9b1741c0.mintlify.dev/docs",
+      },
+      {
+        source: "/docs/:match*",
+        destination: "https://clarity-9b1741c0.mintlify.dev/docs/:match*",
+      },
     ];
   },
   // This is required to support PostHog trailing slash API requests

@@ -42,14 +42,26 @@ OPENAI_API_KEY=sk-your-key-here
 
 ### 2. Run
 
+Two flag sources are supported:
+
 ```bash
-# Generate everything (flags first, then messages)
+# Option A — eval the default flags shipped to fresh-install users (4 flags).
+# Synced from src/types/index.ts → DEFAULT_COACHING_FLAGS.
+# This is what you usually want.
+poetry run python generate_default.py
+
+# Option B — derive flags from personas (9 flags).
+# Useful as a research bench for discovering new flag candidates.
 poetry run python generate.py --step all
 
-# Or run steps individually:
+# Or run the persona pipeline step by step:
 poetry run python generate.py --step flags      # Only generate flags
 poetry run python generate.py --step messages    # Only generate messages (needs flags first)
 ```
+
+Both write to the same files (`data/generate/flags.json`, `data/generate/dataset.json`),
+so `evaluate.py` works on whichever was generated last. Re-run the generator
+when you want to switch flag sources.
 
 ### 3. Output
 
