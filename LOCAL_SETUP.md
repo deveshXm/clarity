@@ -79,22 +79,25 @@ Then: open http://localhost:3000 → **Add to Slack** → pick your dev workspac
 |---|---|
 | `npm run dev` | Next.js dev server with Turbopack |
 | `npm run setup:slack` | Provision/refresh ngrok + dev Slack manifest |
-| `npm run reports:weekly:dev` | Generate weekly user reports (dev DB) |
-| `npm run reports:monthly:dev` | Monthly reports (dev DB) |
+| `npm run digest:test` | Preview style digest from saved eval epoch messages |
+| `npm run digest:sample` | Simulate a digest for one synthetic persona |
+| `npm run evals:style` | Run structural style/digest eval checks |
+| `npm run trigger:dev` | Run Trigger.dev tasks locally with `.env.local` |
+| `npm run trigger:deploy` | Deploy Trigger.dev scheduled tasks to prod with `.env.production` |
 | `npm run evals:run` | Run evaluation suite against local server |
 | `npm run evals:run:prod` | Run evals against prod (`clarity.rocktangle.com`) |
 | `npm run test:evaluate:dev` | Smoke-test the `/api/evaluate` endpoint locally |
 
 ## Testing the weekly style digest
 
-The digest is a Trigger.dev cron task (Mondays 09:00 UTC), but you don't want to wait until Monday to test changes. Two options:
+The digest is a Trigger.dev cron task (daily or Mondays around 09:00 UTC), but you don't want to wait for the schedule while testing. Two options:
 
 **One-off invocation against your own Slack user (preferred for dev):**
 
 ```bash
 # Replace with your Slack user ID (Slack profile → "Copy member ID").
 # Defaults to weekly (7-day lookback). Pass 'daily' for the 1-day path.
-npx tsx --env-file=.env.local -e "import('./src/trigger/weeklyStyleDigest').then(m => m.runForUser('U0A81H9LZ0S', 'weekly')).then(r => { console.log('result:', r); process.exit(0); })"
+npx tsx --env-file=.env.local -e "import('./src/trigger/weeklyStyleDigest').then(m => m.runForUser('U0A81H9LZ0S', 'weekly', '<workspaceObjectId>')).then(r => { console.log('result:', r); process.exit(0); })"
 ```
 
 This bypasses Trigger.dev entirely, runs the full digest pipeline (Slack history fetch → LLM baseline → optional deviation → DM), and exits. The DM lands in your Slack from the bot.
@@ -103,14 +106,23 @@ Prerequisites for a useful result:
 - You've installed Clarity-Dhruv (or whatever your dev app is called) into the Test workspace.
 - `digestCadence` is set to `weekly` on your `slackUsers` doc, OR you're testing the helper directly (it ignores that flag).
 - You've sent at least ~10 messages in `autoCoachingEnabledChannels` over the last 7 days (the task short-circuits with a "not enough activity" DM otherwise).
+- Pass the Mongo workspace `_id` as the optional third argument when the same Slack user exists in multiple workspaces.
 
 **Triggering the actual cron handler in dev:**
 
 ```bash
-npx trigger.dev@latest dev
+npm run trigger:dev
 ```
 
 Then trigger from the Trigger.dev dashboard. Useful for verifying schedule wiring; less useful for iterating on the LLM prompt or block layout.
+
+**Deploying the production schedules:**
+
+```bash
+npm run trigger:deploy
+```
+
+This deploys the `daily-style-digest` and `weekly-style-digest` schedules from `src/trigger/weeklyStyleDigest.ts` to the Trigger.dev prod environment.
 
 ## File map
 

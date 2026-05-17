@@ -517,7 +517,7 @@ async function handleSettings(userId: string, user: SlackUser, workspace: Worksp
                     type: 'section',
                     text: {
                         type: 'mrkdwn',
-                        text: '*📬 Weekly style digest*\nA private DM from Clarity each Monday summarizing how you came across.',
+                        text: '*📬 Communication digest*\nA private DM from Clarity summarizing how you came across. Delivery currently runs around 09:00 UTC.',
                     },
                 },
                 {
@@ -530,15 +530,15 @@ async function handleSettings(userId: string, user: SlackUser, workspace: Worksp
                         action_id: 'digest_cadence_select',
                         options: [
                             { text: { type: 'plain_text', text: 'Off' }, value: 'off' },
-                            { text: { type: 'plain_text', text: 'Daily (every morning)' }, value: 'daily' },
-                            { text: { type: 'plain_text', text: 'Weekly (Monday mornings)' }, value: 'weekly' },
+                            { text: { type: 'plain_text', text: 'Daily (09:00 UTC)' }, value: 'daily' },
+                            { text: { type: 'plain_text', text: 'Weekly (Mondays 09:00 UTC)' }, value: 'weekly' },
                         ],
                         initial_option: (() => {
                             const cadence = user.digestCadence ?? 'off';
                             const labels: Record<string, string> = {
                                 off: 'Off',
-                                daily: 'Daily (every morning)',
-                                weekly: 'Weekly (Monday mornings)',
+                                daily: 'Daily (09:00 UTC)',
+                                weekly: 'Weekly (Mondays 09:00 UTC)',
                             };
                             return {
                                 text: { type: 'plain_text', text: labels[cadence] ?? 'Off' },

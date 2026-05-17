@@ -63,6 +63,18 @@ Both write to the same files (`data/generate/flags.json`, `data/generate/dataset
 so `evaluate.py` works on whichever was generated last. Re-run the generator
 when you want to switch flag sources.
 
+For the style coach and digest feature, run the lightweight structural checks
+from the repo root:
+
+```bash
+npm run evals:style
+```
+
+These checks are intentionally not a replacement for LangWatch scenario evals.
+Use them as a fast local gate, then mirror the same scenarios in LangWatch for
+human/LLM-judge review of digest usefulness, style adherence, and intent
+preservation.
+
 ### 3. Output
 
 Results are saved in `data/generate/`:
@@ -124,4 +136,3 @@ Each entry looks like this:
 - **Want more variety?** Add more personas or scenarios to the config.
 - **Want a bigger dataset?** Increase `MESSAGES_PER_FLAG_SCENARIO`.
 - **Want to regenerate just flags?** Run `--step flags`. Then re-run `--step messages` to get messages based on the new flags.
-

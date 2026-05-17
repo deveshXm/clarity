@@ -21,7 +21,7 @@ export const weeklyStyleDigestTask = schedules.task({
   run: async () => fanOut("weekly"),
 });
 
-// Daily fan-out — runs every morning 09:00 UTC.
+// Daily fan-out — runs every day at 09:00 UTC.
 export const dailyStyleDigestTask = schedules.task({
   id: "daily-style-digest",
   cron: "0 9 * * *",
@@ -126,7 +126,7 @@ async function runForUserDoc(user: SlackUser, cadence: Cadence): Promise<RunResu
         : "Not enough activity this week to summarize. Send a few more messages in your tracked channels and I'll try again next week.",
       workspace.botToken
     );
-    await markSent(user.slackId);
+    await markSent(user);
     return "sent";
   }
 
@@ -144,7 +144,7 @@ async function runForUserDoc(user: SlackUser, cadence: Cadence): Promise<RunResu
     return "skipped";
   }
 
-  await markSent(user.slackId);
+  await markSent(user);
   logger.log("[digest] Delivered", {
     slackId: user.slackId,
     cadence,
@@ -154,9 +154,9 @@ async function runForUserDoc(user: SlackUser, cadence: Cadence): Promise<RunResu
   return "sent";
 }
 
-async function markSent(slackId: string): Promise<void> {
+async function markSent(user: SlackUser): Promise<void> {
   await slackUserCollection.updateOne(
-    { slackId },
+    { slackId: user.slackId, workspaceId: user.workspaceId },
     { $set: { lastDigestSentAt: new Date(), updatedAt: new Date() } }
   );
 }
@@ -164,9 +164,10 @@ async function markSent(slackId: string): Promise<void> {
 // Convenience helper for local dev — defaults to weekly lookback (7 days) so a
 // just-installed dev account with limited daily traffic still has enough to
 // summarize. Pass `'daily'` to test the daily path explicitly.
-export async function runForUser(slackId: string, cadence: Cadence = "weekly"): Promise<RunResult> {
+export async function runForUser(slackId: string, cadence: Cadence = "weekly", workspaceId?: string): Promise<RunResult> {
   const user = (await slackUserCollection.findOne({
     slackId,
+    ...(workspaceId ? { workspaceId } : {}),
     isActive: true,
   })) as SlackUser | null;
   if (!user) {

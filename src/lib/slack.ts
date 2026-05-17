@@ -967,7 +967,7 @@ export const openOnboardingModal = async (
                     block_id: 'digest_opt_in_block',
                     optional: true,
                     label: { type: 'plain_text', text: 'Weekly style digest' },
-                    hint: { type: 'plain_text', text: 'A private DM each Monday summarizing how you came across.' },
+                    hint: { type: 'plain_text', text: 'A private DM each Monday around 09:00 UTC summarizing how you came across.' },
                     element: {
                         type: 'checkboxes',
                         action_id: 'digest_opt_in_checkbox',
@@ -1256,7 +1256,8 @@ export const sendAdminTransferNotification = async (
 export const openStyleEditModal = async (
     triggerId: string,
     botToken: string,
-    currentStyle: PreferredStyle | undefined
+    currentStyle: PreferredStyle | undefined,
+    workspaceId: string
 ): Promise<boolean> => {
     try {
         const workspaceSlack = new WebClient(botToken);
@@ -1297,6 +1298,7 @@ export const openStyleEditModal = async (
             view: {
                 type: 'modal',
                 callback_id: 'style_modal',
+                private_metadata: JSON.stringify({ workspaceId }),
                 title: { type: 'plain_text', text: 'Target style' },
                 submit: { type: 'plain_text', text: 'Save' },
                 close: { type: 'plain_text', text: 'Cancel' },

@@ -1,8 +1,16 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
-import { syncVercelEnvVars } from "@trigger.dev/build/extensions/core";
+import { syncEnvVars } from "@trigger.dev/build/extensions/core";
 import * as dotenv from "dotenv";
 
 dotenv.config();
+
+const TRIGGER_RUNTIME_ENV_VARS = [
+  "MONGODB_URI",
+  "MONGODB_DB_NAME",
+  "PORTKEY_AI_KEY",
+  "NEXT_PUBLIC_BETTER_AUTH_URL",
+] as const;
+
 export default defineConfig({
   project: "proj_akulfxhttrtcetbyjbym",
   runtime: "node",
@@ -23,10 +31,12 @@ export default defineConfig({
   },
   build: {
     extensions: [
-      syncVercelEnvVars({
-        vercelAccessToken: process.env.VERCEL_ACCESS_TOKEN,
-        projectId: process.env.VERCEL_PROJECT_ID,
-        vercelTeamId: process.env.VERCEL_TEAM_ID,
+      syncEnvVars(() => {
+        return Object.fromEntries(
+          TRIGGER_RUNTIME_ENV_VARS
+            .map((name) => [name, process.env[name]])
+            .filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0)
+        );
       }),
     ],
   },

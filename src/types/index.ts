@@ -174,7 +174,7 @@ export const SlackUserSchema = z.object({
     // is baseline-only (LLM describes how the user actually writes).
     preferredStyle: PreferredStyleSchema.optional(),
     digestCadence: z.enum(['off', 'daily', 'weekly']).default('off'),
-    digestTimezone: z.string().default('UTC'), // IANA TZ for scheduling
+    digestTimezone: z.string().default('UTC'), // Reserved for timezone-aware scheduling; current delivery runs in UTC.
     lastDigestSentAt: z.coerce.date().optional(),
     
     isActive: z.boolean().default(true),
@@ -455,4 +455,4 @@ export interface ServerActionResult<T = unknown> {
     data?: T;
     error?: string;
     fieldErrors?: Record<string, string[]>;
-} 
+}

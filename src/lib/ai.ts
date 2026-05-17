@@ -122,7 +122,6 @@ export async function analyzeMessage(
         .replace('{{CONTEXT}}', contextString)
         .replace('{{STYLE}}', styleString);
 
-    console.log('systemPrompt', systemPrompt);
     const raw = await chatCompletion([
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message.replace(/"/g, '\\"') },

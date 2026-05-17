@@ -11,6 +11,7 @@ import { Workspace, CoachingFlag, DEFAULT_COACHING_FLAGS, MAX_COACHING_FLAGS, ST
 // Define types inline for now
 interface SlackInteractivePayload {
   type: string;
+  team?: { id: string; domain?: string };
   user: { id: string; name: string };
   actions: Array<{ action_id: string; value: string; type: string }>;
   channel: { id: string; name: string };
@@ -103,7 +104,7 @@ async function refreshSettingsModal(
                 type: 'section',
                 text: {
                     type: 'mrkdwn',
-                    text: '*📬 Weekly style digest*\nA private DM from Clarity each Monday summarizing how you came across.',
+                    text: '*📬 Communication digest*\nA private DM from Clarity summarizing how you came across. Delivery currently runs around 09:00 UTC.',
                 },
             },
             {
@@ -116,15 +117,15 @@ async function refreshSettingsModal(
                     action_id: 'digest_cadence_select',
                     options: [
                         { text: { type: 'plain_text', text: 'Off' }, value: 'off' },
-                        { text: { type: 'plain_text', text: 'Daily (every morning)' }, value: 'daily' },
-                        { text: { type: 'plain_text', text: 'Weekly (Monday mornings)' }, value: 'weekly' },
+                        { text: { type: 'plain_text', text: 'Daily (09:00 UTC)' }, value: 'daily' },
+                        { text: { type: 'plain_text', text: 'Weekly (Mondays 09:00 UTC)' }, value: 'weekly' },
                     ],
                     initial_option: (() => {
                         const cadence = user.digestCadence ?? 'off';
                         const labels: Record<string, string> = {
                             off: 'Off',
-                            daily: 'Daily (every morning)',
-                            weekly: 'Weekly (Monday mornings)',
+                            daily: 'Daily (09:00 UTC)',
+                            weekly: 'Weekly (Mondays 09:00 UTC)',
                         };
                         return {
                             text: { type: 'plain_text', text: labels[cadence] ?? 'Off' },
@@ -733,8 +734,21 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
             : digestCadenceRaw === 'weekly' ? 'weekly'
             : 'off';
         
-        // Get coaching flags from private_metadata and update enabled state from checkboxes
         const metadata = view.private_metadata ? JSON.parse(view.private_metadata) : {};
+        const workspaceId = metadata.workspaceId;
+        if (!workspaceId) {
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'settings_modal',
+                    title: { type: 'plain_text', text: 'Settings' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Missing workspace context. Please reopen `/clarity-settings`.' } }]
+                }
+            });
+        }
+
+        // Get coaching flags from private_metadata and update enabled state from checkboxes
         const baseFlags: CoachingFlag[] = metadata.coachingFlags || DEFAULT_COACHING_FLAGS;
         
         // Get selected flags from checkboxes (values are indices)
@@ -755,7 +769,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         }
         
         // Get user
-        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        const user = await slackUserCollection.findOne({ slackId: userId, workspaceId, isActive: true });
         if (!user) {
             return NextResponse.json({
                 response_action: 'update',
@@ -769,7 +783,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         }
         
         // Get workspace
-        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
+        const workspace = await workspaceCollection.findOne({ _id: new ObjectId(workspaceId) });
         if (!workspace) {
             return NextResponse.json({
                 response_action: 'update',
@@ -792,7 +806,7 @@ async function handleSettingsSubmission(payload: SlackInteractivePayload) {
         after(async () => {
             try {
                 const userDoc = await slackUserCollection.findOneAndUpdate(
-                    { slackId: userId },
+                    { slackId: userId, workspaceId },
                     {
                         $set: {
                             autoCoachingEnabledChannels: enabledChannelIds,
@@ -1297,12 +1311,14 @@ async function handleEditStyleButton(payload: SlackInteractivePayload) {
         const userId = payload.user?.id;
         const triggerId = payload.trigger_id;
         const settingsViewId = payload.view?.id;
+        const metadata = payload.view?.private_metadata ? JSON.parse(payload.view.private_metadata) : {};
+        const workspaceId = metadata.workspaceId;
 
-        if (!userId || !triggerId) {
+        if (!userId || !triggerId || !workspaceId) {
             return NextResponse.json({ text: 'Missing required data' });
         }
 
-        const user = await slackUserCollection.findOne({ slackId: userId, isActive: true });
+        const user = await slackUserCollection.findOne({ slackId: userId, workspaceId, isActive: true });
         if (!user) return NextResponse.json({ text: 'User not found' });
 
         const workspace = await workspaceCollection.findOne({ _id: new ObjectId(user.workspaceId) });
@@ -1310,7 +1326,7 @@ async function handleEditStyleButton(payload: SlackInteractivePayload) {
 
         // Stash settings view id in private_metadata so the style_modal submission
         // knows which parent modal to refresh.
-        await openStyleEditModal(triggerId, workspace.botToken, user.preferredStyle);
+        await openStyleEditModal(triggerId, workspace.botToken, user.preferredStyle, user.workspaceId);
         // Persist the parent view id on the user temporarily (no schema field needed
         // — we rely on view-level private_metadata in the open call instead).
         // For Phase 1 we don't refresh the parent; the user closes & reopens settings
@@ -1343,6 +1359,20 @@ async function handleStyleSubmission(payload: SlackInteractivePayload) {
 
         const presetSelection = view.state?.values?.style_preset_block?.style_preset_select?.selected_option?.value;
         const description = (view.state?.values?.style_description_block?.style_description_input?.value ?? '').trim();
+        const metadata = view.private_metadata ? JSON.parse(view.private_metadata) : {};
+        const workspaceId = metadata.workspaceId;
+        if (!workspaceId) {
+            return NextResponse.json({
+                response_action: 'update',
+                view: {
+                    type: 'modal',
+                    callback_id: 'style_modal',
+                    title: { type: 'plain_text', text: 'Target style' },
+                    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '❌ Missing workspace context. Please reopen `/clarity-settings`.' } }],
+                },
+            });
+        }
+
         const preset: StylePresetKey = (presetSelection && (presetSelection === 'custom' || presetSelection in STYLE_PRESETS))
             ? presetSelection as StylePresetKey
             : 'custom';
@@ -1357,7 +1387,7 @@ async function handleStyleSubmission(payload: SlackInteractivePayload) {
                 },
             };
 
-        await slackUserCollection.updateOne({ slackId: userId }, update);
+        await slackUserCollection.updateOne({ slackId: userId, workspaceId }, update);
 
         trackEvent(userId, EVENTS.FEATURE_SETTINGS_UPDATED, {
             user_name: payload.user?.name || 'Unknown',
