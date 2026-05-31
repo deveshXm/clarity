@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, isChannelAccessible, getSlackOAuthUrl, openOnboardingModal, getWorkspaceChannels, getSlackUserInfoWithEmail, reconcileBotChannels } from '@/lib/slack';
+import { verifySlackSignature, isChannelAccessible, getSlackOAuthUrl, openOnboardingModal, getWorkspaceChannels, getSlackUserInfoWithEmail, reconcileBotChannels, buildHarmfulWarningBlocks } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection, botChannelsCollection, feedbackCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
@@ -303,7 +303,17 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                     should_flag: analysis.flags.length > 0,
                 });
 
-                if (analysis.flags.length === 0 || !analysis.suggestedRephrase) {
+                if (analysis.harmful) {
+                    // Refuse to launder abuse into a polished message. Warn instead,
+                    // and do not consume a manual-rephrase use.
+                    console.log('[CMD] Rephrase harmful content — refusing, sending warning');
+                    await workspaceSlack.chat.postEphemeral({
+                        channel: channelId,
+                        user: userId,
+                        text: 'This message may be harmful — I won\'t rewrite it.',
+                        blocks: buildHarmfulWarningBlocks(analysis.flags.map(f => f.flagName), analysis.warning)
+                    });
+                } else if (analysis.flags.length === 0 || !analysis.suggestedRephrase) {
                     await workspaceSlack.chat.postEphemeral({
                         channel: channelId,
                         user: userId,
@@ -399,8 +409,11 @@ async function handleRephrase(text: string, userId: string, channelId: string, w
                     });
                 }
                 
-                await incrementWorkspaceUsage(workspace, 'manualRephrase');
-                
+                // Harmful messages were refused, not rephrased — don't bill them.
+                if (!analysis.harmful) {
+                    await incrementWorkspaceUsage(workspace, 'manualRephrase');
+                }
+
             } catch (err) {
                 console.error('Error in background rephrase:', err);
                 const workspaceSlack = new WebClient(workspace.botToken);

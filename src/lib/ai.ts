@@ -28,6 +28,11 @@ export interface SimpleAnalysisResult {
         flagName: string;
     }>;
     suggestedRephrase: string | null;
+    // True when the message is abusive/harmful (hate, harassment, threats, slurs,
+    // personal attack) and should NOT be rephrased into a sendable version. When
+    // set, suggestedRephrase is always null and `warning` carries a de-escalation tip.
+    harmful: boolean;
+    warning: string | null;
     reason?: string;
 }
 
@@ -64,21 +69,30 @@ function parseAnalysisResult(raw: unknown, enabledFlags: CoachingFlag[], include
                 flagName: enabledFlags[idx - 1].name,
             }));
         
+        // Harmful content overrides any rephrase: we never hand back a sendable
+        // version of abuse. Force suggestedRephrase to null when harmful is set.
+        const harmful = data.harmful === true;
+        const warning = harmful ? (typeof data.warning === 'string' ? data.warning : null) : null;
+
         const result: SimpleAnalysisResult = {
             flags: mappedFlags,
-            suggestedRephrase: data.suggestedRephrase || null,
+            suggestedRephrase: harmful ? null : (data.suggestedRephrase || null),
+            harmful,
+            warning,
         };
-        
+
         if (includeReason && data.reason) {
             result.reason = data.reason;
         }
-        
+
         return result;
     } catch (error) {
         console.error('Failed to parse analysis:', error);
         return {
             flags: [],
             suggestedRephrase: null,
+            harmful: false,
+            warning: null,
         };
     }
 }
@@ -101,7 +115,7 @@ export async function analyzeMessage(
     const enabledFlags = coachingFlags.filter(f => f.enabled);
 
     if (enabledFlags.length === 0) {
-        return { flags: [], suggestedRephrase: null };
+        return { flags: [], suggestedRephrase: null, harmful: false, warning: null };
     }
 
     const flagsString = buildFlagsString(coachingFlags);

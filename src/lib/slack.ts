@@ -33,7 +33,13 @@ export const slackOAuthConfig = {
 };
 
 // Generate OAuth URL for Slack installation
-export const getSlackOAuthUrl = (state?: string) => {
+//
+// `team` (or the SLACK_PINNED_TEAM_ID env var) pins the consent screen to a
+// specific Slack workspace by team ID (e.g. "T08HU2MKRK2"). Without it, Slack
+// routes the install to whatever workspace the user's browser is currently
+// active in — which is why installs can land on an unrelated/restricted
+// workspace. Leave SLACK_PINNED_TEAM_ID unset in production for multi-tenant.
+export const getSlackOAuthUrl = (state?: string, team?: string) => {
     const params = new URLSearchParams({
         client_id: slackOAuthConfig.clientId,
         scope: slackOAuthConfig.botScopes.join(','),
@@ -42,7 +48,12 @@ export const getSlackOAuthUrl = (state?: string) => {
         response_type: 'code',
         ...(state && { state })
     });
-    
+
+    const pinnedTeam = team || process.env.SLACK_PINNED_TEAM_ID;
+    if (pinnedTeam) {
+        params.set('team', pinnedTeam);
+    }
+
     return `https://slack.com/oauth/v2/authorize?${params.toString()}`;
 };
 
@@ -1435,5 +1446,35 @@ export const formatDigestBlocks = (baseline: StyleBaselineResult, deviation: Sty
         }],
     });
 
+    return blocks;
+};
+
+// Warning shown when a message is harmful (abuse/hate/harassment/threats). We
+// deliberately do NOT offer a rephrase or any action button — Clarity will not
+// help craft a sendable version of abusive content.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const buildHarmfulWarningBlocks = (
+    flagNames: string[],
+    warning: string | null
+): any[] => {
+    const tip = warning?.trim()
+        || 'This reads as a personal attack. If there is a real issue, consider raising it privately and focusing on the specific behavior, not the person.';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const blocks: any[] = [
+        {
+            type: 'section',
+            text: { type: 'mrkdwn', text: `⚠️ *This message may be harmful*\n${tip}` },
+        },
+    ];
+    if (flagNames.length > 0) {
+        blocks.push({
+            type: 'context',
+            elements: [{ type: 'mrkdwn', text: flagNames.map(f => `*${f}*`).join(' · ') }],
+        });
+    }
+    blocks.push({
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: 'Only you can see this' }],
+    });
     return blocks;
 };

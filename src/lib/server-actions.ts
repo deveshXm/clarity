@@ -16,9 +16,9 @@ import {
 } from './slack';
 
 // Slack OAuth URL Generation
-export async function getSlackOAuthUrl(state?: string) {
+export async function getSlackOAuthUrl(state?: string, team?: string) {
     const { getSlackOAuthUrl: getSlackOAuthUrlFromLib } = await import('@/lib/slack');
-    return getSlackOAuthUrlFromLib(state);
+    return getSlackOAuthUrlFromLib(state, team);
 }
 
 // Get workspace channels for onboarding/settings

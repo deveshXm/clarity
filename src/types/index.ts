@@ -30,6 +30,11 @@ export const DEFAULT_COACHING_FLAGS: CoachingFlag[] = [
         description: 'Messages that request action or raise issues but omit essential details needed to act, including vague requests and unsupported claims. Flag only when: the message asks for action, decision, or change AND lacks key information (who/what/where/when/impact) AND no clarifying detail exists in thread context. Do NOT flag casual updates, early brainstorming, high-level opinions, or normal technical judgment in engineering debate.',
         enabled: true,
     },
+    {
+        name: 'Unconstructive / Demoralizing',
+        description: 'Broad negativity, defeatism, or disparagement of the work, product, project, or team that lowers morale without offering a specific problem, reason, or path forward. Flag when: the message expresses sweeping negativity or hopelessness (\'this sucks\', \'this is pointless\', \'why are we even doing this\', \'this is a disaster\', \'we are doomed\') AND offers no concrete issue, reasoning, or next step. Do NOT flag specific constructive criticism that names a real problem or fix (\'the latency regressed, we should profile the query\'), factual status updates, normal venting that includes a concrete issue, or a clearly proposed action.',
+        enabled: true,
+    },
 ];
 
 export const MAX_COACHING_FLAGS = 15;

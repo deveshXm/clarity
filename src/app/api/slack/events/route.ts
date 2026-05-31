@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, sendEphemeralMessage, isChannelAccessible, getSlackUserInfoWithEmail, sendChannelOptInMessage } from '@/lib/slack';
+import { verifySlackSignature, sendEphemeralMessage, isChannelAccessible, getSlackUserInfoWithEmail, sendChannelOptInMessage, buildHarmfulWarningBlocks } from '@/lib/slack';
 import { workspaceCollection, slackUserCollection, botChannelsCollection, analysisInstanceCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { SlackEventSchema, Workspace, SlackUser, DEFAULT_COACHING_FLAGS, ContextMessage } from '@/types';
@@ -274,11 +274,35 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             is_new_user: isNewUser,
         });
         
+        // Harmful content: warn, never offer a rephrase. This fires regardless of
+        // quota — we don't paywall a safety warning, and there's nothing to "send".
+        if (analysis.harmful) {
+            console.log('[MSG] Harmful content — sending warning, no rephrase');
+            await sendEphemeralMessage(
+                validatedEvent.channel,
+                validatedEvent.user,
+                'This message may be harmful — consider reconsidering before sending.',
+                workspace.botToken,
+                [],
+                buildHarmfulWarningBlocks(analysis.flags.map(f => f.flagName), analysis.warning)
+            );
+            trackEvent(validatedEvent.user, EVENTS.API_SLACK_EVENT_PROCESSED, {
+                event_type: 'message',
+                channel_id: validatedEvent.channel,
+                processed: true,
+                skip_reason: 'harmful_content_warned',
+                flags_found: analysis.flags.length,
+                subscription_tier: workspace.subscription?.tier || 'FREE',
+                is_new_user: isNewUser,
+            });
+            return;
+        }
+
         // If no coaching needed, exit early
         if (analysis.flags.length === 0 || !analysis.suggestedRephrase) {
             return;
         }
-        
+
         // Message was flagged — now check if workspace has quota remaining
         const accessCheck = await validateWorkspaceAccess(workspace, 'autoCoaching');
         
