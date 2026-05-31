@@ -46,9 +46,13 @@ venv/
 __pycache__/
 
 manifest-dev.json
- 
+# Dev manifests for the simulated test bots (contain the rotating ngrok URL)
+manifest-alicebot-dev.json
+manifest-bobbot-dev.json
+
 
 .trigger
 .env*.local
 
 .env.local
+.gstack/
