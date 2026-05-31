@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "digest:test": "tsx --env-file=.env.local src/scripts/test-style-digest.ts",
+    "digest:me": "tsx --env-file=.env.local src/scripts/digest-me.ts",
     "digest:sample": "tsx --env-file=.env.local src/scripts/style-digest-20-msg.ts",
     "evals:style": "tsx --env-file=.env.local src/scripts/evaluate-style-digest.ts",
     "trigger:dev": "npx trigger.dev@4.3.2 dev --env-file .env.local",
