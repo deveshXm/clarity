@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useLayoutEffect } from 'react';
+import { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { motion, MotionConfig } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import Image from 'next/image';
@@ -11,11 +11,38 @@ import { SUBSCRIPTION_TIERS } from '@/types';
 // PostHog autocapture handles all frontend tracking automatically
 import CTAButton from './components/CTAButton';
 
+// Friendly, human messages for the error codes the OAuth callback can redirect
+// back with. The most common real-world failure is a user trying to install on
+// a workspace they don't administer (or that restricts apps) — so every message
+// nudges them toward picking a workspace they own.
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  oauth_error:
+    "Slack didn't authorize the install. Make sure you pick a workspace where you're an admin (or have permission to install apps), then try again.",
+  access_denied:
+    "Installation was cancelled. To add Clarity, choose a Slack workspace where you're an admin or have app-install permission.",
+  missing_code: 'Installation didn\'t complete. Please try adding Clarity again.',
+  oauth_failed: 'Something went wrong talking to Slack. Please try again in a moment.',
+  invalid_oauth_response: 'Slack returned an unexpected response. Please try installing again.',
+  callback_error: 'Something went wrong finishing the install. Please try again.',
+};
+
 export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const freeCardRef = useRef<HTMLDivElement | null>(null);
   const proCardRef = useRef<HTMLDivElement | null>(null);
   // PostHog autocapture handles all tracking automatically
+
+  // Surface OAuth failures the callback redirected us back with (?error=...).
+  // Read from the URL directly to avoid a Suspense boundary for useSearchParams.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('error');
+    if (code) {
+      setErrorMessage(OAUTH_ERROR_MESSAGES[code] || OAUTH_ERROR_MESSAGES.oauth_error);
+      // Clean the URL so a refresh doesn't re-show the banner.
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
 
   // Note: Page views automatically tracked by PostHog autocapture
 
@@ -60,6 +87,22 @@ export default function LandingPage() {
   return (
     <MotionConfig reducedMotion="user">
       <div className="min-h-screen text-slate-900 bg-white">
+        {/* OAuth error banner */}
+        {errorMessage && (
+          <div className="sticky top-0 z-50 bg-red-50 border-b border-red-200">
+            <div className="max-w-7xl mx-auto px-6 py-3 flex items-start gap-3">
+              <span className="text-red-600 mt-0.5">⚠️</span>
+              <p className="text-sm flex-1" style={{ color: '#991B1B' }}>{errorMessage}</p>
+              <button
+                onClick={() => setErrorMessage(null)}
+                aria-label="Dismiss"
+                className="text-red-400 hover:text-red-600 text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <header className="flex justify-between items-center p-6 max-w-7xl mx-auto">
           <div className="flex items-center gap-2">
@@ -128,6 +171,21 @@ export default function LandingPage() {
                     Only you see the coaching. Your messages stay private.
                   </p>
                 </motion.div>
+
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.6, delay: 0.45 }}
+                  className="flex items-center gap-2 text-sm mb-10"
+                  style={{ color: '#64748B' }}
+                >
+                  <span>💡</span>
+                  <span>
+                    Pick a Slack workspace where you&apos;re an <strong>admin</strong> — or have
+                    permission to install apps. You can&apos;t add Clarity to a workspace that
+                    restricts app installs.
+                  </span>
+                </motion.p>
 
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -514,8 +572,8 @@ export default function LandingPage() {
                   
                   <div className="mt-6 space-y-3 flex-1">
                     {[
-                      "20 auto-coaching suggestions/month",
-                      "50 manual rephrase commands", 
+                      "5 auto-coaching suggestions/month",
+                      "50 manual rephrase commands",
                       "Default coaching flags",
                       "Basic tone improvements"
                     ].map((feature, index) => (
