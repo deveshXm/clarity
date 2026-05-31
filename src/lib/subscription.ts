@@ -28,7 +28,13 @@ export async function validateWorkspaceAccess(
     
     const subscription = workspace.subscription!;
     const tierConfig = getTierConfig(subscription.tier);
-    
+
+    // Dev/Test escape hatch: bypass all paywalls and rate limits when explicitly
+    // enabled. Defaults off, so production (which never sets this) is unaffected.
+    if (process.env.DISABLE_QUOTA === 'true') {
+      return { allowed: true, workspace, remainingUsage: -1 };
+    }
+
     // Check if it's a paid-only feature
     if (isPaidFeature(feature)) {
       if (!tierConfig.features[feature]) {

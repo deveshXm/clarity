@@ -16,6 +16,13 @@ CRITICAL RULES:
 - Use the recent channel messages as context to understand tone and situation.
 - Only analyze the user's message, not the context messages.
 
+HARMFUL CONTENT (this overrides the rephrase rule):
+- HARMFUL is reserved for genuinely abusive content with NO acceptable reworded form: hate speech, slurs, identity-based attacks, harassment, threats of harm, or naked hostility toward a person's worth (e.g. "I hate you", "you're worthless", "you f***ing idiot", "I'll make you regret it").
+- BOUNDARY (critical): criticizing someone's competence, ideas, work, or effort is NOT harmful even when blunt or rude — e.g. "you don't know what you're talking about", "this is sloppy", "you clearly didn't read it". These are Disrespectful but COACHABLE: keep "harmful": false, keep the flag, and DO provide a constructive suggestedRephrase. Only mark harmful when the attack targets the person's worth/identity or carries hatred, threats, or slurs with no constructive core.
+- For these, set "harmful": true, set "suggestedRephrase": null, and write a short "warning": one or two sentences that name the problem and give a de-escalation tip (e.g. point out it reads as a personal attack and suggest raising the concern privately, focusing on the behavior not the person). Do NOT produce a polished/sendable version of the message.
+- Reserve "harmful" for genuine abuse/hostility with no acceptable rewrite. Do NOT mark ordinary blunt, terse, critical, or frustrated-but-professional messages as harmful — those are coachable: keep "harmful": false and provide a normal suggestedRephrase.
+- A message can still match a flag (e.g. Disrespectful) AND be harmful. In that case keep the flag, set harmful true, rephrase null.
+
 Flags:
 {{FLAGS}}
 
@@ -26,9 +33,11 @@ User's preferred communication style (apply ONLY when crafting the rephrase; do 
 {{STYLE}}
 
 Output JSON only:
-{"flags": [1, 2], "suggestedRephrase": "improved message or null"}
+{"flags": [1, 2], "suggestedRephrase": "improved message or null", "harmful": false, "warning": null}
 
-If no flags apply: {"flags": [], "suggestedRephrase": null}
+If harmful: {"flags": [1], "suggestedRephrase": null, "harmful": true, "warning": "short de-escalation tip"}
+
+If no flags apply: {"flags": [], "suggestedRephrase": null, "harmful": false, "warning": null}
 `;
 
 // Prompt with reasoning - used for evals to understand why decisions were made
@@ -43,6 +52,13 @@ CRITICAL RULES:
 - Use the recent channel messages as context to understand tone and situation.
 - Only analyze the user's message, not the context messages.
 
+HARMFUL CONTENT (this overrides the rephrase rule):
+- HARMFUL is reserved for genuinely abusive content with NO acceptable reworded form: hate speech, slurs, identity-based attacks, harassment, threats of harm, or naked hostility toward a person's worth (e.g. "I hate you", "you're worthless", "you f***ing idiot", "I'll make you regret it").
+- BOUNDARY (critical): criticizing someone's competence, ideas, work, or effort is NOT harmful even when blunt or rude — e.g. "you don't know what you're talking about", "this is sloppy", "you clearly didn't read it". These are Disrespectful but COACHABLE: keep "harmful": false, keep the flag, and DO provide a constructive suggestedRephrase. Only mark harmful when the attack targets the person's worth/identity or carries hatred, threats, or slurs with no constructive core.
+- For these, set "harmful": true, set "suggestedRephrase": null, and write a short "warning": one or two sentences that name the problem and give a de-escalation tip (e.g. point out it reads as a personal attack and suggest raising the concern privately, focusing on the behavior not the person). Do NOT produce a polished/sendable version of the message.
+- Reserve "harmful" for genuine abuse/hostility with no acceptable rewrite. Do NOT mark ordinary blunt, terse, critical, or frustrated-but-professional messages as harmful — those are coachable: keep "harmful": false and provide a normal suggestedRephrase.
+- A message can still match a flag (e.g. Disrespectful) AND be harmful. In that case keep the flag, set harmful true, rephrase null.
+
 Flags:
 {{FLAGS}}
 
@@ -53,10 +69,12 @@ Output JSON only:
 {
   "flags": [1, 2],
   "suggestedRephrase": "improved message or null",
-  "reason": "Why you flagged or didn't flag the message, which parts triggered each flag, and what the rephrase improves."
+  "harmful": false,
+  "warning": null,
+  "reason": "Why you flagged or didn't flag the message, whether it is harmful and why, which parts triggered each flag, and what the rephrase improves."
 }
 
-If no flags apply: {"flags": [], "suggestedRephrase": null, "reason": "..."}
+If no flags apply: {"flags": [], "suggestedRephrase": null, "harmful": false, "warning": null, "reason": "..."}
 `;
 
 // Weekly style digest — baseline section
