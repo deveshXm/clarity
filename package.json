@@ -5,25 +5,31 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "dev:test": "bash scripts/dev-test.sh",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
     "digest:test": "tsx --env-file=.env.local src/scripts/test-style-digest.ts",
     "digest:me": "tsx --env-file=.env.local src/scripts/digest-me.ts",
     "digest:sample": "tsx --env-file=.env.local src/scripts/style-digest-20-msg.ts",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
     "evals:style": "tsx --env-file=.env.local src/scripts/evaluate-style-digest.ts",
+    "evals:sim": "tsx --env-file=.env.local src/scripts/simulation-eval.ts",
     "trigger:dev": "npx trigger.dev@4.3.2 dev --env-file .env.local",
     "trigger:deploy": "npx trigger.dev@4.3.2 deploy --env prod --env-file .env.production",
-    "test:evaluate:dev": "tsx --env-file=.env.local src/scripts/test-evaluate-api.ts",
-    "test:evaluate:prod": "tsx --env-file=.env.production src/scripts/test-evaluate-api.ts",
-    "setup:slack": "bash scripts/setup-app.sh",
     "evals:setup": "bash evals/setup.sh",
     "evals:generate": "cd evals && poetry run python generate.py --step all",
     "evals:generate:flags": "cd evals && poetry run python generate.py --step flags",
     "evals:generate:messages": "cd evals && poetry run python generate.py --step messages",
     "evals:generate:default": "cd evals && poetry run python generate_default.py",
     "evals:run": "cd evals && poetry run python evaluate.py",
-    "evals:run:prod": "cd evals && BASE_URL=https://clarity.rocktangle.com poetry run python evaluate.py"
+    "evals:run:prod": "cd evals && BASE_URL=https://clarity.rocktangle.com poetry run python evaluate.py",
+    "test:evaluate:dev": "tsx --env-file=.env.local src/scripts/test-evaluate-api.ts",
+    "test:evaluate:prod": "tsx --env-file=.env.production src/scripts/test-evaluate-api.ts",
+    "setup:slack": "bash scripts/setup-app.sh",
+    "scenarios": "vitest run --config vitest.config.ts",
+    "scenarios:watch": "vitest --config vitest.config.ts",
+    "evals:style:deviation": "tsx --env-file=.env.local src/scripts/evaluate-style-deviation.ts",
+    "test:stripe:webhooks": "tsx --env-file=.env.local src/scripts/test-stripe-webhooks.ts",
+    "test:slack:events": "tsx --env-file=.env.local src/scripts/test-slack-events.ts"
   },
   "dependencies": {
     "@mantine/core": "^8.3.12",
@@ -64,7 +70,9 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@ai-sdk/azure": "^3.0.68",
     "@eslint/eslintrc": "^3.3.3",
+    "@langwatch/scenario": "^0.4.11",
     "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/postcss": "^4.1.18",
     "@tailwindcss/typography": "^0.5.19",
@@ -80,6 +88,8 @@
     "postcss-simple-vars": "^7.0.1",
     "tailwindcss": "^4.1.18",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.7"
   }
 }

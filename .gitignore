@@ -56,3 +56,11 @@ manifest-bobbot-dev.json
 
 .env.local
 .gstack/
+
+# python venv for evals
+evals/.venv/
+
+# agent / editor local config + scratch
+.claude/
+.cursor/skills/
+.playwright-mcp/

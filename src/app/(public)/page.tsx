@@ -6,8 +6,7 @@ import { ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 
 import { getSlackOAuthUrl } from '@/lib/server-actions';
-import { Card, Container, Link, Stack, Text, Title, Button } from '@/components/ui';
-import { SUBSCRIPTION_TIERS } from '@/types';
+import { Card, Link, Text, Title, Button } from '@/components/ui';
 // PostHog autocapture handles all frontend tracking automatically
 import CTAButton from './components/CTAButton';
 
@@ -38,6 +37,7 @@ export default function LandingPage() {
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('error');
     if (code) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync from the URL on mount
       setErrorMessage(OAUTH_ERROR_MESSAGES[code] || OAUTH_ERROR_MESSAGES.oauth_error);
       // Clean the URL so a refresh doesn't re-show the banner.
       window.history.replaceState(null, '', window.location.pathname);

@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 // Hand-label a stratified sample of the synthetic eval dataset to find out
 // whether the LLM-assigned labels in dataset.json actually match what a human
 // reviewer would say.
@@ -234,7 +234,7 @@ async function main(): Promise<void> {
     const dataset: DatasetEntry[] = JSON.parse(fs.readFileSync(DATASET_PATH, "utf-8"));
     const flags: FlagDef[] = fs.existsSync(FLAGS_PATH) ? JSON.parse(fs.readFileSync(FLAGS_PATH, "utf-8")) : [];
 
-    let file = loadAnnotations();
+    const file = loadAnnotations();
 
     if (REPORT_ONLY) {
         reportAndExit(file, dataset);
