@@ -96,6 +96,34 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// API versions after 2025-03-31 moved current_period_start/end from the
+// subscription to its items; fall back to the legacy top-level fields for
+// webhook endpoints still pinned to an older version.
+function getSubscriptionPeriod(subscription: Stripe.Subscription): { start: Date; end: Date } | null {
+  const item = subscription.items?.data?.[0];
+  const legacy = subscription as unknown as { current_period_start?: number; current_period_end?: number };
+  const start = item?.current_period_start ?? legacy.current_period_start;
+  const end = item?.current_period_end ?? legacy.current_period_end;
+  if (typeof start !== 'number' || typeof end !== 'number') {
+    return null;
+  }
+  return { start: new Date(start * 1000), end: new Date(end * 1000) };
+}
+
+// API versions after 2025-03-31 moved invoice.subscription to
+// invoice.parent.subscription_details; support both shapes.
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const parentSub = invoice.parent?.subscription_details?.subscription;
+  if (parentSub) {
+    return typeof parentSub === 'string' ? parentSub : parentSub.id;
+  }
+  const legacy = (invoice as unknown as { subscription?: string | { id: string } }).subscription;
+  if (legacy) {
+    return typeof legacy === 'string' ? legacy : legacy.id;
+  }
+  return null;
+}
+
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log('✅ Checkout completed for session:', session.id);
   
@@ -167,21 +195,31 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
   const previousTier = workspace.subscription?.tier || 'FREE';
   
   // Update workspace subscription
-  const subscriptionData = subscription as unknown as Record<string, unknown>;
+  const period = getSubscriptionPeriod(subscription);
   await updateWorkspaceSubscription(String(workspace._id), {
     tier: tier,
     status: subscription.status as 'active' | 'cancelled' | 'past_due',
-    currentPeriodStart: new Date((subscriptionData.current_period_start as number) * 1000),
-    currentPeriodEnd: new Date((subscriptionData.current_period_end as number) * 1000),
+    ...(period ? { currentPeriodStart: period.start, currentPeriodEnd: period.end } : {}),
     stripeSubscriptionId: subscription.id,
     updatedAt: new Date(),
   });
-  
-  // Reset usage counters if subscription became active
+
+  // Reset usage counters only on a fresh upgrade or when the billing period
+  // actually advanced — `customer.subscription.updated` also fires for portal
+  // visits and metadata changes, which must not grant a free quota refill.
   if (subscription.status === 'active') {
-    await resetWorkspaceMonthlyUsage(String(workspace._id));
-    console.log('🔄 Reset usage counters for new billing period');
-    
+    const isNewUpgrade = tier === 'PRO' && previousTier === 'FREE';
+    const storedStartMs = workspace.subscription?.currentPeriodStart
+      ? new Date(workspace.subscription.currentPeriodStart).getTime()
+      : NaN;
+    const isNewBillingPeriod = period !== null
+      && (!Number.isFinite(storedStartMs) || period.start.getTime() > storedStartMs);
+
+    if (isNewUpgrade || isNewBillingPeriod) {
+      await resetWorkspaceMonthlyUsage(String(workspace._id));
+      console.log('🔄 Reset usage counters for new billing period');
+    }
+
     // Send Pro subscription welcome message only for new upgrades
     if (tier === 'PRO' && previousTier === 'FREE') {
       // Find admin user to send notification
@@ -287,9 +325,8 @@ async function handleCustomerUpdated(customer: Stripe.Customer) {
 
 async function handlePaymentSuccess(invoice: Stripe.Invoice) {
   console.log('💰 Payment succeeded for invoice:', invoice.id);
-  
-  const invoiceData = invoice as unknown as Record<string, unknown>;
-  const subscriptionId = invoiceData.subscription as string;
+
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
   if (!subscriptionId) {
     return; // Not a subscription payment
   }
@@ -310,11 +347,10 @@ async function handlePaymentSuccess(invoice: Stripe.Invoice) {
   
   // Update billing period and reset usage if it's a new period
   const needsReset = await workspaceNeedsBillingReset(String(workspace._id));
-  
-  const subscriptionData = subscription as unknown as Record<string, unknown>;
+
+  const period = getSubscriptionPeriod(subscription);
   await updateWorkspaceSubscription(String(workspace._id), {
-    currentPeriodStart: new Date((subscriptionData.current_period_start as number) * 1000),
-    currentPeriodEnd: new Date((subscriptionData.current_period_end as number) * 1000),
+    ...(period ? { currentPeriodStart: period.start, currentPeriodEnd: period.end } : {}),
     status: 'active',
     updatedAt: new Date(),
   });
@@ -329,9 +365,8 @@ async function handlePaymentSuccess(invoice: Stripe.Invoice) {
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
   console.log('💸 Payment failed for invoice:', invoice.id);
-  
-  const invoiceData = invoice as unknown as Record<string, unknown>;
-  const subscriptionId = invoiceData.subscription as string;
+
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
   if (!subscriptionId) {
     return; // Not a subscription payment
   }
