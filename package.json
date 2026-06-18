@@ -29,7 +29,8 @@
     "scenarios:watch": "vitest --config vitest.config.ts",
     "evals:style:deviation": "tsx --env-file=.env.local src/scripts/evaluate-style-deviation.ts",
     "test:stripe:webhooks": "tsx --env-file=.env.local src/scripts/test-stripe-webhooks.ts",
-    "test:slack:events": "tsx --env-file=.env.local src/scripts/test-slack-events.ts"
+    "test:slack:events": "tsx --env-file=.env.local src/scripts/test-slack-events.ts",
+    "check:e2e": "bash scripts/e2e-check.sh"
   },
   "dependencies": {
     "@mantine/core": "^8.3.12",
