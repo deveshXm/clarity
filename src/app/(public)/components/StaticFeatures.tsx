@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Text, Title } from "@/components/ui";
+import { Text, Title } from "@/components/ui";
 import { motion } from "framer-motion";
 import Image from "next/image";
 

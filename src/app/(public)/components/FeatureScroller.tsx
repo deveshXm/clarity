@@ -44,7 +44,9 @@ export default function FeatureScroller() {
   const lastTouchYRef = useRef<number | null>(null);
   const edgeAccumulatedRef = useRef<number>(0);
   const edgeReleasedRef = useRef<boolean>(false);
-  const lastIndexChangeAtRef = useRef<number>(Date.now());
+  // 0 = "long ago" so edge release is armed on first load; the mount effect
+  // resets this to performance.now(), which all comparisons use.
+  const lastIndexChangeAtRef = useRef<number>(0);
 
   const THRESHOLD_PX = 100; // gesture distance to trigger a slide
   const SLIDE_DURATION_S = 0.32; // fixed-duration snap
@@ -54,6 +56,7 @@ export default function FeatureScroller() {
 
   // Ensure client-side only execution
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard one-shot hydration gate
     setIsClient(true);
   }, []);
 

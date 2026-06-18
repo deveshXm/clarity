@@ -30,6 +30,7 @@ export function AuthGuard({
 
     // Handle authentication requirement
     if (!user && requireAuth) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- flips the loading overlay exactly once before a route replace
       setRedirecting(true);
       router.replace(fallbackPath);
       return;

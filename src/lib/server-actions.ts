@@ -3,11 +3,10 @@
 import { ObjectId } from 'mongodb';
 
 import {
-    slackUserCollection,
     workspaceCollection,
     botChannelsCollection
 } from '@/lib/db';
-import { ServerActionResult, Workspace } from '@/types';
+import { Workspace } from '@/types';
 import { trackEvent } from './posthog';
 import { EVENTS } from './analytics/events';
 import {
