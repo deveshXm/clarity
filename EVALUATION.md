@@ -28,14 +28,14 @@ Content-Type: application/json
 |-------|------|----------|-------------|
 | `message` | `string` | Yes | The message to analyze |
 | `coachingFlags` | `CoachingFlag[]` | No | Custom coaching flags (uses defaults if omitted) |
-| `includeReasoning` | `boolean` | No | If true, includes reasoning in response (default: false) |
+| `includeReason` | `boolean` | No | If true, includes `reason` in response (default: false) |
 | `prompt` | `string` | No | Custom system prompt (must contain `{{FLAGS}}` placeholder) |
 
 ### CoachingFlag Object
 
 ```typescript
 {
-  name: string;        // Flag name (e.g., "Pushiness")
+  name: string;        // Flag name (e.g., "Disrespectful")
   description: string; // What this flag detects
   enabled: boolean;    // Whether to check for this issue
 }
@@ -43,18 +43,20 @@ Content-Type: application/json
 
 ### Default Coaching Flags
 
-If `coachingFlags` is not provided, these defaults are used:
+If `coachingFlags` is not provided, the 5 shipped defaults are used (source of
+truth: `src/types/index.ts` → `DEFAULT_COACHING_FLAGS`):
 
-| Name | Description | Enabled |
-|------|-------------|---------|
-| Pushiness | Overly aggressive or demanding tone | ✅ |
-| Vagueness | Unclear or imprecise requests | ✅ |
-| Non-Objective | Subjective or biased communication | ✅ |
-| Circular | Repetitive or circular reasoning | ✅ |
-| Rudeness | Impolite or discourteous communication | ✅ |
-| Passive-Aggressive | Indirect expression of negative feelings | ✅ |
-| Fake | Insincere or inauthentic communication | ❌ |
-| One-Liner | Overly brief or dismissive responses | ❌ |
+| Name | Detects | Enabled |
+|------|---------|---------|
+| Disrespectful | Demeaning, insulting, or hostile language aimed at a person/group (not blunt-but-neutral feedback) | ✅ |
+| Passive-Aggressive | Indirect frustration masked by politeness, fake enthusiasm, or veiled digs | ✅ |
+| Dismissive | Rejecting/shutting down a raised concern without reasoning (not reasoned "no" or prioritization) | ✅ |
+| Unclear / Not Actionable | Asks for action but omits who/what/where/when/impact, or makes unsupported claims | ✅ |
+| Unconstructive / Demoralizing | Sweeping negativity/defeatism with no concrete problem or path forward | ✅ |
+
+> Genuinely abusive content (threats, slurs, identity attacks, attacks on a
+> person's worth) is treated as **harmful**: it is flagged but **not** rephrased
+> into a sendable message — the agent returns a de-escalation `warning` instead.
 
 ## Response
 

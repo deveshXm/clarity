@@ -1,8 +1,9 @@
-"""Generate a synthetic eval dataset using the 4 default app flags.
+"""Generate a synthetic eval dataset using the 5 default app flags.
 
-This is the "Option A" alignment: the eval directly measures the experience a
-fresh-install user (the vast majority) gets, instead of a 9-flag persona-derived
-set that no end-user actually sees.
+This is the canonical, production-aligned bench: the eval directly measures the
+experience a fresh-install user (the vast majority) gets, against the exact flags
+shipped in the app — not the 9-flag persona-derived research set in generate.py
+that no end-user actually sees.
 
 DEFAULT_FLAGS below is synced from `src/types/index.ts` → `DEFAULT_COACHING_FLAGS`.
 If you update the app's default flags, update this list in the same commit.
@@ -61,11 +62,16 @@ DEFAULT_FLAGS: list[dict[str, str]] = [
         "name": "Dismissive",
         "description": (
             "Responses that reject or shut down discussion without engaging with the "
-            "substance. Flag when: a concern or question was raised, the reply "
-            "dismisses it without reasoning, and the reply reduces engagement or "
-            "signals refusal to consider. Do NOT flag concise but sufficient answers, "
-            "boundary setting ('Let's take this offline'), or prioritization decisions "
-            "('We'll address this next sprint')."
+            "substance. Flag ONLY when: a concern or question was raised, the reply "
+            "rejects it WITHOUT any reasoning, tradeoff, or path forward, and it "
+            "signals refusal to consider (e.g. 'No.', 'Doesn't matter, moving on', "
+            "'Whatever'). Do NOT flag a reply just because it opens with 'No' or 'I "
+            "disagree': reasoned disagreement ('I disagree — REST is simpler here "
+            "because X'), decisions that give a rationale or next step ('No, we're not "
+            "expanding scope this release — let's ship what's planned and revisit "
+            "after'), concise but sufficient answers, boundary setting ('Let's take "
+            "this offline'), and prioritization decisions ('We'll address this next "
+            "sprint') are NOT dismissive."
         ),
     },
     {
@@ -77,6 +83,20 @@ DEFAULT_FLAGS: list[dict[str, str]] = [
             "information (who/what/where/when/impact) AND no clarifying detail exists "
             "in thread context. Do NOT flag casual updates, early brainstorming, "
             "high-level opinions, or normal technical judgment in engineering debate."
+        ),
+    },
+    {
+        "name": "Unconstructive / Demoralizing",
+        "description": (
+            "Broad negativity, defeatism, or disparagement of the work, product, "
+            "project, or team that lowers morale without offering a specific problem, "
+            "reason, or path forward. Flag when: the message expresses sweeping "
+            "negativity or hopelessness ('this sucks', 'this is pointless', 'why are "
+            "we even doing this', 'this is a disaster', 'we are doomed') AND offers no "
+            "concrete issue, reasoning, or next step. Do NOT flag specific constructive "
+            "criticism that names a real problem or fix ('the latency regressed, we "
+            "should profile the query'), factual status updates, normal venting that "
+            "includes a concrete issue, or a clearly proposed action."
         ),
     },
 ]
@@ -99,7 +119,7 @@ def save(filename: str, data) -> None:
 
 
 def write_flags() -> list[dict]:
-    """Persist the 4 default flags in the same shape evaluate.py reads.
+    """Persist the 5 default flags in the same shape evaluate.py reads.
 
     The existing pipeline includes a `persona` field per flag; we set it to
     'general' since these flags are voice-agnostic. The messages step picks a
@@ -123,7 +143,7 @@ def generate_messages(flags: list[dict]) -> None:
     dataset: list[dict] = []
     id_counter = 1
 
-    # 4 flags × 4 scenarios × 3 personas × MESSAGES_PER × 2 (pos+neg)
+    # 5 flags × 4 scenarios × 3 personas × MESSAGES_PER × 2 (pos+neg)
     total = len(flags) * len(SCENARIOS) * len(PERSONAS) * MESSAGES_PER_FLAG_SCENARIO * 2
 
     for scenario in SCENARIOS:
@@ -134,7 +154,7 @@ def generate_messages(flags: list[dict]) -> None:
                     is_multi = random.random() < (MULTI_FLAG_PERCENT / 100) and len(flags) > 1
                     if is_multi:
                         others = [f for f in flags if f["name"] != flag["name"]]
-                        # Cap extras at 1 since we only have 4 flags total
+                        # Cap extras at 1 to keep multi-flag cases realistic
                         extra = random.sample(others, 1)
                         active_flags = [flag] + extra
                     else:

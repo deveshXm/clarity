@@ -22,7 +22,7 @@ export const DEFAULT_COACHING_FLAGS: CoachingFlag[] = [
     },
     {
         name: 'Dismissive',
-        description: 'Responses that reject or shut down discussion without engaging with the substance. Flag when: a concern or question was raised, the reply dismisses it without reasoning, and the reply reduces engagement or signals refusal to consider. Do NOT flag concise but sufficient answers, boundary setting (\'Let\'s take this offline\'), or prioritization decisions (\'We\'ll address this next sprint\').',
+        description: 'Responses that reject or shut down discussion without engaging with the substance. Flag ONLY when: a concern or question was raised, the reply rejects it WITHOUT any reasoning, tradeoff, or path forward, and it signals refusal to consider (e.g. \'No.\', \'Doesn\'t matter, moving on\', \'Whatever\'). Do NOT flag a reply just because it opens with \'No\' or \'I disagree\': reasoned disagreement (\'I disagree — REST is simpler here because X\'), decisions that give a rationale or next step (\'No, we\'re not expanding scope this release — let\'s ship what\'s planned and revisit after\'), concise but sufficient answers, boundary setting (\'Let\'s take this offline\'), and prioritization decisions (\'We\'ll address this next sprint\') are NOT dismissive.',
         enabled: true,
     },
     {

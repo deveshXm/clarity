@@ -71,9 +71,36 @@ npm run evals:style
 ```
 
 These checks are intentionally not a replacement for LangWatch scenario evals.
-Use them as a fast local gate, then mirror the same scenarios in LangWatch for
-human/LLM-judge review of digest usefulness, style adherence, and intent
-preservation.
+Use them as a fast local gate, then run the judge-evaluated scenario suite for
+the coaching agent: see [`../scenarios`](../scenarios) (`npm run scenarios`).
+That suite drives the real agent through realistic, LLM-judged conversations
+(correct flagging, intent-preserving rephrases, harmful-content refusal, and
+adversarial gate-evasion) and reports to LangWatch.
+
+### Style-deviation calibration
+
+The **style digest** (`analyzeStyleBaseline` / `analyzeStyleDeviation`) is batch,
+not conversational, so it's evaluated as a calibration test rather than a
+scenario:
+
+```bash
+npm run evals:style:deviation
+```
+
+`src/scripts/evaluate-style-deviation.ts` checks whether the adherence score
+(0-100) is *correct or wildly off* across multiple target styles and workplace
+registers, via four signals: **banding** (clearly on-style → high, off-style →
+low), **discrimination** (on-style must outscore off-style per target),
+**variance** (same input run twice → similar score), and **judge gap** (vs an
+independent Azure LLM judge). Prints a scorecard, exits non-zero if calibration
+is broken. The independent judge uses the Azure OpenAI client (same one the
+companion bots use); the scorer under test runs through Clarity's Portkey stack.
+
+Verified run (2026-05-31, 11 cases, gpt-5-mini judge): **band accuracy 100%
+(11/11)**, mean |clarity − judge| = **7 pts**, max run-to-run spread **10**,
+and **5/5 target styles cleanly separate on-style from off-style** (margins
+69–89). On-style batches scored 84–97, off-style 8–20, mixed 65. Conclusion:
+the deviation scores are well-calibrated, not wildly off.
 
 ### 3. Output
 
