@@ -105,6 +105,9 @@ export async function GET(request: NextRequest) {
         const existingWorkspace = await workspaceCollection.findOne({ workspaceId: team.id });
         let workspaceObjectId: ObjectId;
         let isNewWorkspace = false;
+        // Whether the person completing this OAuth run is the workspace admin.
+        // Re-installs by ordinary teammates must not grant admin rights.
+        let isAdminInstaller = true;
 
         console.log('[AUTH] Workspace lookup:', { teamId: team.id, exists: !!existingWorkspace });
 
@@ -124,6 +127,14 @@ export async function GET(request: NextRequest) {
                 currentPeriodEnd: existingSubscription?.currentPeriodEnd || nextMonth,
             };
             
+            // Keep the original admin. Re-running OAuth is a normal, expected flow —
+            // it's how an ordinary teammate grants the per-user `chat:write` scope
+            // that makes in-place message replacement work. Handing workspace admin
+            // (settings, billing, onboarding) to whoever authorized most recently
+            // would silently demote the real owner. Only claim admin when the
+            // workspace has none recorded.
+            const retainedAdminSlackId = existingWorkspace.adminSlackId || authed_user.id;
+
             await workspaceCollection.updateOne(
                 { workspaceId: team.id },
                 { 
@@ -132,7 +143,7 @@ export async function GET(request: NextRequest) {
                         domain: team.name?.toLowerCase().replace(/\s+/g, '-') || 'unknown',
                         botToken: oauthResponse.access_token,
                         botUserId: oauthResponse.bot_user_id,
-                        adminSlackId: authed_user.id, // Update admin to current installer
+                        adminSlackId: retainedAdminSlackId,
                         hasCompletedOnboarding: existingWorkspace.hasCompletedOnboarding || false, // Preserve if already completed
                         subscription: updatedSubscription,
                         isActive: true,
@@ -141,10 +152,13 @@ export async function GET(request: NextRequest) {
                 }
             );
             workspaceObjectId = existingWorkspace._id as ObjectId;
+            isAdminInstaller = retainedAdminSlackId === authed_user.id;
             
             logInfo('Updated existing workspace', { 
                 workspace_id: team.id,
-                admin_slack_id: authed_user.id
+                admin_slack_id: retainedAdminSlackId,
+                installer_slack_id: authed_user.id,
+                installer_is_admin: isAdminInstaller
             });
         } else {
             // Create new workspace with admin and subscription
@@ -198,7 +212,7 @@ export async function GET(request: NextRequest) {
                 autoCoachingEnabledChannels: [],
                 coachingFlags: [...DEFAULT_COACHING_FLAGS],
                 userToken: userToken, // Store user token for message editing
-                isAdmin: true,
+                isAdmin: isAdminInstaller,
                 isActive: true,
                 createdAt: new Date(),
                 updatedAt: new Date()
@@ -216,7 +230,9 @@ export async function GET(request: NextRequest) {
                 { slackId: authed_user.id, workspaceId: workspaceObjectId.toString() },
                 { 
                     $set: { 
-                        isAdmin: true,
+                        // Only (re)assert admin for the actual workspace admin. A
+                        // teammate re-authorizing keeps whatever role they had.
+                        ...(isAdminInstaller ? { isAdmin: true } : {}),
                         isActive: true,
                         ...(userToken && { userToken }), // Update user token if provided
                         updatedAt: new Date()
@@ -224,7 +240,7 @@ export async function GET(request: NextRequest) {
                 }
             );
             
-            logInfo('Updated existing user as admin', {
+            logInfo('Updated existing user after OAuth', {
                 slack_id: authed_user.id,
                 workspace_id: workspaceObjectId.toString(),
                 has_user_token: !!userToken
@@ -238,13 +254,14 @@ export async function GET(request: NextRequest) {
             slack_user_id: authed_user.id,
             workspace_id: workspaceObjectId.toString(),
             workspace_name: team.name,
-            is_workspace_admin: true,
+            is_workspace_admin: isAdminInstaller,
             is_new_workspace: isNewWorkspace,
         });
 
-        // Send welcome message to the admin
+        // Send welcome message to the admin only. A teammate who re-ran OAuth just
+        // to grant their own `chat:write` scope shouldn't get the install walkthrough.
         try {
-            const welcomeMessageSent = await sendWelcomeMessage(
+            const welcomeMessageSent = isAdminInstaller && await sendWelcomeMessage(
                 authed_user.id,
                 team.id,
                 oauthResponse.access_token
@@ -266,7 +283,7 @@ export async function GET(request: NextRequest) {
             workspace_id: workspaceObjectId.toString(),
             workspace_name: team.name,
             is_new_workspace: isNewWorkspace,
-            is_workspace_admin: true,
+            is_workspace_admin: isAdminInstaller,
             admin_email: adminEmail,
         });
 

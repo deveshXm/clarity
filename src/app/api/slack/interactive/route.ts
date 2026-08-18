@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, sendWorkspaceAnnouncementMessage, joinChannel, sendAdminTransferNotification, openAdminTransferModal, resolveSlackUserName, getWorkspaceChannels, openOnboardingModal, sendDirectMessage, reconcileBotChannels, openStyleEditModal } from '@/lib/slack';
+import { verifySlackSignature, sendWorkspaceAnnouncementMessage, joinChannel, sendAdminTransferNotification, openAdminTransferModal, resolveSlackUserName, getWorkspaceChannels, openOnboardingModal, sendDirectMessage, reconcileBotChannels, openStyleEditModal, getSlackOAuthUrl } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection, botChannelsCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
@@ -41,6 +41,13 @@ interface SlackInteractivePayload {
     };
   };
 }
+
+// Buttons that only open a URL — they need a bare 200, never a response body.
+const LINK_ONLY_ACTION_IDS = new Set([
+  'learn_about_clarity_link',
+  'connect_clarity_user_token',
+  'install_clarity',
+]);
 
 interface MessageReplacementData {
   original_ts: string;
@@ -291,6 +298,12 @@ export async function POST(request: NextRequest) {
                 return await handleEnableChannelMonitoring(payload, action);
             } else if (action.action_id === 'edit_style_button') {
                 return await handleEditStyleButton(payload);
+            } else if (LINK_ONLY_ACTION_IDS.has(action.action_id)) {
+                // Link buttons still deliver a block_actions payload. Slack treats any
+                // JSON body we return as a message replacement, so answering these with
+                // the generic "Unknown interaction" fall-through would wipe out the
+                // message the user just clicked from. Acknowledge with an empty 200.
+                return new NextResponse('', { status: 200 });
             }
         } else if (payload.type === 'view_submission') {
             // Handle modal form submissions
@@ -335,6 +348,46 @@ export async function POST(request: NextRequest) {
     }
 }
 
+// Shown when we can't edit the user's message for them: the rephrase stays
+// available to copy, and the authorize link grants the per-user `chat:write`
+// scope that makes the Replace button work from the next message onward.
+function buildConnectToReplaceBlocks(improvedText: string): Array<Record<string, unknown>> {
+    return [
+        {
+            type: 'section',
+            text: {
+                type: 'mrkdwn',
+                text: `*Here's the rephrased version — copy it in:*\n\`\`\`${improvedText}\`\`\``
+            }
+        },
+        {
+            type: 'context',
+            elements: [
+                {
+                    type: 'mrkdwn',
+                    text: "Clarity can't edit your message until you authorize it — Slack only lets an app edit your messages with your own permission. It takes one click and Clarity will replace messages for you from then on."
+                }
+            ]
+        },
+        {
+            type: 'actions',
+            elements: [
+                {
+                    type: 'button',
+                    text: { type: 'plain_text', text: 'Connect Clarity', emoji: true },
+                    style: 'primary',
+                    url: getSlackOAuthUrl(),
+                    action_id: 'connect_clarity_user_token'
+                }
+            ]
+        },
+        {
+            type: 'context',
+            elements: [{ type: 'mrkdwn', text: 'Only you can see this' }]
+        }
+    ];
+}
+
 async function handleMessageReplacement(payload: SlackInteractivePayload, action: SlackInteractivePayload['actions'][0]) {
     const responseUrl = payload.response_url;
     
@@ -349,26 +402,54 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         }
     };
     
+    // Replace the ephemeral in place instead of deleting it, so the user always
+    // gets an explanation rather than a button that appears to do nothing.
+    const replaceEphemeral = async (blocks: Array<Record<string, unknown>>, text: string) => {
+        if (responseUrl) {
+            await fetch(responseUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ replace_original: 'true', text, blocks })
+            });
+        }
+    };
+
     try {
         const data: MessageReplacementData = JSON.parse(action.value);
         const { original_ts, channel, original_text, improved_text, user } = data;
         
         console.log('[INT] Replace message:', { user, channel });
         
-        // Verify user has installed the app and get user token
+        // Scope the lookup to the workspace the click came from — the same Slack
+        // user ID can exist in several installed workspaces, and an unscoped
+        // lookup can pick up another workspace's token.
+        const workspaceDoc = payload.team?.id
+            ? await workspaceCollection.findOne({ workspaceId: payload.team.id, isActive: true })
+            : null;
+
         const appUser = await slackUserCollection.findOne({
             slackId: user,
-            isActive: true
+            isActive: true,
+            ...(workspaceDoc ? { workspaceId: String(workspaceDoc._id) } : {})
         });
         
-        if (!appUser) {
-            await deleteEphemeral();
-            return NextResponse.json({ ok: true });
-        }
-        
-        // Check if user has provided user token (required for message updating)
-        if (!appUser.userToken) {
-            await deleteEphemeral();
+        // Editing someone's own message requires *their* user token, which only
+        // exists once they've personally authorized Clarity. Teammates who were
+        // coached via channel discovery have never done that, so instead of a
+        // dead button we hand them the rephrase to copy plus a one-click
+        // authorize link that enables in-place replace from then on.
+        if (!appUser || !appUser.userToken) {
+            console.log('[INT] Replace unavailable — no user token:', { user, hasUser: !!appUser });
+            await replaceEphemeral(
+                buildConnectToReplaceBlocks(improved_text),
+                'Copy your rephrased message, or connect Clarity to replace it in one click.'
+            );
+            trackEvent(user, EVENTS.API_MESSAGE_REPLACED, {
+                workspace_id: appUser?.workspaceId || 'unknown',
+                channel_id: channel,
+                replaced: false,
+                skip_reason: 'missing_user_token',
+            });
             return NextResponse.json({ ok: true });
         }
         
@@ -384,7 +465,12 @@ async function handleMessageReplacement(payload: SlackInteractivePayload, action
         
         if (!updateResult.ok) {
             console.error('[INT] Message update failed:', updateResult.error);
-            await deleteEphemeral();
+            // A revoked or expired user token surfaces here — fall back to the
+            // same copy-and-connect path rather than failing silently.
+            await replaceEphemeral(
+                buildConnectToReplaceBlocks(improved_text),
+                'Couldn\'t replace the message automatically — here it is to copy.'
+            );
             return NextResponse.json({ ok: true });
         }
         
@@ -472,13 +558,30 @@ async function handleSendImprovedMessage(payload: SlackInteractivePayload, actio
         // Create workspace-specific WebClient
         const workspaceSlack = new WebClient(workspace.botToken);
         
-        // Post the improved message as the user (using bot with custom username)
-        const postResult = await workspaceSlack.chat.postMessage({
+        // Post the improved message under the sender's name/avatar. That needs the
+        // `chat:write.customize` scope — workspaces installed before it was added to
+        // the manifest don't have it, and Slack rejects the whole call with
+        // `missing_scope`. Retry as a plain bot post so the message still lands.
+        let postResult = await workspaceSlack.chat.postMessage({
             channel: channelId,
             text: improvedMessage,
             username: appUser.displayName || appUser.name, // Try to match user's display name
             icon_url: appUser.image || undefined // Use user's profile image if available
+        }).catch((err: unknown) => {
+            const code = (err as { data?: { error?: string } })?.data?.error;
+            console.warn('[INT] Customized post failed, falling back:', code);
+            return { ok: false, error: code } as { ok: boolean; error?: string };
         });
+
+        if (!postResult.ok) {
+            postResult = await workspaceSlack.chat.postMessage({
+                channel: channelId,
+                text: improvedMessage,
+            }).catch((err: unknown) => {
+                const code = (err as { data?: { error?: string } })?.data?.error;
+                return { ok: false, error: code } as { ok: boolean; error?: string };
+            });
+        }
         
         if (!postResult.ok) {
             console.error('[INT] Post failed:', postResult.error);

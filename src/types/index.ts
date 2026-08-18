@@ -258,6 +258,11 @@ export const SlackEventSchema = z.object({
     ts: z.string(),
     event_ts: z.string(),
     channel_type: z.string(),
+    // Present when the message is a reply inside a thread. Coaching for a thread
+    // reply has to be delivered *into* that thread, otherwise the ephemeral lands
+    // in the channel root where the sender — who is reading the thread pane —
+    // never sees it.
+    thread_ts: z.string().optional(),
 });
 
 // Better Auth User type (already defined above)

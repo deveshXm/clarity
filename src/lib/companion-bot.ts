@@ -22,13 +22,27 @@ export interface CompanionConfig {
     replyDelayMs?: number;   // pause before posting (more human-feeling), default 1000
 }
 
-// Azure OpenAI client (shared — same config as the main app)
-const openaiClient = new AzureOpenAI({
-    endpoint: process.env.AZURE_API_ENDPOINT || '',
-    apiKey: process.env.AZURE_API_KEY || '',
-    deployment: process.env.AZURE_DEPLOYMENT_NAME || 'gpt-5-mini',
-    apiVersion: process.env.AZURE_API_VERSION || '2024-12-01-preview',
-});
+// Azure OpenAI client (shared — same config as the main app).
+//
+// Constructed lazily. At module scope the SDK throws when no key is configured,
+// and `next build` evaluates every route module while collecting page data — so
+// a module-scope client makes the whole production build fail on any machine
+// without Azure credentials. These companion bots are a dev-only dogfooding
+// tool; they must never be able to break the app's build.
+let openaiClient: AzureOpenAI | null = null;
+
+function getOpenAIClient(): AzureOpenAI {
+    if (!openaiClient) {
+        openaiClient = new AzureOpenAI({
+            endpoint: process.env.AZURE_API_ENDPOINT || '',
+            apiKey: process.env.AZURE_API_KEY || '',
+            deployment: process.env.AZURE_DEPLOYMENT_NAME || 'gpt-5-mini',
+            apiVersion: process.env.AZURE_API_VERSION || '2024-12-01-preview',
+        });
+    }
+    return openaiClient;
+}
+
 const modelName = process.env.AZURE_MODEL_NAME || process.env.AZURE_DEPLOYMENT_NAME || 'gpt-5-nano';
 
 function verifySlackSignature(signingSecret: string, sig: string, ts: string, body: string): boolean {
@@ -44,7 +58,7 @@ function verifySlackSignature(signingSecret: string, sig: string, ts: string, bo
 }
 
 async function chatCompletion(messages: ChatCompletionMessageParam[]): Promise<string> {
-    const res = await openaiClient.chat.completions.create({
+    const res = await getOpenAIClient().chat.completions.create({
         messages,
         model: modelName,
         reasoning_effort: 'low',

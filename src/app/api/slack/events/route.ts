@@ -284,7 +284,8 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                 'This message may be harmful — consider reconsidering before sending.',
                 workspace.botToken,
                 [],
-                buildHarmfulWarningBlocks(analysis.flags.map(f => f.flagName), analysis.warning)
+                buildHarmfulWarningBlocks(analysis.flags.map(f => f.flagName), analysis.warning),
+                validatedEvent.thread_ts
             );
             trackEvent(validatedEvent.user, EVENTS.API_SLACK_EVENT_PROCESSED, {
                 event_type: 'message',
@@ -325,7 +326,8 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
                     quotaNotification.text,
                     workspace.botToken,
                     [],
-                    quotaNotification.blocks
+                    quotaNotification.blocks,
+                    validatedEvent.thread_ts
                 );
                 
                 await slackUserCollection.updateOne(
@@ -494,7 +496,8 @@ async function handleMessageEvent(event: Record<string, unknown>, teamId: string
             "Clarity",
             workspace.botToken,
             [],
-            blocks
+            blocks,
+            validatedEvent.thread_ts
         );
         
         if (success) {

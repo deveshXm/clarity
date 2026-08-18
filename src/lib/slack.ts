@@ -13,6 +13,10 @@ export const slackOAuthConfig = {
     botScopes: [
         'chat:write',   
         'chat:write.public',
+        // Required to post a rephrase back under the sender's own name/avatar
+        // (`/clarity-rephrase` → Send). Without it Slack rejects the call with
+        // `missing_scope`; the send path degrades to a plain bot post.
+        'chat:write.customize',
         'commands',
         'channels:history',
         'groups:history',
@@ -201,13 +205,18 @@ export const resolveSlackUserNames = async (
 };
 
 // Send ephemeral message to user
+// `threadTs` scopes the ephemeral to a thread. Slack renders an ephemeral without
+// it in the channel root, so coaching on a thread reply would be invisible to a
+// sender who is reading the thread pane. Pass the reply's `thread_ts` whenever the
+// message being coached is itself a thread reply.
 export const sendEphemeralMessage = async (
     channelId: string,
     userId: string,
     text: string,
     botToken: string,
     attachments?: unknown[],
-    blocks?: unknown[]
+    blocks?: unknown[],
+    threadTs?: string
 ): Promise<boolean> => {
     try {
         // Create workspace-specific WebClient with the bot token
@@ -218,7 +227,8 @@ export const sendEphemeralMessage = async (
             user: userId,
             text,
             ...(attachments && { attachments }),
-            ...(blocks && { blocks })
+            ...(blocks && { blocks }),
+            ...(threadTs && { thread_ts: threadTs })
         });
         
         return result.ok || false;
