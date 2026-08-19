@@ -11,7 +11,7 @@ Everything happens inside Slack. There is no dashboard to log into.
 |---|---|
 | **Stack** | Next.js 16 (App Router) · MongoDB · Slack Bolt/Web API · Portkey → Azure OpenAI · Trigger.dev · Stripe · PostHog |
 | **Docs** | [`docs/`](docs/) (Mintlify, served at `/docs/*`) |
-| **Runbooks** | [`LOCAL_SETUP.md`](LOCAL_SETUP.md) · [`DEPLOY.md`](DEPLOY.md) · [`EVALUATION.md`](EVALUATION.md) |
+| **Runbooks** | [`LOCAL_SETUP.md`](LOCAL_SETUP.md) · [`DEPLOY.md`](DEPLOY.md) · [`QUALITY.md`](QUALITY.md) · [`EVALUATION.md`](EVALUATION.md) |
 
 ---
 
@@ -183,14 +183,31 @@ conversation that feels live. Configure `DEMO_*` / `DEMO2_*` in `.env.local`.
 ## Automated checks
 
 ```bash
+npm run test:unit     # unit tests — no network, no keys, ~1s. Run these constantly.
 npm run lint          # ESLint (flat config, Next 16)
 npx tsc --noEmit      # typecheck
 npm run build         # production build
-
-npm run evals:sim     # 47 hand-labelled messages, 11 workspace archetypes → P/R/F1
-npm run scenarios     # 9 LLM-judged behavioural scenarios (LangWatch)
-npm run evals:style:deviation
 ```
+
+Integration checks (need a dev server + `.env.local`, no Slack workspace):
+
+```bash
+npm run test:slack:events        # signed message events → coaching, quota, DB effects
+npm run test:slack:interactive   # button paths, incl. Replace without a user token
+npm run test:stripe:webhooks     # signed Stripe events → tier changes
+```
+
+Evals (hit a live model — these cost money):
+
+```bash
+npm run evals:quality            # rephrase + baseline + suggestion quality
+npm run evals:sim                # 47 hand-labelled messages → P/R/F1 per flag
+npm run scenarios                # 9 LLM-judged behavioural scenarios (LangWatch)
+npm run evals:style:deviation    # is the 0-100 adherence score calibrated?
+```
+
+**[`QUALITY.md`](QUALITY.md)** explains what each layer catches, why the eval
+gates are deliberately loose, and where results are reported.
 
 There is also a one-command integration check — `npm run check:e2e`, documented
 in `TESTING.md` — that drives the Stripe webhook and Slack event routes against

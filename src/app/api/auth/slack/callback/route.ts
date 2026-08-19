@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exchangeOAuthCode, sendWelcomeMessage } from '@/lib/slack';
+import { exchangeOAuthCode, sendWelcomeMessage, resolveWorkspaceAdmin } from '@/lib/slack';
 import { workspaceCollection, slackUserCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
@@ -127,13 +127,12 @@ export async function GET(request: NextRequest) {
                 currentPeriodEnd: existingSubscription?.currentPeriodEnd || nextMonth,
             };
             
-            // Keep the original admin. Re-running OAuth is a normal, expected flow —
-            // it's how an ordinary teammate grants the per-user `chat:write` scope
-            // that makes in-place message replacement work. Handing workspace admin
-            // (settings, billing, onboarding) to whoever authorized most recently
-            // would silently demote the real owner. Only claim admin when the
-            // workspace has none recorded.
-            const retainedAdminSlackId = existingWorkspace.adminSlackId || authed_user.id;
+            // See resolveWorkspaceAdmin: a teammate re-authorizing must not take
+            // over the workspace. Unit-tested in tests/oauth-admin.test.ts.
+            const { adminSlackId: retainedAdminSlackId } = resolveWorkspaceAdmin(
+                existingWorkspace.adminSlackId as string | undefined,
+                authed_user.id
+            );
 
             await workspaceCollection.updateOne(
                 { workspaceId: team.id },

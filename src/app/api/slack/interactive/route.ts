@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { verifySlackSignature, sendWorkspaceAnnouncementMessage, joinChannel, sendAdminTransferNotification, openAdminTransferModal, resolveSlackUserName, getWorkspaceChannels, openOnboardingModal, sendDirectMessage, reconcileBotChannels, openStyleEditModal, getSlackOAuthUrl } from '@/lib/slack';
+import { verifySlackSignature, sendWorkspaceAnnouncementMessage, joinChannel, sendAdminTransferNotification, openAdminTransferModal, resolveSlackUserName, getWorkspaceChannels, openOnboardingModal, sendDirectMessage, reconcileBotChannels, openStyleEditModal, buildConnectToReplaceBlocks } from '@/lib/slack';
 import { slackUserCollection, workspaceCollection, botChannelsCollection } from '@/lib/db';
 import { ObjectId } from 'mongodb';
 import { WebClient } from '@slack/web-api';
@@ -346,46 +346,6 @@ export async function POST(request: NextRequest) {
             text: 'Sorry, there was an error processing your action. Please try again.' 
         }, { status: 500 });
     }
-}
-
-// Shown when we can't edit the user's message for them: the rephrase stays
-// available to copy, and the authorize link grants the per-user `chat:write`
-// scope that makes the Replace button work from the next message onward.
-function buildConnectToReplaceBlocks(improvedText: string): Array<Record<string, unknown>> {
-    return [
-        {
-            type: 'section',
-            text: {
-                type: 'mrkdwn',
-                text: `*Here's the rephrased version — copy it in:*\n\`\`\`${improvedText}\`\`\``
-            }
-        },
-        {
-            type: 'context',
-            elements: [
-                {
-                    type: 'mrkdwn',
-                    text: "Clarity can't edit your message until you authorize it — Slack only lets an app edit your messages with your own permission. It takes one click and Clarity will replace messages for you from then on."
-                }
-            ]
-        },
-        {
-            type: 'actions',
-            elements: [
-                {
-                    type: 'button',
-                    text: { type: 'plain_text', text: 'Connect Clarity', emoji: true },
-                    style: 'primary',
-                    url: getSlackOAuthUrl(),
-                    action_id: 'connect_clarity_user_token'
-                }
-            ]
-        },
-        {
-            type: 'context',
-            elements: [{ type: 'mrkdwn', text: 'Only you can see this' }]
-        }
-    ];
 }
 
 async function handleMessageReplacement(payload: SlackInteractivePayload, action: SlackInteractivePayload['actions'][0]) {

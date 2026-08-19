@@ -1490,3 +1490,65 @@ export const buildHarmfulWarningBlocks = (
     });
     return blocks;
 };
+
+// Shown when Clarity can't edit the user's message for them: the rephrase stays
+// available to copy, and the authorize link grants the per-user `chat:write`
+// scope that makes the Replace button work from the next message onward.
+//
+// Lives here rather than in the route so it can be asserted in a unit test —
+// this block is the entire fallback experience for every teammate who hasn't
+// personally authorized Clarity, which is most of them.
+export const buildConnectToReplaceBlocks = (improvedText: string): Array<Record<string, unknown>> => {
+    return [
+        {
+            type: 'section',
+            text: {
+                type: 'mrkdwn',
+                text: `*Here's the rephrased version — copy it in:*\n\`\`\`${improvedText}\`\`\``
+            }
+        },
+        {
+            type: 'context',
+            elements: [
+                {
+                    type: 'mrkdwn',
+                    text: "Clarity can't edit your message until you authorize it — Slack only lets an app edit your messages with your own permission. It takes one click and Clarity will replace messages for you from then on."
+                }
+            ]
+        },
+        {
+            type: 'actions',
+            elements: [
+                {
+                    type: 'button',
+                    text: { type: 'plain_text', text: 'Connect Clarity', emoji: true },
+                    style: 'primary',
+                    url: getSlackOAuthUrl(),
+                    action_id: 'connect_clarity_user_token'
+                }
+            ]
+        },
+        {
+            type: 'context',
+            elements: [{ type: 'mrkdwn', text: 'Only you can see this' }]
+        }
+    ];
+};
+
+/**
+ * Decide who owns a workspace after an OAuth run.
+ *
+ * Re-running OAuth is a normal flow, not just a re-install: it's how an ordinary
+ * teammate grants the per-user `chat:write` scope that makes in-place message
+ * replacement work. So the installer of record must NOT change just because
+ * someone authorized more recently — that would hand workspace settings,
+ * billing, and onboarding to whoever clicked last. Admin is only claimed when
+ * the workspace has none recorded.
+ */
+export const resolveWorkspaceAdmin = (
+    existingAdminSlackId: string | undefined | null,
+    installerSlackId: string
+): { adminSlackId: string; installerIsAdmin: boolean } => {
+    const adminSlackId = existingAdminSlackId || installerSlackId;
+    return { adminSlackId, installerIsAdmin: adminSlackId === installerSlackId };
+};
