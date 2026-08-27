@@ -87,6 +87,12 @@ async function runForUserDoc(user: SlackUser, cadence: Cadence): Promise<RunResu
     .toArray();
   const channelNameById = new Map(channelDocs.map(c => [c.channelId, c.channelName]));
 
+  // conversations.history returns thread *parents* only — replies inside a thread
+  // never appear in it. A lot of real work conversation happens in threads, so a
+  // history-only corpus systematically under-samples how someone actually writes.
+  // Walk the threads too, bounded per channel to keep the API cost predictable.
+  const MAX_THREADS_PER_CHANNEL = 25;
+
   const channelIds = user.autoCoachingEnabledChannels ?? [];
   for (const channelId of channelIds) {
     try {
@@ -95,14 +101,50 @@ async function runForUserDoc(user: SlackUser, cadence: Cadence): Promise<RunResu
         oldest,
         limit: 200,
       });
+      const channelName = channelNameById.get(channelId);
+      const threadParents: string[] = [];
+
       for (const m of res.messages ?? []) {
         if (m.user === user.slackId && typeof m.text === "string" && m.text.trim().length > 0 && typeof m.ts === "string") {
-          collected.push({
-            text: m.text,
-            ts: m.ts,
-            channelName: channelNameById.get(channelId),
+          collected.push({ text: m.text, ts: m.ts, channelName });
+        }
+        // Collect thread roots regardless of who started them — the user may have
+        // replied in a thread someone else opened.
+        if (typeof m.ts === "string" && typeof m.reply_count === "number" && m.reply_count > 0) {
+          threadParents.push(m.ts);
+        }
+      }
+
+      for (const parentTs of threadParents.slice(0, MAX_THREADS_PER_CHANNEL)) {
+        try {
+          const replies = await slack.conversations.replies({
+            channel: channelId,
+            ts: parentTs,
+            oldest,
+            limit: 200,
+          });
+          for (const r of replies.messages ?? []) {
+            // Skip the parent itself — it already came through history above.
+            if (r.ts === parentTs) continue;
+            if (r.user === user.slackId && typeof r.text === "string" && r.text.trim().length > 0 && typeof r.ts === "string") {
+              collected.push({ text: r.text, ts: r.ts, channelName });
+            }
+          }
+        } catch (err) {
+          logger.warn("[digest] thread replies fetch failed", {
+            channelId,
+            parentTs,
+            error: err instanceof Error ? err.message : String(err),
           });
         }
+      }
+
+      if (threadParents.length > MAX_THREADS_PER_CHANNEL) {
+        logger.warn("[digest] thread cap hit — some replies not sampled", {
+          channelId,
+          threads: threadParents.length,
+          sampled: MAX_THREADS_PER_CHANNEL,
+        });
       }
     } catch (err) {
       logger.warn("[digest] history fetch failed", {
