@@ -27,6 +27,10 @@ describe('quoteAppearsInCorpus', () => {
         expect(quoteAppearsInCorpus('I’m not sure the migration is safe', corpus)).toBe(true);
     });
 
+    it('ignores a trailing channel tag the digest prompt appends', () => {
+        expect(quoteAppearsInCorpus('Ship the auth patch today. No more bikeshedding. [#eng]', corpus)).toBe(true);
+    });
+
     it('matches a partial phrase drawn from a real message', () => {
         expect(quoteAppearsInCorpus('no more bikeshedding', corpus)).toBe(true);
     });

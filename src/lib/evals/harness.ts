@@ -101,6 +101,9 @@ export async function judgeJson<T>(system: string, user: string): Promise<T> {
  *  those. Anything beyond this is a genuine fabrication. */
 function normalizeForQuote(s: string): string {
     return s
+        // The digest prompts render each message as "text [#channel]"; a model
+        // that quotes the tag along with the text is not inventing anything.
+        .replace(/\s*\[#[^\]]+\]\s*$/, '')
         .toLowerCase()
         .replace(/[‘’]/g, "'")
         .replace(/[“”]/g, '"')

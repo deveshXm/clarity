@@ -9,7 +9,7 @@
 #
 # Usage:
 #   npm run check:e2e              # local pipelines + production health
-#   npm run check:e2e -- --evals   # also run the 3 eval suites (slower, ~3 min)
+#   npm run check:e2e -- --evals   # also run the LangWatch eval suites (slower, ~10 min)
 #   npm run check:e2e -- --prod    # production health only (no local server)
 #
 # Exit code is 0 only if every selected check passes.
@@ -104,17 +104,28 @@ local_pipeline() {
 
 # --- eval suites (opt-in) ---------------------------------------------------
 run_evals() {
-  section "Eval · simulation (47 gold cases)"
-  npm run evals:sim 2>&1 | tee /tmp/clarity-e2e-sim.log | grep -E "OVERALL|HARMFUL GATE" -A1 | head
-  grep -qE "OVERALL +[0-9]+/[0-9]+ +\(100" /tmp/clarity-e2e-sim.log && record PASS "eval: simulation" || record PASS "eval: simulation (review %)"
+  # Every suite is a LangWatch experiment (needs LANGWATCH_API_KEY in .env.local).
+  # Exit code 0 means the suite's own gates held; the run is also browsable in
+  # the LangWatch UI (the script prints the link).
+  section "Eval · flagging (47 gold cases)"
+  npm run evals:flagging 2>&1 | tee /tmp/clarity-e2e-flagging.log | grep -E "overall_accuracy|harmful_recall|View details" | head
+  grep -q "All gates passed" /tmp/clarity-e2e-flagging.log && record PASS "eval: flagging" || record FAIL "eval: flagging"
+
+  section "Eval · rephrase quality"
+  npm run evals:rephrase 2>&1 | tee /tmp/clarity-e2e-rephrase.log | grep -E "flag_cleared|force_retained|View details" | head
+  grep -q "All gates passed" /tmp/clarity-e2e-rephrase.log && record PASS "eval: rephrase" || record FAIL "eval: rephrase"
+
+  section "Eval · style deviation (persona × target)"
+  npm run evals:style 2>&1 | tee /tmp/clarity-e2e-style.log | grep -E "band_accuracy|discrimination|suggestion_preserves_intent|View details" | head
+  grep -q "All gates passed" /tmp/clarity-e2e-style.log && record PASS "eval: style deviation" || record FAIL "eval: style deviation"
+
+  section "Eval · persona digest"
+  npm run evals:digest 2>&1 | tee /tmp/clarity-e2e-digest.log | grep -E "quote_fidelity|distinctive|View details" | head
+  grep -q "All gates passed" /tmp/clarity-e2e-digest.log && record PASS "eval: persona digest" || record FAIL "eval: persona digest"
 
   section "Eval · LangWatch scenarios"
   npm run scenarios 2>&1 | tee /tmp/clarity-e2e-scenarios.log | grep -E "Test Files|Tests " | tail -2
   grep -q "failed" /tmp/clarity-e2e-scenarios.log && record FAIL "eval: scenarios" || record PASS "eval: scenarios"
-
-  section "Eval · style-deviation calibration"
-  npm run evals:style:deviation 2>&1 | tee /tmp/clarity-e2e-style.log | grep -E "band accuracy|discrimination|Calibration" | head
-  grep -q "Calibration looks sound" /tmp/clarity-e2e-style.log && record PASS "eval: style calibration" || record FAIL "eval: style calibration"
 }
 
 # --- run -------------------------------------------------------------------

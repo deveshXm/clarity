@@ -21,8 +21,8 @@ the layer below it structurally cannot.
 |---|---|---|---|---|
 | **Unit** | `npm run test:unit` | nothing | ~1s | free |
 | **Integration** | `npm run test:slack:events`, `test:slack:interactive`, `test:stripe:webhooks` | dev server + `.env.local` | ~1–2 min | pennies |
-| **Evals** | `npm run evals:quality`, `evals:sim`, `scenarios` | LLM keys | ~3–8 min | real money |
-| **Production** | PostHog | shipped users | continuous | free |
+| **Evals** | `npm run evals:all` (flagging, rephrase, style, digest), `scenarios` | LLM keys + `LANGWATCH_API_KEY` | ~10 min | real money |
+| **Production** | PostHog + LangWatch traces | shipped users | continuous | free |
 
 ### Unit — runs on every commit
 
@@ -72,109 +72,135 @@ accept rate doesn't move, the eval is measuring the wrong thing.
 
 ## What each eval measures
 
-### `evals:rephrase` — rephrase quality
+Every suite is a **LangWatch experiment**: one run per invocation, one row per
+gold case, every metric logged per row so the UI can show which case moved and
+why. The gold datasets live in `src/evals/langwatch/datasets/` (the source of
+truth — `npm run evals:datasets` mirrors them to LangWatch so they can be
+browsed, annotated, and grown from real traces). The suites themselves are in
+`src/evals/langwatch/*.experiment.ts`.
 
-A rephrase fails in five distinct ways, and they trade off against each other,
-so they are scored separately rather than as one number:
+Two kinds of metric, kept deliberately separate:
 
-| Dimension | How | Why it's separate |
+- **Objective** — computed in code, no judge: re-run the classifier on a rewrite,
+  match a quote back to the corpus, re-score a suggestion through the product's
+  own scorer. These cannot drift with a judge prompt.
+- **Judged** — an independent Azure model (`src/lib/evals/harness.ts`) that
+  bypasses Portkey on purpose, so a gateway-level regression cannot move the
+  system under test and its grader together.
+
+### `evals:flagging` — does Clarity make the right call?
+
+47 hand-labelled Slack messages across 11 workspace archetypes: 24 that should
+be flagged, 18 hard negatives (blunt, urgent, terse — but fine), 5 that must trip
+the harmful gate. No judge at all.
+
+| Metric | Rows | What it pins |
 |---|---|---|
-| **Flag cleared** | Re-run the classifier on the rewrite | Objective, no judge — cannot drift with judge prompts |
-| **Intent preserved** | Independent judge | The failure users notice fastest |
-| **No fabrication** | Independent judge | The failure that gets someone in real trouble at work |
-| **Force retained** | Independent judge, against a per-case "required substance" | The one a politeness-optimizer fails |
-| **Style adherence** | Independent judge | Only meaningful when a target is set |
+| `case_correct` | all | The headline: right decision for this case type |
+| `harmful_gate_correct` | all | harmful ⇔ expected harmful — the safety property |
+| `expected_flag_hit` | positives, harmful | At least one expected flag fired |
+| `clean_message_untouched` | hard negatives | No flag, not harmful — the over-flagging rate |
+| `rephrase_offered` | positives | A rewrite was produced |
+| `harmful_blocks_rephrase` | harmful | No rewrite was produced |
+| `flag_precision` | rows with flags | Share of fired flags that were expected |
+
+The terminal also prints per-flag precision/recall/F1 and per-workspace accuracy.
+Gates: overall accuracy ≥ `SIM_MIN_ACCURACY` (0.85), harmful recall = 100%.
+
+### `evals:rephrase` — is the rewrite worth sending?
+
+12 flagged messages, each with a `mustRetain` line spelling out the substance
+the rewrite has to keep. That line is what turns "force retained" from taste
+into a checkable claim.
+
+| Metric | How | Why it's separate |
+|---|---|---|
+| `flag_cleared` | Re-run the classifier on the rewrite | Objective — cannot drift with judge prompts |
+| `intent_preserved` | Independent judge | The failure users notice fastest |
+| `no_fabrication` | Independent judge | The failure that gets someone in trouble at work |
+| `force_retained` | Judge, against `mustRetain` | The one a politeness-optimizer fails |
+| `style_adherence` | Judge, 0-100 | Only meaningful when a target style is set |
+| `length_ratio` | rewrite ÷ original | A 4x rewrite is not a Slack message |
 
 **Force retained is the dimension that matters most and is easiest to miss.**
 A rewriter that turns *"This is broken, fix it today"* into *"No rush, whenever
 you get a chance!"* scores beautifully on politeness and has destroyed the
-message. If you only measure niceness, you optimize straight into this failure.
+message.
 
-### `evals:style:baseline` — "how you come across"
+### `evals:style` — persona × target: is the score honest, is the advice good?
 
-| Dimension | How |
+15 rows. Each is a corpus from one kind of writer (a hedger, a terse exec, a
+vibes-only analyst…) scored against a target style, with the band the 0-100
+adherence score must land in. On/off pairs for the same target let the suite
+check the scorer *separates* them, not just that it agrees with a judge.
+
+| Metric | What it pins |
 |---|---|
-| **Quote fidelity** | Every quote is matched back to a real message. Objective. |
-| **Distinctive** | A judge is given one assessment and *two* corpora and must say which it describes |
-| **Trait groundedness** | Judge, against the messages |
-| **Not flattering** | Run against a deliberately poor communicator |
-| **Thin-corpus honesty** | A near-empty corpus must be reported as such, not confabulated |
-
-**Distinctiveness is the sharpest test here.** A digest that a judge cannot match
-back to its own author is horoscope text — fluent, agreeable, and worthless.
-That failure is invisible to any metric that only reads one output at a time,
-which is why the test needs two corpora.
-
-Quote fidelity is gated hardest (95%). Being shown words attributed to you that
-you never wrote is the one failure a user cannot forgive, and it is measured
-objectively, so there is no judge noise to excuse it.
-
-### `evals:style:suggestions` — assessments vs. your target
-
-Complements `evals:style:deviation` (which asks whether the 0–100 score is
-calibrated) by asking whether the advice is any good:
-
-- quoted deviations trace back to real messages
-- the suggested rewrite **re-scores higher against the same target** — the
-  product must agree its own advice is an improvement
-- the rewrite still says what the original said. Restyling toward "warm" must
-  not quietly delete the objection.
+| `adherence_score` | The score itself (mean of two runs), labelled by expected band |
+| `band_correct` | Inside the expected high / mid / low range |
+| `run_spread` | Two runs on the same corpus must agree within 20 points |
+| `judge_gap` | Within 25 points of an independent judge |
+| `discrimination` (suite) | On-style mean minus off-style mean ≥ 20 per target |
+| `deviation_quote_fidelity` | Quoted deviations trace back to a real message |
+| `suggestion_moves_on_target` | The rewrite re-scores higher against the same target — the product must agree its own advice is an improvement |
+| `suggestion_preserves_intent` | Judge: restyling toward "warm" must not quietly delete the objection |
+| `strengths_grounded` | Strengths quote the corpus, not generic praise |
 
 A miscalibrated score is annoying. A confident, specific, wrong suggestion is
 worse, because the user sends it.
+
+### `evals:digest` — does "how you come across" describe *this* person?
+
+5 personas with an independently-known truth, including a deliberately poor
+communicator (flattery check) and a near-empty corpus (honesty check).
+
+| Metric | How |
+|---|---|
+| `quote_fidelity` | Every quoted example matched back to a real message. Objective. Gated hardest (95%). |
+| `distinctive` | Judge is given the digest and *two* corpora and must say which it describes |
+| `trait_groundedness` | Judge, against the messages |
+| `summary_accurate` | Judge, against the known truth |
+| `not_flattering` | Only on the poor communicator; gated at 100% |
+| `thin_corpus_acknowledged` | A near-empty corpus must be reported as such, not confabulated |
+
+**Distinctiveness is the sharpest test.** A digest a judge cannot match back to
+its own author is horoscope text — fluent, agreeable, and worthless. That
+failure is invisible to any metric that reads one output at a time.
+
+### Reading a run
+
+Each script prints a scorecard and the link to the run in LangWatch, then applies
+its gates and sets the exit code. Two different verdicts, on purpose:
+
+- **LangWatch's run status** is FAILED if *any* row failed *any* metric. Use it to
+  find the rows to look at.
+- **The gate** (exit code) is the release decision: loose thresholds that only
+  trip on "clearly broken", because a gate tight enough to catch every borderline
+  case goes red on sampling noise and gets ignored.
+
+Triage a red run with the CLI: `langwatch experiment results clarity-rephrase --filter failed -o json`.
 
 ---
 
 ## Observability: where the results go
 
-Suites never import a vendor SDK. They emit a run/case/summary shape to
-`src/lib/evals/reporter.ts`, which fans out to whatever is configured. Adding or
-swapping a platform is a change in that one file.
+**LangWatch, and only LangWatch.** Experiments (the suites above), scenarios
+(`npm run scenarios`), and datasets all live in the same project, so a prompt
+change can be read as "this metric moved on these rows" instead of a number
+scrolling past in a terminal. Set `LANGWATCH_API_KEY` in `.env.local`; without it
+the suites refuse to start rather than silently running blind.
 
-**JSONL is always on** — `evals/data/runs/<suite>-<timestamp>.jsonl`, no
-credentials required, so CI and a laptop with no keys still produce a diffable
-artifact and a history you own.
+The judge runs on your own Azure deployment. LangWatch's built-in LLM evaluators
+(`langevals/llm_boolean` and friends) would need a model provider configured on
+the platform (`langwatch model-provider set azure`) — a reasonable next step once
+you want judges editable in the UI, not a requirement.
 
-### Recommendation
-
-**Langfuse as the eval and trace store.** Two reasons that actually matter here:
-
-- **Self-hostable.** Eval inputs are real workplace messages. Every other option
-  means shipping that content to a third party, which is a materially harder
-  conversation with a security-conscious customer than "it runs in our VPC."
-- **It has the API we're missing.** The comment in
-  `evaluate-style-deviation.ts` notes the LangWatch TS SDK has no experiments
-  API, which is why style runs never made it to a dashboard. Langfuse's TS SDK
-  has datasets, runs, and scores, so results get a home instead of scrolling
-  past in a terminal.
-
-Enable by setting `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`, and optionally
-`LANGFUSE_BASEURL`. Absent those, nothing changes and JSONL keeps working.
-
-There's a third benefit worth taking: **Langfuse prompt management would fix a
-real bug class.** `MESSAGE_ANALYSIS_PROMPT` currently exists twice — in
-`src/lib/prompts/index.ts` and mirrored "byte-identical" into
-`evals/generate_default.py`. Byte-identical-by-convention is a drift bug waiting
-to happen, and when it drifts the eval silently starts grading a prompt that
-isn't shipping. Versioned prompts fetched by both would remove the duplication
-entirely.
-
-### The others, honestly
-
-| Platform | Keep it for | Why not as the primary |
-|---|---|---|
-| **LangWatch** | The scenario suite — its simulation framing is genuinely good and already working | TS SDK has no experiments API, so the numeric suites can't report to it |
-| **Portkey** | Already the gateway; gives request-level logs, caching, and fallbacks for free | Strong at request tracing, not an eval-experiment store |
-| **PostHog** | Already there; the right home for the accept/dismiss rate, which is the best quality signal that exists | Product analytics, not a trace or eval store |
-| **Braintrust** | — | Best pure eval DX, TS-first, excellent run diffing. SaaS-only, which is the dealbreaker given the data |
-
-Nothing needs to be ripped out. Each tool sits where it is strongest: Portkey on
-the request path, LangWatch for scenarios, Langfuse for eval runs and traces,
-PostHog for what real users do.
-
-**Don't skip the last one.** It's tempting to invest in offline evals because
-they're controllable, but the accept rate is the only number that reflects
-whether any of this works for a real person.
+**Don't skip production.** Every offline eval is a proxy. The real signal is
+already being collected: **Replace clicked vs. "Didn't like it" clicked** is
+direct human judgment on rephrase quality at a volume no eval set will reach.
+Wiring that acceptance rate into a dashboard, per flag, is the highest-value
+observability work available. It also validates the evals: if `flag_cleared`
+improves and the accept rate doesn't move, the eval is measuring the wrong thing.
 
 ---
 
@@ -185,16 +211,16 @@ whether any of this works for a real person.
 | Every commit / CI | `npm run test:unit`, `npm run lint`, `npx tsc --noEmit` |
 | Every PR | the above + `npm run build` |
 | Before merge to `main` | integration checks against a dev server (`check:e2e` once merged) |
-| Any prompt or model change | `npm run evals:quality` + `evals:sim` + `scenarios` — **non-negotiable**; this is the only thing standing between a prompt tweak and a silent quality regression |
-| Weekly | full suite, record results, watch the trend rather than the absolute number |
+| Any prompt or model change | `npm run evals:all` + `scenarios` — **non-negotiable**; this is the only thing standing between a prompt tweak and a silent quality regression |
+| Weekly | full suite; compare runs in LangWatch and watch the trend rather than the absolute number |
 | Continuously | rephrase accept rate in PostHog |
 
 ---
 
 ## Adding a case
 
-Every eval reads from an inline dataset at the top of its script — no fixtures
-to hunt for. When a user reports a bad rephrase or a wrong digest, **add it as a
+Every eval reads from a typed dataset in `src/evals/langwatch/datasets/` — no
+fixtures to hunt for. Edit it, then `npm run evals:datasets` to mirror it to LangWatch. When a user reports a bad rephrase or a wrong digest, **add it as a
 case before fixing it.** That's what turns a one-off bug report into a permanent
 regression net, and it's how the datasets should grow: from reality, not from
 imagination.

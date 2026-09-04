@@ -65,5 +65,3 @@ evals/.venv/
 .cursor/skills/
 .playwright-mcp/
 
-# eval run artifacts (regenerated on every run)
-evals/data/runs/

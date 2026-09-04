@@ -197,13 +197,16 @@ npm run test:slack:interactive   # button paths, incl. Replace without a user to
 npm run test:stripe:webhooks     # signed Stripe events → tier changes
 ```
 
-Evals (hit a live model — these cost money):
+Evals (LangWatch experiments — hit a live model, cost money, need `LANGWATCH_API_KEY`):
 
 ```bash
-npm run evals:quality            # rephrase + baseline + suggestion quality
-npm run evals:sim                # 47 hand-labelled messages → P/R/F1 per flag
-npm run scenarios                # 9 LLM-judged behavioural scenarios (LangWatch)
-npm run evals:style:deviation    # is the 0-100 adherence score calibrated?
+npm run evals:flagging           # 47 hand-labelled messages → right call, P/R/F1 per flag
+npm run evals:rephrase           # is the suggested rewrite worth sending?
+npm run evals:style              # persona × target: is the 0-100 score honest, is the advice good?
+npm run evals:digest             # does "how you come across" describe THIS person?
+npm run evals:all                # the four above, in sequence
+npm run scenarios                # 9 LLM-judged behavioural scenarios
+npm run evals:datasets           # push the gold datasets to LangWatch (after editing them)
 ```
 
 **[`QUALITY.md`](QUALITY.md)** explains what each layer catches, why the eval
