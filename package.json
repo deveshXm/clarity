@@ -30,7 +30,14 @@
     "evals:style:deviation": "tsx --env-file=.env.local src/scripts/evaluate-style-deviation.ts",
     "test:stripe:webhooks": "tsx --env-file=.env.local src/scripts/test-stripe-webhooks.ts",
     "test:slack:events": "tsx --env-file=.env.local src/scripts/test-slack-events.ts",
-    "check:e2e": "bash scripts/e2e-check.sh"
+    "check:e2e": "bash scripts/e2e-check.sh",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:unit:watch": "vitest --config vitest.unit.config.ts",
+    "test:slack:interactive": "tsx --env-file=.env.local src/scripts/test-slack-interactive.ts",
+    "evals:rephrase": "tsx --env-file=.env.local src/scripts/evaluate-rephrase.ts",
+    "evals:style:baseline": "tsx --env-file=.env.local src/scripts/evaluate-style-baseline.ts",
+    "evals:style:suggestions": "tsx --env-file=.env.local src/scripts/evaluate-style-suggestions.ts",
+    "evals:quality": "npm run evals:rephrase && npm run evals:style:baseline && npm run evals:style:suggestions"
   },
   "dependencies": {
     "@mantine/core": "^8.3.12",
@@ -84,6 +91,7 @@
     "dotenv": "^17.2.3",
     "eslint": "^9.39.2",
     "eslint-config-next": "16.1.1",
+    "langfuse": "^3.38.20",
     "postcss": "^8.5.6",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",

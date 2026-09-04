@@ -13,6 +13,10 @@ export const slackOAuthConfig = {
     botScopes: [
         'chat:write',   
         'chat:write.public',
+        // Required to post a rephrase back under the sender's own name/avatar
+        // (`/clarity-rephrase` → Send). Without it Slack rejects the call with
+        // `missing_scope`; the send path degrades to a plain bot post.
+        'chat:write.customize',
         'commands',
         'channels:history',
         'groups:history',
@@ -201,13 +205,18 @@ export const resolveSlackUserNames = async (
 };
 
 // Send ephemeral message to user
+// `threadTs` scopes the ephemeral to a thread. Slack renders an ephemeral without
+// it in the channel root, so coaching on a thread reply would be invisible to a
+// sender who is reading the thread pane. Pass the reply's `thread_ts` whenever the
+// message being coached is itself a thread reply.
 export const sendEphemeralMessage = async (
     channelId: string,
     userId: string,
     text: string,
     botToken: string,
     attachments?: unknown[],
-    blocks?: unknown[]
+    blocks?: unknown[],
+    threadTs?: string
 ): Promise<boolean> => {
     try {
         // Create workspace-specific WebClient with the bot token
@@ -218,7 +227,8 @@ export const sendEphemeralMessage = async (
             user: userId,
             text,
             ...(attachments && { attachments }),
-            ...(blocks && { blocks })
+            ...(blocks && { blocks }),
+            ...(threadTs && { thread_ts: threadTs })
         });
         
         return result.ok || false;
@@ -1479,4 +1489,66 @@ export const buildHarmfulWarningBlocks = (
         elements: [{ type: 'mrkdwn', text: 'Only you can see this' }],
     });
     return blocks;
+};
+
+// Shown when Clarity can't edit the user's message for them: the rephrase stays
+// available to copy, and the authorize link grants the per-user `chat:write`
+// scope that makes the Replace button work from the next message onward.
+//
+// Lives here rather than in the route so it can be asserted in a unit test —
+// this block is the entire fallback experience for every teammate who hasn't
+// personally authorized Clarity, which is most of them.
+export const buildConnectToReplaceBlocks = (improvedText: string): Array<Record<string, unknown>> => {
+    return [
+        {
+            type: 'section',
+            text: {
+                type: 'mrkdwn',
+                text: `*Here's the rephrased version — copy it in:*\n\`\`\`${improvedText}\`\`\``
+            }
+        },
+        {
+            type: 'context',
+            elements: [
+                {
+                    type: 'mrkdwn',
+                    text: "Clarity can't edit your message until you authorize it — Slack only lets an app edit your messages with your own permission. It takes one click and Clarity will replace messages for you from then on."
+                }
+            ]
+        },
+        {
+            type: 'actions',
+            elements: [
+                {
+                    type: 'button',
+                    text: { type: 'plain_text', text: 'Connect Clarity', emoji: true },
+                    style: 'primary',
+                    url: getSlackOAuthUrl(),
+                    action_id: 'connect_clarity_user_token'
+                }
+            ]
+        },
+        {
+            type: 'context',
+            elements: [{ type: 'mrkdwn', text: 'Only you can see this' }]
+        }
+    ];
+};
+
+/**
+ * Decide who owns a workspace after an OAuth run.
+ *
+ * Re-running OAuth is a normal flow, not just a re-install: it's how an ordinary
+ * teammate grants the per-user `chat:write` scope that makes in-place message
+ * replacement work. So the installer of record must NOT change just because
+ * someone authorized more recently — that would hand workspace settings,
+ * billing, and onboarding to whoever clicked last. Admin is only claimed when
+ * the workspace has none recorded.
+ */
+export const resolveWorkspaceAdmin = (
+    existingAdminSlackId: string | undefined | null,
+    installerSlackId: string
+): { adminSlackId: string; installerIsAdmin: boolean } => {
+    const adminSlackId = existingAdminSlackId || installerSlackId;
+    return { adminSlackId, installerIsAdmin: adminSlackId === installerSlackId };
 };
